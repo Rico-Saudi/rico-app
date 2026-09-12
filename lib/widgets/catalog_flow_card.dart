@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/customer.dart';
 import '../models/request_flow.dart';
+import '../services/auth_store.dart';
 import '../theme/app_theme.dart';
 import 'rico_surfaces.dart';
 
@@ -7,10 +9,16 @@ import 'rico_surfaces.dart';
 /// [RequestFlow] بمراحله الثلاث (تصفّح، تأكيد/إرسال، تم الإرسال) مع مؤشر
 /// خطوات في الترويسة، فيعرف المستخدم موضعه من التدفّق ولا يشعر أنه انتقل
 /// لشاشة أخرى داخل المحادثة.
-class CatalogFlowCard extends StatefulWidget {
+class CatalogFlowCard extends StatelessWidget {
   final RequestFlow flow;
   final void Function(String itemType, String itemId, String label, String? detail)? onSelectItem;
-  final void Function(String name, String phone)? onConfirm;
+
+  /// تأكيد الطلب بحساب مسجّل — بلا وسائط: الاسم والرقم يأتيان من الحساب.
+  final VoidCallback? onConfirm;
+
+  /// يُطلب حين يضغط زائر زر التأكيد — يفتح ورقة الدخول.
+  final VoidCallback? onRequestLogin;
+
   final VoidCallback? onCancel;
 
   const CatalogFlowCard({
@@ -18,27 +26,12 @@ class CatalogFlowCard extends StatefulWidget {
     required this.flow,
     this.onSelectItem,
     this.onConfirm,
+    this.onRequestLogin,
     this.onCancel,
   });
 
   @override
-  State<CatalogFlowCard> createState() => _CatalogFlowCardState();
-}
-
-class _CatalogFlowCardState extends State<CatalogFlowCard> {
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final flow = widget.flow;
     final submitted = flow.stage == RequestFlowStage.submitted;
 
     return RicoCard(
@@ -100,7 +93,7 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
               icon: Icons.local_offer_rounded,
               tone: RicoColors.goldInk,
               toneBackground: RicoColors.goldTint,
-              onTap: () => widget.onSelectItem?.call('deal', deal.id, deal.titleAr, deal.typeLabel),
+              onTap: () => onSelectItem?.call('deal', deal.id, deal.titleAr, deal.typeLabel),
             ),
           if (catalog.products.isNotEmpty) const SizedBox(height: 14),
         ],
@@ -115,7 +108,7 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
               icon: Icons.shopping_bag_outlined,
               tone: RicoColors.primaryDeep,
               toneBackground: RicoColors.primaryTint,
-              onTap: () => widget.onSelectItem?.call(
+              onTap: () => onSelectItem?.call(
                 'product',
                 product.id,
                 product.name,
@@ -127,117 +120,65 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
     );
   }
 
+  /// خطوة التأكيد — تتبدّل حسب حالة الدخول: بيانات الحساب جاهزة للمسجّل،
+  /// ودعوة دخول للزائر. الاستماع لـ[AuthStore] هنا لا في الشاشة يجعل
+  /// البطاقة تتحدّث لحظة نجاح الدخول من الورقة السفلية بلا تمرير حالة.
   Widget _buildConfirming(RequestFlow flow) {
     final submitting = flow.stage == RequestFlowStage.submitting;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: RicoColors.surfaceSunken,
-            borderRadius: RicoRadii.controlR,
-            border: Border.all(color: RicoColors.hairline),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, size: 17, color: RicoColors.primary),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(flow.selectedItemLabel ?? '', style: RicoText.labelStrong),
-                    if (flow.selectedItemDetail != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(flow.selectedItemDetail!, style: RicoText.caption),
-                      ),
-                  ],
-                ),
-              ),
+
+    return ListenableBuilder(
+      listenable: AuthStore.instance,
+      builder: (context, _) {
+        final customer = AuthStore.instance.customer;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SelectedItemRow(flow: flow),
+            const SizedBox(height: 12),
+            if (customer != null)
+              _AccountRecap(customer: customer)
+            else
+              const _SignInInvite(),
+            if (flow.errorMessage != null) ...[
+              const SizedBox(height: 10),
+              _CardError(message: flow.errorMessage!),
             ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'اكتب اسمك ورقمك ونوصّل طلبك للمحل مباشرة، وهو يتواصل معك.',
-          style: RicoText.caption.copyWith(height: 1.6),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _nameController,
-          enabled: !submitting,
-          textInputAction: TextInputAction.next,
-          style: RicoText.body.copyWith(color: RicoColors.ink),
-          decoration: const InputDecoration(
-            labelText: 'الاسم',
-            prefixIcon: Icon(Icons.person_outline_rounded, size: 19),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _phoneController,
-          enabled: !submitting,
-          keyboardType: TextInputType.phone,
-          style: RicoText.body.copyWith(color: RicoColors.ink),
-          decoration: const InputDecoration(
-            labelText: 'رقم الجوال',
-            prefixIcon: Icon(Icons.phone_outlined, size: 19),
-          ),
-        ),
-        if (flow.errorMessage != null) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(
-              color: RicoColors.dangerTint,
-              borderRadius: RicoRadii.controlR,
-            ),
-            child: Row(
+            const SizedBox(height: 13),
+            Row(
               children: [
-                const Icon(Icons.error_outline_rounded, size: 16, color: RicoColors.danger),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(flow.errorMessage!, style: RicoText.caption.copyWith(color: RicoColors.danger)),
+                  child: OutlinedButton(
+                    onPressed: submitting ? null : onCancel,
+                    child: const Text('رجوع'),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: submitting ? null : (customer != null ? onConfirm : onRequestLogin),
+                    icon: submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(customer != null ? Icons.send_rounded : Icons.lock_open_rounded, size: 17),
+                    label: Text(
+                      submitting
+                          ? 'جارٍ الإرسال…'
+                          : customer != null
+                              ? 'أكّد الطلب'
+                              : 'سجّل دخولك وأكّد',
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
-        const SizedBox(height: 13),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: submitting ? null : widget.onCancel,
-                child: const Text('رجوع'),
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: submitting
-                    ? null
-                    : () {
-                        final name = _nameController.text.trim();
-                        final phone = _phoneController.text.trim();
-                        if (name.isEmpty || phone.isEmpty) return;
-                        widget.onConfirm?.call(name, phone);
-                      },
-                child: submitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('أكّد الطلب'),
-              ),
-            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -267,6 +208,176 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// العنصر المختار (منتج أو عرض) كما سيصل للمحل.
+class _SelectedItemRow extends StatelessWidget {
+  final RequestFlow flow;
+
+  const _SelectedItemRow({required this.flow});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RicoColors.surfaceSunken,
+        borderRadius: RicoRadii.controlR,
+        border: Border.all(color: RicoColors.hairline),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_rounded, size: 17, color: RicoColors.primary),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(flow.selectedItemLabel ?? '', style: RicoText.labelStrong),
+                if (flow.selectedItemDetail != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(flow.selectedItemDetail!, style: RicoText.caption),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// بيانات الحساب التي ستصل للمحل — تُعرض ولا تُكتب: بعد ربط الطلب بالحساب
+/// صار الاسم والرقم موثّقين مرة واحدة عند التسجيل بدل كتابتهما (وإمكان
+/// خطئهما) مع كل طلب.
+class _AccountRecap extends StatelessWidget {
+  final Customer customer;
+
+  const _AccountRecap({required this.customer});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RicoColors.primaryTint,
+        borderRadius: RicoRadii.controlR,
+        border: Border.all(color: RicoColors.primaryTintStrong),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.verified_user_rounded, size: 16, color: RicoColors.primary),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('يوصل المحل باسمك ورقمك', style: RicoText.labelStrong),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          _RecapRow(icon: Icons.person_outline_rounded, value: customer.name),
+          const SizedBox(height: 5),
+          _RecapRow(icon: Icons.phone_outlined, value: customer.phone, ltr: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecapRow extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final bool ltr;
+
+  const _RecapRow({required this.icon, required this.value, this.ltr = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: RicoColors.primaryDeep),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            value,
+            // الأرقام تُقرأ من اليسار حتى داخل واجهة عربية.
+            textDirection: ltr ? TextDirection.ltr : null,
+            textAlign: TextAlign.start,
+            style: RicoText.caption.copyWith(color: RicoColors.primaryDeep, fontWeight: FontWeight.w600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// دعوة الدخول للزائر — تشرح السبب قبل الزر: طلب حساب بلا سبب ظاهر أسرع
+/// طريق لهجر التدفّق عند آخر خطوة فيه.
+class _SignInInvite extends StatelessWidget {
+  const _SignInInvite();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RicoColors.goldTint,
+        borderRadius: RicoRadii.controlR,
+        border: Border.all(color: RicoColors.gold.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, size: 17, color: RicoColors.goldInk),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('يحتاج حساب عشان نوصّل طلبك', style: RicoText.labelStrong),
+                const SizedBox(height: 3),
+                Text(
+                  'المحل يتواصل معك على رقمك، فنتأكد منه مرة وحدة بس — ودقيقة وتخلص.',
+                  style: RicoText.caption.copyWith(height: 1.6),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CardError extends StatelessWidget {
+  final String message;
+
+  const _CardError({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: const BoxDecoration(
+        color: RicoColors.dangerTint,
+        borderRadius: RicoRadii.controlR,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 16, color: RicoColors.danger),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message, style: RicoText.caption.copyWith(color: RicoColors.danger)),
+          ),
+        ],
+      ),
     );
   }
 }

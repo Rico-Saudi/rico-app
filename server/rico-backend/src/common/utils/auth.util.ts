@@ -29,3 +29,12 @@ export function verifyPassword(password: string, stored: string): boolean {
   if (hashBuffer.length !== candidateBuffer.length) return false;
   return crypto.timingSafeEqual(hashBuffer, candidateBuffer);
 }
+
+// 6-digit numeric code for the app's email verification / password reset.
+// crypto.randomInt (not Math.random) because this is a credential: it has
+// to be unguessable, and the 6-digit space is small enough that a biased
+// generator would meaningfully shrink it. Zero-padded so every code is
+// exactly six characters — "012345" must not be emailed as "12345".
+export function generateOtpCode(): string {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}

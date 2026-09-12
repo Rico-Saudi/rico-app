@@ -5,6 +5,7 @@ NestJS + MongoDB backend for Rico: a local business discovery platform. Combines
 - A product-catalog MVP (`Business` → `Product` → `Discount`) with a rule-based, non-LLM query parser (category/attribute dictionaries + typo-tolerant fuzzy matching).
 - Everything the previous Express backend already had: geo search (`/search`) and nearby deals (`/deals`) with response shapes kept **byte-identical** to the old `rico-api`/`groq-proxy` Cloudflare Workers so the Flutter app only needs its base URLs updated — plus a vendor self-serve dashboard (email+password login, products/discounts/deals), place claims with owner moderation, and a platform-owner dashboard (business oversight, deal/claim moderation, Google Places sync, analytics, staff, audit log).
 - A single unified `Account` model (`app: 'owner'|'vendor'`) backing one `/auth/*` login surface for both dashboards — no separate admin token or magic-link flow.
+- App-customer accounts (`/customer/auth/*`): name + email + password + phone, email proven by a 6-digit code sent with Resend, and a bearer-token session for the Flutter app. Confirming an order in chat (`POST /requests`) now attaches the customer behind it.
 - A multi-intent Arabic classifier (`/classify`) backed by Groq, ported from `groq-proxy`.
 
 ## Requirements
@@ -28,7 +29,7 @@ Copy `.env.example` to `.env` and fill in:
 | `GOOGLE_SYNC_COOLDOWN_DAYS` | no | default `30` |
 | `GROQ_API_KEY` | only for `/classify` | Groq Cloud API key |
 | `GROQ_MODEL` | no | default `llama-3.3-70b-versatile` |
-| `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails are logged to the console instead of sent |
+| `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails **and app-customer verification codes** are logged to the console instead of sent — the whole signup flow is testable locally without an email account |
 | `RESEND_FROM_EMAIL` | no | default `Rico <onboarding@resend.dev>` |
 
 ## Run locally
@@ -74,6 +75,28 @@ curl -c cookies.txt -X POST "http://localhost:3000/auth/login" -H "Content-Type:
 curl -b cookies.txt "http://localhost:3000/owner/sourcing/usage"
 ```
 
+### App-customer auth (bearer token, used by the Flutter app)
+
+```bash
+# 1. Register — returns {status:'otp_sent'}, never a session
+curl -X POST http://localhost:3000/customer/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"ماهر","email":"me@example.com","password":"at least 8","phone":"+966512345678","brand":"rico"}'
+
+# 2. Read the 6-digit code from the server log (no RESEND_API_KEY) or the inbox, then:
+curl -X POST http://localhost:3000/customer/auth/verify-email -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","code":"123456"}'    # -> {token, expiresAt, customer}
+
+# 3. Use the token
+curl http://localhost:3000/customer/auth/me -H 'Authorization: Bearer <token>'
+
+# 4. An order from chat: name/phone come from the account, not the body
+curl -X POST http://localhost:3000/requests -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <token>' \
+  -d '{"businessId":"<id>","itemType":"product","itemId":"<id>"}'
+```
+
+Also: `POST /customer/auth/login`, `/resend-otp` (`purpose: verify_email|reset_password`), `/forgot-password`, `/reset-password`, `PATCH /customer/auth/me`, `POST /customer/auth/logout`.
+
 ## Tests
 
 ```bash
@@ -93,5 +116,7 @@ One web service running the combined API + static self-serve/admin dashboard (`c
 - **`Business`** absorbs the old `Place` collection — one entity for "a location", referenced by `Product`, `Deal`, and `BusinessClaim`.
 - **`Deal.businessId`** now refers to `Business` (was `Place`); the dashboard-account owner ref was renamed to **`Deal.ownerAccountId`** (refs `Account`) to avoid two different "business" meanings on the same document. The public JSON response still calls this field `placeId` for Flutter compatibility.
 - **`Account`** is the single collection backing both dashboards (`app: 'owner'|'vendor'`, `platformRole` set only for owner-app accounts). Vendor accounts are owner-invited (an owner picks a business + email, the claim is created `active` immediately, and the vendor gets a "set your password" email) — there's no public vendor signup. A vendor can still self-serve **claim an additional** business via `/vendor/claim-place`, which lands in `pending_review` and needs an owner's approval via `/owner/claims/:id/status` before it unlocks.
+- **`Customer`** is a separate collection from `Account`, not another `app` value on it. The two authenticate differently (a phone's bearer token vs. a browser session cookie) and carry different required fields, and keeping them apart means a customer id can never land in a dashboard session. Tokens and 6-digit codes are stored only as sha256 hashes, one live code per purpose, five wrong guesses and the code is burned, and a password reset revokes every other device's token.
+- **`POST /requests`** takes the optional customer guard, not the strict one: the app now sends a bearer token and the server derives `customerName`/`customerPhone` from the verified account, but a client already in users' hands still posts a bare name/phone with no token and keeps working. A token that *is* sent must be valid — failing open on an expired one would silently detach the request from its customer.
 - **`/classify`** is exposed at `POST /classify` (the old `groq-proxy` Worker served it at its root path) — the Flutter client's base URL constant just gets `/classify` appended.
 - The classifier's category list intentionally has 11 entries, not 12 — `clothing_store` was a bug introduced in the previous Express port that didn't exist in the original Worker or in Flutter's local category enum.

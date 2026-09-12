@@ -19,6 +19,14 @@ export class CustomerRequest {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Business', required: true, index: true })
   businessId: Types.ObjectId;
 
+  // The logged-in app account that placed this, when there is one. Null for
+  // requests from clients that predate customer accounts, which still post
+  // a bare name/phone — customerName/customerPhone below stay the vendor's
+  // source of truth either way, and stay a snapshot: a later profile edit
+  // must not rewrite the number a vendor already tried to call.
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Customer', default: null, index: true })
+  customerId: Types.ObjectId | null;
+
   @Prop({ type: String, required: true, trim: true, maxlength: 80 })
   customerName: string;
 

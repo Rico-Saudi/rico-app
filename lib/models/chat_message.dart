@@ -41,8 +41,14 @@ class ChatMessage {
   /// من تصفّح إلى تأكيد.
   final void Function(String itemType, String itemId, String label, String? detail)? onSelectCatalogItem;
 
-  /// يُستدعى عند تأكيد الطلب باسم وهاتف العميل — يرسل الطلب الفعلي للخادم.
-  final void Function(String name, String phone)? onConfirmRequest;
+  /// يُستدعى عند تأكيد الطلب — يرسل الطلب الفعلي للخادم باسم ورقم الحساب
+  /// المسجّل، فلا يمرّر اسماً ورقماً: بعد ربط الطلبات بالحسابات صار مصدرهما
+  /// الحساب الموثّق لا حقلين يُكتبان مع كل طلب.
+  final VoidCallback? onConfirmRequest;
+
+  /// يُستدعى حين يضغط زائر (غير مسجّل) زر التأكيد — يفتح ورقة الدخول، ثم
+  /// يُرسل الطلب تلقائياً إذا نجح الدخول.
+  final VoidCallback? onRequestLogin;
 
   /// يُستدعى عند الرجوع من مرحلة التأكيد إلى تصفّح القائمة من جديد.
   final VoidCallback? onCancelCatalogSelection;
@@ -61,6 +67,7 @@ class ChatMessage {
     this.requestFlow,
     this.onSelectCatalogItem,
     this.onConfirmRequest,
+    this.onRequestLogin,
     this.onCancelCatalogSelection,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
@@ -84,6 +91,7 @@ class ChatMessage {
       requestFlow: requestFlow ?? this.requestFlow,
       onSelectCatalogItem: onSelectCatalogItem,
       onConfirmRequest: onConfirmRequest,
+      onRequestLogin: onRequestLogin,
       onCancelCatalogSelection: onCancelCatalogSelection,
       timestamp: timestamp,
     );

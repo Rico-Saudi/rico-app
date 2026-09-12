@@ -6,6 +6,7 @@ import { RequestsController } from './requests.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { ProductsModule } from '../products/products.module';
 import { DealsModule } from '../deals/deals.module';
+import { CustomersModule } from '../customers/customers.module';
 import { submitDealLimiter } from '../common/middleware/rate-limiters';
 
 @Module({
@@ -14,6 +15,7 @@ import { submitDealLimiter } from '../common/middleware/rate-limiters';
     BusinessesModule,
     ProductsModule,
     DealsModule,
+    CustomersModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService],

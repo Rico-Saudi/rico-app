@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_store.dart';
 import '../theme/app_theme.dart';
 import 'rico_surfaces.dart';
 
@@ -10,7 +11,15 @@ class ChatHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool elevated;
   final VoidCallback onOpenFavorites;
 
-  const ChatHeader({super.key, required this.elevated, required this.onOpenFavorites});
+  /// يفتح ورقة الحساب للمسجّل أو ورقة الدخول للزائر — انظر ChatScreen.
+  final VoidCallback onOpenAccount;
+
+  const ChatHeader({
+    super.key,
+    required this.elevated,
+    required this.onOpenFavorites,
+    required this.onOpenAccount,
+  });
 
   static const double _height = 66;
 
@@ -58,10 +67,62 @@ class ChatHeader extends StatelessWidget implements PreferredSizeWidget {
                 tooltip: 'المفضّلة',
                 onTap: onOpenFavorites,
               ),
+              const SizedBox(width: 6),
+              _AccountAction(onTap: onOpenAccount),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// زر الحساب — حرف اسم المستخدم داخل دائرة بلون العلامة إذا كان مسجّلاً،
+/// وأيقونة محايدة إذا كان زائراً. الحرف وحده يكفي كإشارة "أنت داخل" بلا
+/// شريط حالة إضافي يزاحم ترويسة ضيقة أصلاً.
+class _AccountAction extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _AccountAction({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: AuthStore.instance,
+      builder: (context, _) {
+        final customer = AuthStore.instance.customer;
+        final signedIn = customer != null;
+
+        return Tooltip(
+          message: signedIn ? customer.firstName : 'تسجيل الدخول',
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: signedIn ? null : RicoColors.surfaceSunken,
+                gradient: signedIn
+                    ? const LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                        colors: [RicoColors.primaryLift, RicoColors.primaryDeep],
+                      )
+                    : null,
+                shape: BoxShape.circle,
+              ),
+              child: signedIn
+                  ? Text(
+                      customer.initial,
+                      style: RicoText.labelStrong.copyWith(color: Colors.white, fontSize: 15),
+                    )
+                  : const Icon(Icons.person_outline_rounded, size: 20, color: RicoColors.inkBody),
+            ),
+          ),
+        );
+      },
     );
   }
 }

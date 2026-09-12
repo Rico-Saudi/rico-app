@@ -5,6 +5,7 @@ import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/request_flow.dart';
+import '../services/auth_store.dart';
 import '../services/backend_warmup.dart';
 import '../services/catalog_service.dart';
 import '../services/compose_service.dart';
@@ -20,6 +21,8 @@ import '../services/session_memory_service.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/auth/account_sheet.dart';
+import '../widgets/auth/auth_sheet.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_header.dart';
 import '../widgets/message_bubble.dart';
@@ -637,7 +640,8 @@ class _ChatScreenState extends State<ChatScreen> {
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
           onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
-          onConfirmRequest: (name, phone) => _confirmRequest(index, name, phone),
+          onConfirmRequest: () => _confirmRequest(index),
+          onRequestLogin: () => _signInThenConfirm(index),
           onCancelCatalogSelection: () => _cancelCatalogSelection(index),
         );
       });
@@ -683,26 +687,51 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _confirmRequest(int index, String name, String phone) async {
+  /// يفتح ورقة الدخول من داخل بطاقة الطلب، ويكمل التأكيد تلقائياً عند
+  /// نجاحه — الدخول خطوة في الطلب، فلا يُطلب من المستخدم ضغط "أكّد" مرتين.
+  Future<void> _signInThenConfirm(int index) async {
+    final signedIn = await showAuthSheet(
+      context,
+      reason: 'سجّل دخولك عشان نوصّل طلبك للمحل باسمك ورقمك.',
+    );
+    if (!mounted || !signedIn) return;
+    await _confirmRequest(index);
+  }
+
+  Future<void> _confirmRequest(int index) async {
     if (index >= _messages.length) return;
     final current = _messages[index];
     final flow = current.requestFlow;
     if (flow == null || flow.selectedItemType == null || flow.selectedItemId == null) return;
 
+    // حارس أخير: البطاقة تعرض زر الدخول للزائر أصلاً، لكن الجلسة قد تنتهي
+    // بين فتح البطاقة والضغط على "أكّد".
+    final customer = AuthStore.instance.customer;
+    final token = AuthStore.instance.token;
+    if (customer == null || token == null) {
+      await _signInThenConfirm(index);
+      return;
+    }
+
     setState(() {
       _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(stage: RequestFlowStage.submitting, customerName: name, customerPhone: phone),
+        requestFlow: flow.copyWith(
+          stage: RequestFlowStage.submitting,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          clearError: true,
+        ),
       );
     });
 
     try {
       await _requestService.submitRequest(
         businessId: flow.catalog.businessId,
-        customerName: name,
-        customerPhone: phone,
+        token: token,
         itemType: flow.selectedItemType!,
         itemId: flow.selectedItemId!,
       );
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -710,6 +739,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     } on RequestException catch (e) {
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -717,6 +747,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -729,6 +760,17 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       _scrollToBottom();
     }
+  }
+
+  /// زر الحساب في الترويسة: ملف المستخدم إن كان داخلاً، وإلا ورقة الدخول.
+  /// الدخول من هنا اختياري تماماً — التطبيق يُفتح ويُستخدم بلا حساب، ولا
+  /// يُطلب الحساب إلا عند تأكيد طلب فعلي.
+  Future<void> _openAccount() async {
+    if (AuthStore.instance.isSignedIn) {
+      await showAccountSheet(context);
+      return;
+    }
+    await showAuthSheet(context);
   }
 
   @override
@@ -744,6 +786,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onOpenFavorites: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const FavoritesScreen()),
         ),
+        onOpenAccount: _openAccount,
       ),
       body: Column(
         children: [

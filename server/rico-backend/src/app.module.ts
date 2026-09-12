@@ -15,6 +15,7 @@ import { ComposeModule } from './compose/compose.module';
 import { TranscribeModule } from './transcribe/transcribe.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
+import { CustomersModule } from './customers/customers.module';
 import { VendorModule } from './vendor/vendor.module';
 import { OwnerModule } from './owner/owner.module';
 import { PublicModule } from './public/public.module';
@@ -47,6 +48,7 @@ import { SpaModule } from './spa/spa.module';
         '/discounts*',
         '/requests*',
         '/auth*',
+        '/customer/*',
         '/vendor*',
         '/owner*',
       ],
@@ -63,6 +65,7 @@ import { SpaModule } from './spa/spa.module';
     MailerModule,
     AccountsModule,
     AuthModule,
+    CustomersModule,
     VendorModule,
     OwnerModule,
     PublicModule,

@@ -116,6 +116,7 @@ class MessageBubble extends StatelessWidget {
                         flow: message.requestFlow!,
                         onSelectItem: message.onSelectCatalogItem,
                         onConfirm: message.onConfirmRequest,
+                        onRequestLogin: message.onRequestLogin,
                         onCancel: message.onCancelCatalogSelection,
                       ),
                   ],

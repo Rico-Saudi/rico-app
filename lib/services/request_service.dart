@@ -16,10 +16,12 @@ class RequestService {
   // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
   static const String _baseUrl = 'https://app.rico-go.com';
 
+  /// [token] رمز حساب العميل — الخادم يأخذ منه الاسم والرقم، فلا يُرسلان في
+  /// الجسم: الرقم الذي يتصل عليه المحل يجب أن يكون رقم حساب موثّق لا حقلاً
+  /// حراً يُكتب مع كل طلب.
   Future<void> submitRequest({
     required String businessId,
-    required String customerName,
-    required String customerPhone,
+    required String token,
     required String itemType,
     required String itemId,
   }) async {
@@ -28,18 +30,25 @@ class RequestService {
       response = await http
           .post(
             Uri.parse('$_baseUrl/requests'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
             body: jsonEncode({
               'businessId': businessId,
-              'customerName': customerName,
-              'customerPhone': customerPhone,
               'itemType': itemType,
               'itemId': itemId,
             }),
           )
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 8));
     } catch (_) {
       throw RequestException('ما قدرت أرسل طلبك حالياً، تحقق من اتصالك وحاول مرة ثانية.');
+    }
+
+    // رمز منتهٍ أو مُبطَل: الرسالة تقول للمستخدم ما الذي عليه فعله، ولا
+    // تختلط بفشل الشبكة العام.
+    if (response.statusCode == 401) {
+      throw RequestException('انتهت جلستك، سجّل دخولك من جديد وأعد التأكيد.');
     }
 
     if (response.statusCode != 200 && response.statusCode != 201) {

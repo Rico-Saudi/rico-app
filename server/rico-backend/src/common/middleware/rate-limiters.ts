@@ -2,10 +2,17 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'node:crypto';
 import { Request } from 'express';
 
-// Two independent caps on /business/login: by IP (catches broad abuse) and
-// by the target email (catches someone repeatedly emailing one address —
-// harassment vector, not just a cost concern). `app.set('trust proxy', 1)`
-// in main.ts makes req.ip reflect the real client IP behind Render's proxy.
+// Keys a limiter by the request's target email rather than its source IP.
+// Hashed so the limiter's in-memory keyspace never holds raw addresses.
+function emailKey(req: Request): string {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  return crypto.createHash('sha256').update(email).digest('hex');
+}
+
+// Two independent caps on a login: by IP (catches broad abuse) and by the
+// target email (catches someone repeatedly hitting one address — harassment
+// vector, not just a cost concern). `app.set('trust proxy', 1)` in main.ts
+// makes req.ip reflect the real client IP behind Render's proxy.
 export const loginIpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 20,
@@ -18,10 +25,7 @@ export const loginEmailLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    return crypto.createHash('sha256').update(email).digest('hex');
-  },
+  keyGenerator: emailKey,
 });
 
 // Public write endpoint with no auth — cap abuse without adding real
@@ -38,3 +42,38 @@ export const impressionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 
 // sends a handful of clips per session; 40 per 15 minutes is far past
 // normal use and still cheap if someone burns the whole window.
 export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
+
+// The app's own auth (customer accounts) gets its own IP cap rather than
+// reusing loginIpLimiter: a rate-limit instance is one shared counter, so
+// hanging the app off the dashboards' limiter would let phone traffic lock
+// staff out of the dashboard (and vice versa). It's also looser, because
+// mobile users sit behind carrier NAT — many real people can share one IP,
+// while a dashboard login is one person at a desk.
+export const customerIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Credential checks get a higher per-address ceiling than the dashboards' 5/hour because a customer
+// mistyping a password on a phone keyboard is routine, while the codes and
+// passwords behind it are still rate-limited server-side by OTP attempt caps.
+export const customerEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: emailKey,
+});
+
+// Anything that causes an email to be SENT — tighter, because each call
+// costs a real message to someone's inbox and the abuse case (mailbombing
+// an address you don't own) needs only the address, not an account.
+export const customerOtpSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: emailKey,
+});

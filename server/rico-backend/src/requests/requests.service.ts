@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CustomerRequest, CustomerRequestDocument } from './schemas/request.schema';
@@ -6,6 +6,7 @@ import { Business, BusinessDocument } from '../businesses/schemas/business.schem
 import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { Deal, DealDocument } from '../deals/schemas/deal.schema';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { CustomerDocument } from '../customers/schemas/customer.schema';
 
 // Same wording as the Flutter Deal.typeLabel getter and the owner dashboard's
 // DEAL_TYPE_LABELS — kept in sync by hand since this is the one place a deal's
@@ -39,9 +40,18 @@ export class RequestsService {
   // itemLabel/itemDetail are always derived here from the real record, never
   // taken from the client — also doubles as the ownership check (itemId must
   // actually belong to businessId).
-  async create(dto: CreateRequestDto) {
+  async create(dto: CreateRequestDto, customer?: CustomerDocument) {
     const business = await this.businessModel.findById(dto.businessId).lean();
     if (!business) throw new NotFoundException({ error: 'business_not_found' });
+
+    // A logged-in customer's own name/phone win over anything the client
+    // sent: the vendor calls this number back, so it has to be the one tied
+    // to a verified account, not a per-order free-text field.
+    const customerName = customer ? customer.name : dto.customerName?.trim();
+    const customerPhone = customer ? customer.phone : dto.customerPhone?.trim();
+    if (!customerName || !customerPhone) {
+      throw new BadRequestException({ error: 'customer_details_required' });
+    }
 
     let itemLabel: string;
     let itemDetail: string | null;
@@ -60,8 +70,9 @@ export class RequestsService {
 
     const request = await this.requestModel.create({
       businessId: dto.businessId,
-      customerName: dto.customerName.trim(),
-      customerPhone: dto.customerPhone.trim(),
+      customerId: customer?._id ?? null,
+      customerName,
+      customerPhone,
       itemType: dto.itemType,
       itemId: dto.itemId,
       itemLabel,
