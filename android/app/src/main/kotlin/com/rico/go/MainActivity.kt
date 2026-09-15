@@ -1,4 +1,4 @@
-package com.example.rico_app
+package com.rico.go
 
 import io.flutter.embedding.android.FlutterActivity
 
