@@ -18,6 +18,36 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+/// ما يُرسل لتعيين/تعديل مهنة المستخدم. منفصل عن [ProfessionalProfile]
+/// (شكل القراءة) لأن الخادم يستقبل lat/lng ويرجّع معهما اسم المهنة العربي
+/// المشتقّ عنده — ما نرسله له، فهو من يملكه.
+class ProfessionalUpdate {
+  final String profession;
+  final String? headline;
+  final double lat;
+  final double lng;
+  final int serviceRadiusMeters;
+  final bool isAvailable;
+
+  const ProfessionalUpdate({
+    required this.profession,
+    required this.lat,
+    required this.lng,
+    required this.serviceRadiusMeters,
+    required this.isAvailable,
+    this.headline,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'profession': profession,
+        if (headline != null && headline!.trim().isNotEmpty) 'headline': headline!.trim(),
+        'lat': lat,
+        'lng': lng,
+        'serviceRadiusMeters': serviceRadiusMeters,
+        'isAvailable': isAvailable,
+      };
+}
+
 /// جلسة مستخدم: رمز حامل (Bearer) + بيانات الحساب.
 class AuthSession {
   final String token;
@@ -48,6 +78,9 @@ class AuthService {
     'too_many_attempts': 'حاولت كثير، اطلب رمزاً جديداً.',
     'email_send_failed': 'ما قدرنا نرسل الرمز لبريدك الحين، حاول بعد شوي.',
     'phone_invalid': 'رقم الجوال غير صحيح.',
+    'profession_invalid': 'المهنة المختارة غير معروفة، اختر وحدة من القائمة.',
+    'service_location_invalid': 'موقع الخدمة غير صحيح، حدّده من جديد.',
+    'service_radius_invalid': 'نطاق الخدمة لازم يكون بين ١ و١٠٠ كم.',
     'unauthorized': 'انتهت جلستك، سجّل دخولك من جديد.',
     'rate_limited': 'محاولات كثيرة، انتظر شوي وحاول مرة ثانية.',
     'network': 'ما قدرت أتصل بالخدمة، تحقق من اتصالك وحاول مرة ثانية.',
@@ -105,10 +138,16 @@ class AuthService {
     return Customer.fromJson(data);
   }
 
+  /// تعديل الملف. [professional] له ثلاث حالات مقصودة، والفرق بينها هو كل
+  /// المعنى: تركه (`clearProfessional: false` بلا قيمة) = لا تلمس المهنة،
+  /// وهو ما يحصل في كل تعديل اسم/رقم عادي؛ تمريره = إضافتها أو تعديلها؛
+  /// و[clearProfessional] = حذفها ("ما عدت أشتغل بهالمهنة").
   Future<Customer> updateProfile({
     required String token,
     String? name,
     String? phone,
+    ProfessionalUpdate? professional,
+    bool clearProfessional = false,
   }) async {
     final data = await _send(
       () => http.patch(
@@ -117,6 +156,8 @@ class AuthService {
         body: jsonEncode({
           if (name != null) 'name': name,
           if (phone != null) 'phone': phone,
+          if (clearProfessional) 'professional': null,
+          if (!clearProfessional && professional != null) 'professional': professional.toJson(),
         }),
       ),
     );

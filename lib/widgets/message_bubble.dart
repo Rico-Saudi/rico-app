@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import 'catalog_flow_card.dart';
 import 'chat_pill_chip.dart';
 import 'place_result_card.dart';
+import 'professional_flow_card.dart';
 import 'recommended_pick_card.dart';
 import 'rico_surfaces.dart';
 import 'typing_dots.dart';
@@ -38,6 +39,7 @@ class MessageBubble extends StatelessWidget {
     final hasAttachments = (message.places?.isNotEmpty ?? false) ||
         (message.deals?.isNotEmpty ?? false) ||
         message.requestFlow != null ||
+        message.professionalFlow != null ||
         message.understandingIntent != null && message.isLoading;
 
     return Padding(
@@ -118,6 +120,14 @@ class MessageBubble extends StatelessWidget {
                         onConfirm: message.onConfirmRequest,
                         onRequestLogin: message.onRequestLogin,
                         onCancel: message.onCancelCatalogSelection,
+                      ),
+                    if (message.professionalFlow != null)
+                      ProfessionalFlowCard(
+                        flow: message.professionalFlow!,
+                        onSelect: message.onSelectProfessional,
+                        onConfirm: message.onConfirmProfessionalRequest,
+                        onRequestLogin: message.onProfessionalRequestLogin,
+                        onCancel: message.onCancelProfessionalSelection,
                       ),
                   ],
                 ),

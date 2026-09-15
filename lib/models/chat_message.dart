@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import '../services/intent_service.dart';
 import 'deal.dart';
 import 'place_result.dart';
+import 'professional.dart';
+import 'professional_flow.dart';
 import 'request_flow.dart';
 
 enum MessageSender { user, bot }
@@ -53,6 +55,25 @@ class ChatMessage {
   /// يُستدعى عند الرجوع من مرحلة التأكيد إلى تصفّح القائمة من جديد.
   final VoidCallback? onCancelCatalogSelection;
 
+  /// تدفّق "أقرب أصحاب مهنة + إرسال طلب تواصل لواحد منهم" — نظير
+  /// [requestFlow] لنتائج الأشخاص بدل الأنشطة التجارية.
+  final ProfessionalFlow? professionalFlow;
+
+  /// يُستدعى عند اختيار صاحب مهنة من [professionalFlow] — ينقل الحالة من
+  /// تصفّح إلى تأكيد.
+  final void Function(Professional professional)? onSelectProfessional;
+
+  /// يُستدعى عند تأكيد إرسال الطلب لصاحب المهنة المختار، ومعه وصف الشغلة
+  /// إن كتبه العميل.
+  final void Function(String? note)? onConfirmProfessionalRequest;
+
+  /// يُستدعى حين يضغط زائر (غير مسجّل) زر الإرسال — يفتح ورقة الدخول ثم
+  /// يكمل الإرسال تلقائياً، تماماً مثل [onRequestLogin].
+  final VoidCallback? onProfessionalRequestLogin;
+
+  /// يُستدعى عند الرجوع من التأكيد لقائمة أصحاب المهنة.
+  final VoidCallback? onCancelProfessionalSelection;
+
   ChatMessage({
     required this.text,
     required this.sender,
@@ -69,6 +90,11 @@ class ChatMessage {
     this.onConfirmRequest,
     this.onRequestLogin,
     this.onCancelCatalogSelection,
+    this.professionalFlow,
+    this.onSelectProfessional,
+    this.onConfirmProfessionalRequest,
+    this.onProfessionalRequestLogin,
+    this.onCancelProfessionalSelection,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
@@ -76,6 +102,7 @@ class ChatMessage {
     String? text,
     bool? isLoading,
     RequestFlow? requestFlow,
+    ProfessionalFlow? professionalFlow,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -93,6 +120,11 @@ class ChatMessage {
       onConfirmRequest: onConfirmRequest,
       onRequestLogin: onRequestLogin,
       onCancelCatalogSelection: onCancelCatalogSelection,
+      professionalFlow: professionalFlow ?? this.professionalFlow,
+      onSelectProfessional: onSelectProfessional,
+      onConfirmProfessionalRequest: onConfirmProfessionalRequest,
+      onProfessionalRequestLogin: onProfessionalRequestLogin,
+      onCancelProfessionalSelection: onCancelProfessionalSelection,
       timestamp: timestamp,
     );
   }

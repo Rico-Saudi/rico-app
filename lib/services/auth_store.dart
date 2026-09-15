@@ -78,11 +78,22 @@ class AuthStore extends ChangeNotifier {
     await prefs.setString(_customerKey, jsonEncode(session.customer.toJson()));
   }
 
-  Future<void> updateProfile({String? name, String? phone}) async {
+  Future<void> updateProfile({
+    String? name,
+    String? phone,
+    ProfessionalUpdate? professional,
+    bool clearProfessional = false,
+  }) async {
     final token = _token;
     if (token == null) throw AuthException('unauthorized', 'انتهت جلستك، سجّل دخولك من جديد.');
 
-    final updated = await _service.updateProfile(token: token, name: name, phone: phone);
+    final updated = await _service.updateProfile(
+      token: token,
+      name: name,
+      phone: phone,
+      professional: professional,
+      clearProfessional: clearProfessional,
+    );
     _customer = updated;
     notifyListeners();
 

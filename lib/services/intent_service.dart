@@ -1,3 +1,6 @@
+import '../models/profession.dart';
+import 'profession_catalog.dart';
+
 /// نمط رسالة دردشة (غير بحث) + الردود الممكنة عليه — انظر
 /// [IntentService.detectOffTopicReply].
 class _ChatReply {
@@ -16,8 +19,10 @@ class _ChatReply {
 /// بيانات تقييم حقيقية غير متوفرة دوماً).
 enum RankMode { nearest, cheapest, openNow, bestRated }
 
-/// نوع النية: بحث عن مكان، أو استفسار عن عروض/خصومات (لا يرتبط بفئة مكان).
-enum IntentKind { place, deals }
+/// نوع النية: بحث عن مكان، أو استفسار عن عروض/خصومات (لا يرتبط بفئة مكان)،
+/// أو طلب **شخص** صاحب مهنة (دهان، كهربائي...) وهذا غير المحل الذي يبيع
+/// أدوات المهنة نفسها — انظر [IntentService.professionFor].
+enum IntentKind { place, deals, professional }
 
 /// نية واحدة من نوايا رسالة المستخدم (قد تحتوي الرسالة الواحدة عدة نوايا،
 /// انظر [IntentService.parseMulti]).
@@ -27,6 +32,9 @@ class QueryIntent {
   final RankMode rank;
   final String? brandHint;
   final String? slug; // null لنوايا deals وللفئات الحرة (other) غير الثابتة
+
+  /// سلوق المهنة لنوايا [IntentKind.professional] فقط — null لغيرها.
+  final String? profession;
 
   /// رقم ترتيب عنصر من "آخر نتائج معروضة" أشار له المستخدم صراحة (مثل
   /// "الثاني")، أو null لطلب بحث عادي. عند تحديده يُحل من الذاكرة المحلية
@@ -39,6 +47,7 @@ class QueryIntent {
     this.rank = RankMode.nearest,
     this.brandHint,
     this.slug,
+    this.profession,
     this.referencedPosition,
   });
 
@@ -282,6 +291,42 @@ class IntentService {
 
   static bool _containsWord(String text, String word) => _anyWordPattern([word]).hasMatch(text);
 
+  // نهاية كلمة: مسافة، ترقيم، أو نهاية النص — مع السماح بجمع المذكر
+  // (دهان/دهانين). بلا تثبيت النهاية كانت "رش" (مكافحة حشرات) تطابق داخل
+  // "رشّح لي مطعم"، و"مدرس" تطابق داخل "مدرسة" فيصير السؤال عن أقرب مدرسة
+  // طلب مدرّس خصوصي.
+  //
+  // التاء المربوطة ولاحقة "ات" مستثناتان عمداً: بهما كانت "كهربائي" تبتلع
+  // "كهربائيات" (محل إلكترونيات) و"مساح" تبتلع "مساحات". وما نخسر شي —
+  // جمع المؤنث لأسماء المهن مكتوب صراحةً في الجدول (مكيفات، دهانات،
+  // خزانات، مقاولات...) فيطابق كصيغة مستقلة.
+  static const String _pluralSuffixes = '(?:ين|ون)?';
+  static const String _wordEnd = r'(?=$|[\s،,.؟!:()\-])';
+
+  /// نمط مطابقة على حدود الكلمة من الطرفين — لأسماء المهن وكلمات المحلات.
+  static RegExp _boundedPattern(List<String> words) => RegExp(
+        '$_wordStart$_arabicPrefixes(?:${words.map(RegExp.escape).join('|')})$_pluralSuffixes$_wordEnd',
+      );
+
+  static final Map<String, RegExp> _professionPatternCache = {};
+
+  static bool _containsProfessionWord(String text, String word) {
+    final pattern = _professionPatternCache.putIfAbsent(word, () => _boundedPattern([word]));
+    return pattern.hasMatch(text);
+  }
+
+  /// طول أطول كلمة فئة مكان تطابق النص، أو 0. يُستخدم للترجيح بين جدولي
+  /// المهن والأماكن — انظر [professionFor].
+  static int _longestPlaceWordMatch(String text) {
+    var longest = 0;
+    for (final category in _categories) {
+      for (final word in (category['words'] as String).split('|')) {
+        if (word.length > longest && _containsWord(text, word)) longest = word.length;
+      }
+    }
+    return longest;
+  }
+
   // كلمات تدل على أن الرسالة استكمال لطلب سابق وليست طلباً جديداً مستقلاً
   // (تستخدم فقط عند فشل مطابقة أي كلمة فئة وتوفر فئة سابقة من نفس الجلسة)
   static final RegExp _continuationWords =
@@ -289,6 +334,12 @@ class IntentService {
 
   // كلمات تدل على نية "عروض/خصومات" (بحث منفصل عن أي فئة مكان)
   static final RegExp _dealsWords = _anyWordPattern(['عروض', 'عرض', 'خصم', 'خصومات', 'تخفيضات']);
+
+  // كلمات تدل أن المقصود **محل** لا **شخص**: "محل دهانات" بضاعة تُشترى،
+  // و"دهان" شخص يجي يشتغل. بدون هالتمييز كانت كل رسالة فيها اسم مهنة
+  // تُفهم كطلب شخص، فيُجاوَب سؤال عن محل بقائمة أشخاص.
+  static final RegExp _shopWords =
+      _boundedPattern(['محل', 'محلات', 'متجر', 'معرض', 'سوق', 'ورشة', 'مركز', 'شركة', 'مصنع', 'مكتب']);
 
   // فاصل بين نوايا متعددة في رسالة واحدة: "و"/"أو" كمحرف مستقل (بمسافة على
   // الجانبين لتفادي قطع كلمات تبدأ بـ"و" مثل "وايش")، أو فاصلة عربية/إنجليزية
@@ -309,6 +360,24 @@ class IntentService {
   // تحية، و"شو بتعمل؟" سؤال عن ريكو مش تحية، و"بدي شي حلو" طلب اقتراح غامض
   // مش مدح. أول نمط يطابق هو اللي بيرد.
   static final List<_ChatReply> _chatReplies = [
+    // طلب عمالة/فنيين بشكل عام بلا تخصص ("فتحت ورشة وأبي فنيين"، "أدور
+    // عمال"). موضوع في أول القائمة لأنه أخص من كل ما بعده.
+    //
+    // ما نخمّن مهنة هنا عن قصد — نفس القاعدة المكتوبة في برومبت المصنّف:
+    // "فنيين" كلمة عامة تشمل مئة مهنة، واختيار وحدة منها (فني صيانة عامة
+    // مثلاً) تخمين يرد على سؤال واضح بجواب غلط. نسأل عن التخصص بدلها.
+    //
+    // ما تُفحص أصلاً إلا لما تفشل [hasSearchSignal]، فرسالة فيها تخصص فعلي
+    // ("أبي فني تكييف") تروح للبحث ولا توصل هنا.
+    _ChatReply(
+      RegExp('فنيين|فنيه|عمال|عمالة|عمّال|صنايعية|صنايعي|حرفيين|معلمين|موظفين|شغالين|أيدي عاملة|ايدي عاملة'),
+      [
+        'تمام 👌 وش التخصص اللي تحتاجه؟\n🔌 كهربائي\n🚿 سبّاك\n🎨 دهّان\n🪚 نجّار\nقل لي المهنة وأنا أطلّع لك أقربهم لك.',
+        'أبشر 😄 قل لي التخصص بالضبط:\n🔧 فني تكييف\n🔌 كهربائي\n🧱 مبلّط\n🎨 دهّان\nوأنا أدوّر لك على أقربهم.',
+        'على طول 👍 بس حدّد لي المهنة — كهربائي؟ سبّاك؟ نجّار؟ حدّاد؟ قل لي وش تحتاج وأنا ألقى لك أقربهم.',
+      ],
+      appendCta: false,
+    ),
     // شكر
     _ChatReply(
       RegExp('شكرا|شكراً|مشكور|مشكورة|تسلم|تسلمي|يعطيك العافية|الله يعافيك|ما قصرت|ممنون|يسلمو'),
@@ -527,12 +596,13 @@ class IntentService {
     ),
   ];
 
-  /// هل بالرسالة أي إشارة فعلية لطلب مكان أو عروض (كلمة فئة، كلمة عروض، أو
-  /// كلمة استكمال لطلب سابق)؟ يُستخدم قبل اعتبار الرسالة تحية/دردشة عامة —
+  /// هل بالرسالة أي إشارة فعلية لطلب (كلمة فئة مكان، كلمة عروض، اسم مهنة،
+  /// أو كلمة استكمال لطلب سابق)؟ يُستخدم قبل اعتبار الرسالة تحية/دردشة عامة —
   /// رسالة متل "هلا، وين أقرب مطعم؟" فيها تحية وطلب حقيقي بنفس الوقت، ولازم
   /// تُعامل كطلب بحث لا كتحية فقط.
-  static bool hasPlaceOrDealsSignal(String text, {String? lastCategorySlug}) {
+  static bool hasSearchSignal(String text, {String? lastCategorySlug}) {
     if (_dealsWords.hasMatch(text)) return true;
+    if (professionFor(text) != null) return true;
     if (_categories.any((c) => (c['words'] as String).split('|').any((w) => _containsWord(text, w)))) {
       return true;
     }
@@ -540,7 +610,7 @@ class IntentService {
     return false;
   }
 
-  /// يكتشف إذا كانت رسالة بلا أي إشارة لمكان/عروض (شرط hasPlaceOrDealsSignal
+  /// يكتشف إذا كانت رسالة بلا أي إشارة لمكان/عروض/مهنة (شرط hasSearchSignal
   /// أعلاه) من أنواع الدردشة المعروفة (تحية، شكر، وداع، سؤال عن ريكو، طلب
   /// مساعدة، شكوى، اقتراح غامض...). يرجع نص الرد المناسب، أو null إذا لم
   /// تُعرف الرسالة إطلاقاً (عندها تُعامل كطلب مكان غامض بالافتراض المعتاد في
@@ -568,6 +638,50 @@ class IntentService {
     return null;
   }
 
+  /// يطابق اسم مهنة في النص، أو null. مسار محلي احتياطي فقط: المصنّف عبر
+  /// LLM هو من يفرّق عادة بين "أبغى دهان" و"وين محل دهانات"، وهذا يفعل نفس
+  /// التمييز بقاعدة واحدة بسيطة — وجود كلمة تدل على محل ([_shopWords]) يعني
+  /// أن المقصود مكان لا شخص.
+  ///
+  /// أطول صيغة مطابقة تفوز لنفس سبب فوزها في [parse]: "تنظيف خزانات" أخص من
+  /// "تنظيف".
+  static Profession? professionFor(String text) {
+    if (_shopWords.hasMatch(text)) return null;
+
+    Profession? chosen;
+    var chosenLength = 0;
+    for (final profession in ProfessionCatalog.all) {
+      for (final alias in profession.aliases) {
+        if (alias.length > chosenLength && _containsProfessionWord(text, alias)) {
+          chosen = profession;
+          chosenLength = alias.length;
+        }
+      }
+    }
+    if (chosen == null) return null;
+
+    // "أطول مطابقة تفوز" مطبّقة عبر الجدولين لا داخل كل واحد وحده: "تنظيف"
+    // مهنة و"تنظيف جاف" مغسلة، و"كهربائي" مهنة و"كهربائيات" محل. لما تطابق
+    // كلمة مكان أطول، المقصود المكان — والعكس يخلي السؤال عن محل يُجاوَب
+    // بقائمة أشخاص.
+    return _longestPlaceWordMatch(text) >= chosenLength ? null : chosen;
+  }
+
+  /// يبني نية طلب صاحب مهنة من سلوق معروف — نظير [byCategorySlug] لنتيجة
+  /// تصنيف LLM من نوع professional.
+  static QueryIntent byProfessionSlug(String slug, {int? referencedPosition}) {
+    final profession = ProfessionCatalog.bySlug(slug);
+    // سلوق ما نعرفه = مهنة أُضيفت على الخادم بعد إصدار هذي النسخة. نمرّرها
+    // كما هي بدل إسقاط النية: الخادم يعرف كيف يبحث عنها، وكل الناقص عندنا
+    // هو الاسم العربي المصقول.
+    return QueryIntent(
+      kind: IntentKind.professional,
+      label: profession?.label ?? slug,
+      profession: slug,
+      referencedPosition: referencedPosition,
+    );
+  }
+
   static RankMode _detectRank(String text) {
     if (RegExp(r'مفتوح الحين|مفتوح الآن|مفتوح الان|فاتح الحين|فاتح الآن|فاتح الان').hasMatch(text)) {
       return RankMode.openNow;
@@ -580,6 +694,17 @@ class IntentService {
 
   static QueryIntent parse(String rawText, {String? lastCategorySlug}) {
     final text = rawText.trim();
+
+    // اسم مهنة يُفحص قبل فئات الأماكن: "أبغى كهربائي" لازم تطلع طلب شخص، لا
+    // تسقط على الافتراضي (مطعم) لأن ما فيها كلمة فئة مكان.
+    final profession = professionFor(text);
+    if (profession != null) {
+      return QueryIntent(
+        kind: IntentKind.professional,
+        label: profession.label,
+        profession: profession.slug,
+      );
+    }
 
     Map<String, Object>? chosen;
 

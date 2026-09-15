@@ -6,7 +6,7 @@ import 'intent_service.dart';
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
 /// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
 class ResolvedIntent {
-  final String kind; // 'place' | 'deals'
+  final String kind; // 'place' | 'deals' | 'professional'
   final String? category;
   final String rank; // 'nearest' | 'cheapest' | 'open_now' | 'best_rated'
   final String? brandHint;
@@ -14,6 +14,9 @@ class ResolvedIntent {
   final String? customTagValue;
   final String? label;
   final int? referencedPosition;
+
+  /// سلوق المهنة — لـkind == 'professional' فقط.
+  final String? profession;
 
   ResolvedIntent({
     required this.kind,
@@ -24,11 +27,20 @@ class ResolvedIntent {
     this.customTagValue,
     this.label,
     this.referencedPosition,
+    this.profession,
   });
 
   QueryIntent? toQueryIntent() {
     if (kind == 'deals') {
       return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض', referencedPosition: referencedPosition);
+    }
+
+    if (kind == 'professional') {
+      // بلا سلوق مهنة ما فيه شي نبحث عنه — الخادم يسقط هذي الحالة أصلاً
+      // ([ClassifyService.validateIntent])، وهذا حارس ثانٍ لا أكثر.
+      final slug = profession;
+      if (slug == null || slug.isEmpty) return null;
+      return IntentService.byProfessionSlug(slug, referencedPosition: referencedPosition);
     }
 
     final rankMode = _rankFromString(rank);
@@ -164,6 +176,7 @@ class LlmIntentService {
         customTagValue: customTag?['value'] as String?,
         label: map['label'] as String?,
         referencedPosition: map['referencedPosition'] as int?,
+        profession: map['profession'] as String?,
       );
     }).toList();
 

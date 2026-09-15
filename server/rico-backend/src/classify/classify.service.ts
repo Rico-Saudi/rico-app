@@ -2,15 +2,18 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { brandFor } from '../common/constants/brands';
 import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
+import { isKnownProfession, professionLabel } from '../professionals/constants/professions';
 
 interface Intent {
-  kind: 'place' | 'deals';
+  kind: 'place' | 'deals' | 'professional';
   category: string | null;
   rank: string;
   brandHint: string | null;
   customTag: { key: string; value: string } | null;
   label: string | null;
   referencedPosition: number | null;
+  /** Trade slug, for kind='professional' only — null otherwise. */
+  profession: string | null;
 }
 
 // Strips characters that could break out of the plain-text block we
@@ -48,6 +51,25 @@ function validateIntent(raw: any): Intent | null {
       customTag: null,
       label: rawLabel && rawLabel.length <= 40 ? rawLabel : 'العروض',
       referencedPosition: parseReferencedPosition(raw),
+      profession: null,
+    };
+  }
+
+  // A person who does a trade, not a place that sells something. Dropped
+  // unless the profession is one we actually have a slug for: an invented
+  // trade would search for nobody, and falling back to a place search would
+  // answer "أبغى دهان" with a paint shop — a different thing than a painter.
+  if (raw.kind === 'professional') {
+    if (!isKnownProfession(raw.profession)) return null;
+    return {
+      kind: 'professional',
+      category: null,
+      rank: 'nearest',
+      brandHint: null,
+      customTag: null,
+      label: professionLabel(raw.profession),
+      referencedPosition: parseReferencedPosition(raw),
+      profession: raw.profession,
     };
   }
 
@@ -88,6 +110,7 @@ function validateIntent(raw: any): Intent | null {
     customTag,
     label,
     referencedPosition,
+    profession: null,
   };
 }
 

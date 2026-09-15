@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../models/customer.dart';
+import '../../screens/incoming_requests_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_store.dart';
 import '../../theme/app_theme.dart';
+import 'profession_sheet.dart';
 
 /// ورقة الحساب — ملخّص بيانات المستخدم مع تعديلها والخروج.
 ///
@@ -104,6 +107,20 @@ class _AccountSheetState extends State<AccountSheet> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// المهنة تُحرّر في ورقتها الخاصة: ورقة الحساب أصلاً نموذج مكتظ، ومحرّر
+  /// المهنة فيه منتقٍ وموقع ونطاق ومفتاح إتاحة — حشره هنا يطمس الاثنين.
+  Future<void> _openProfessionSheet() async {
+    await showProfessionSheet(context);
+    // لا setState: [AuthStore] يبلّغ بنفسه بعد الحفظ، وهذي الورقة مبنية
+    // داخل [ListenableBuilder] يستمع له.
+  }
+
+  void _openIncomingRequests() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const IncomingRequestsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -194,6 +211,15 @@ class _AccountSheetState extends State<AccountSheet> {
                         alignment: Alignment.topCenter,
                         child: _editing ? _buildEditor() : _buildDetails(customer.phone),
                       ),
+                      if (!_editing) ...[
+                        const SizedBox(height: 12),
+                        _ProfessionSection(
+                          profile: customer.professional,
+                          busy: _busy,
+                          onEdit: _openProfessionSheet,
+                          onOpenRequests: _openIncomingRequests,
+                        ),
+                      ],
                       if (_error != null) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -345,6 +371,129 @@ class _AccountSheetState extends State<AccountSheet> {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// قسم "مهنتي" في ورقة الحساب — حالتان: من ما أضاف مهنة يرى دعوة سطر واحد،
+/// ومن أضافها يرى مهنته وحالتها ومدخلاً لطلباته الواردة.
+class _ProfessionSection extends StatelessWidget {
+  final ProfessionalProfile? profile;
+  final bool busy;
+  final VoidCallback onEdit;
+  final VoidCallback onOpenRequests;
+
+  const _ProfessionSection({
+    required this.profile,
+    required this.busy,
+    required this.onEdit,
+    required this.onOpenRequests,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = this.profile;
+
+    if (profile == null) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: RicoColors.surface,
+          borderRadius: RicoRadii.cardR,
+          border: Border.all(color: RicoColors.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.engineering_rounded, size: 17, color: RicoColors.inkMuted),
+                SizedBox(width: 9),
+                Expanded(child: Text('عندك مهنة؟', style: RicoText.labelStrong)),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'أضف مهنتك وموقع شغلك، ويلقونك أول ما أحد قريب منك يدوّر عليها.',
+              style: RicoText.caption.copyWith(height: 1.6),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: busy ? null : onEdit,
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: const Text('أضف مهنتك'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: RicoColors.surface,
+        borderRadius: RicoRadii.cardR,
+        border: Border.all(color: RicoColors.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.engineering_rounded, size: 17, color: RicoColors.primary),
+              const SizedBox(width: 9),
+              Expanded(child: Text(profile.professionLabel, style: RicoText.labelStrong)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: profile.isAvailable ? RicoColors.primaryTint : RicoColors.surfaceSunken,
+                  borderRadius: RicoRadii.pillR,
+                ),
+                child: Text(
+                  profile.isAvailable ? 'ظاهر للباحثين' : 'مخفي مؤقتاً',
+                  style: RicoText.overline.copyWith(
+                    color: profile.isAvailable ? RicoColors.primaryDeep : RicoColors.inkMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (profile.headline != null && profile.headline!.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(profile.headline!, style: RicoText.caption.copyWith(height: 1.6)),
+          ],
+          const SizedBox(height: 7),
+          Text(
+            'تخدم لين ${(profile.serviceRadiusMeters / 1000).round()} كم من موقع شغلك.',
+            style: RicoText.caption.copyWith(color: RicoColors.inkFaint),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 11),
+            child: Divider(height: 1),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: onOpenRequests,
+                  icon: const Icon(Icons.inbox_rounded, size: 17),
+                  label: const Text('طلبات وصلتني'),
+                  style: TextButton.styleFrom(minimumSize: const Size(0, 36)),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: busy ? null : onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 17),
+                label: const Text('تعديل'),
+                style: TextButton.styleFrom(
+                  foregroundColor: RicoColors.inkMuted,
+                  minimumSize: const Size(0, 36),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

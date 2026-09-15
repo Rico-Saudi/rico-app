@@ -77,3 +77,15 @@ export const customerOtpSendLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: emailKey,
 });
+
+// Sending a lead to a tradesperson emails them and shows up in their inbox,
+// so it's capped per IP like the other endpoints that reach a real person.
+// Looser than the OTP caps because a customer legitimately messages several
+// professionals while comparing, and tighter than impressions because each
+// call costs someone's attention rather than a row in a table.
+export const professionalRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});

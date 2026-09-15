@@ -35,13 +35,57 @@ class UnderstandingCard extends StatelessWidget {
     'park': Icons.park_rounded,
   };
 
-  IconData get _categoryIcon => intent.kind == IntentKind.deals
-      ? Icons.local_offer_rounded
-      : (_categoryIcons[intent.slug] ?? Icons.place_rounded);
+  /// أيقونة لكل مهنة. الناقص منها يقع على أيقونة عامة لـ"صاحب مهنة" بدل
+  /// أيقونة مكان — المقصود شخص، والفرق يظهر بلمحة قبل وصول النتائج.
+  static const Map<String, IconData> _professionIcons = {
+    'painter': Icons.format_paint_rounded,
+    'electrician': Icons.electrical_services_rounded,
+    'plumber': Icons.plumbing_rounded,
+    'carpenter': Icons.carpenter_rounded,
+    'ac_technician': Icons.ac_unit_rounded,
+    'blacksmith': Icons.hardware_rounded,
+    'welder': Icons.local_fire_department_rounded,
+    'tiler': Icons.grid_view_rounded,
+    'plasterer': Icons.roller_shades_rounded,
+    'aluminum_glass': Icons.window_rounded,
+    'insulation': Icons.roofing_rounded,
+    'mover': Icons.local_shipping_rounded,
+    'cleaner': Icons.cleaning_services_rounded,
+    'water_tank_cleaning': Icons.water_drop_rounded,
+    'pest_control': Icons.pest_control_rounded,
+    'gardener': Icons.yard_rounded,
+    'appliance_repair': Icons.home_repair_service_rounded,
+    'phone_repair': Icons.smartphone_rounded,
+    'it_support': Icons.computer_rounded,
+    'cctv': Icons.videocam_rounded,
+    'satellite_technician': Icons.settings_input_antenna_rounded,
+    'car_mechanic': Icons.car_repair_rounded,
+    'driver': Icons.drive_eta_rounded,
+    'chef': Icons.restaurant_menu_rounded,
+    'tailor': Icons.content_cut_rounded,
+    'photographer': Icons.photo_camera_rounded,
+    'tutor': Icons.school_rounded,
+    'home_nurse': Icons.medical_services_rounded,
+  };
+
+  IconData get _categoryIcon => switch (intent.kind) {
+        IntentKind.deals => Icons.local_offer_rounded,
+        IntentKind.professional => _professionIcons[intent.profession] ?? Icons.engineering_rounded,
+        IntentKind.place => _categoryIcons[intent.slug] ?? Icons.place_rounded,
+      };
 
   List<({IconData icon, String label})> get _tags {
     if (intent.kind == IntentKind.deals) {
       return [(icon: Icons.local_offer_rounded, label: 'العروض القريبة')];
+    }
+
+    // أصحاب المهن ما ينطبق عليهم ترتيب بسعر ولا تقييم ولا حالة فتح — الوسم
+    // الوحيد الصادق هو المهنة نفسها وأنهم الأقرب.
+    if (intent.kind == IntentKind.professional) {
+      return [
+        (icon: _categoryIcon, label: intent.label),
+        (icon: Icons.near_me_rounded, label: 'الأقرب لك'),
+      ];
     }
 
     final tags = <({IconData icon, String label})>[

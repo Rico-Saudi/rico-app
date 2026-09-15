@@ -49,6 +49,13 @@ class ComposeItemDto {
   @IsString()
   @Length(1, 60)
   dealLabel?: string;
+
+  // Present only for intentKind='professional' — the trade of the person
+  // this item describes ("دهّان"). Places never carry it.
+  @IsOptional()
+  @IsString()
+  @Length(1, 60)
+  professionLabel?: string;
 }
 
 export class ComposeRequestDto {
@@ -56,7 +63,7 @@ export class ComposeRequestDto {
   @Length(1, 500)
   message: string;
 
-  @IsIn(['place', 'deals'])
+  @IsIn(['place', 'deals', 'professional'])
   intentKind: string;
 
   @IsString()

@@ -10,12 +10,14 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import crypto from 'node:crypto';
 import { Model, Types } from 'mongoose';
-import { Customer, CustomerDocument } from './schemas/customer.schema';
+import { Customer, CustomerDocument, DEFAULT_SERVICE_RADIUS_METERS } from './schemas/customer.schema';
 import { CustomerOtp, CustomerOtpDocument, OtpPurpose } from './schemas/customer-otp.schema';
 import { CustomerToken, CustomerTokenDocument } from './schemas/customer-token.schema';
 import { MailerService } from '../mailer/mailer.service';
 import { brandFor } from '../common/constants/brands';
 import { generateOtpCode, generateToken, hashPassword, hashToken, verifyPassword } from '../common/utils/auth.util';
+import { professionLabel } from '../professionals/constants/professions';
+import { UpdateCustomerProfileDto } from './dto/update-profile.dto';
 
 export const OTP_TTL_MINUTES = 10;
 const OTP_TTL_MS = OTP_TTL_MINUTES * 60 * 1000;
@@ -37,12 +39,24 @@ export const GENERIC_OTP_RESPONSE = {
   expiresInSeconds: OTP_TTL_MS / 1000,
 };
 
+export interface CustomerProfessionalProfile {
+  profession: string;
+  professionLabel: string;
+  headline: string | null;
+  lat: number;
+  lng: number;
+  serviceRadiusMeters: number;
+  isAvailable: boolean;
+}
+
 export interface CustomerProfile {
   id: string;
   name: string;
   email: string;
   phone: string;
   emailVerified: boolean;
+  /** null unless this person offers a trade — see ProfessionalProfile. */
+  professional: CustomerProfessionalProfile | null;
 }
 
 export interface CustomerSession {
@@ -210,9 +224,28 @@ export class CustomersService {
     return { ok: true };
   }
 
-  async updateProfile(customer: CustomerDocument, updates: { name?: string; phone?: string }) {
+  async updateProfile(customer: CustomerDocument, updates: UpdateCustomerProfileDto) {
     if (updates.name !== undefined) customer.name = updates.name.trim();
     if (updates.phone !== undefined) customer.phone = updates.phone.trim();
+
+    // Three cases, distinguished by JS's own absent/null split: key omitted
+    // (leave the trade alone — every plain name/phone edit), explicit null
+    // (stop offering the trade), or an object (set or replace it).
+    if (updates.professional === null) {
+      customer.professional = null;
+    } else if (updates.professional !== undefined) {
+      const next = updates.professional;
+      customer.professional = {
+        profession: next.profession,
+        headline: next.headline?.trim() || null,
+        serviceLocation: { type: 'Point', coordinates: [next.lng, next.lat] },
+        serviceRadiusMeters: next.serviceRadiusMeters ?? DEFAULT_SERVICE_RADIUS_METERS,
+        // Editing your trade shouldn't quietly take you offline, so an
+        // omitted flag keeps the current value (true for a new profile).
+        isAvailable: next.isAvailable ?? customer.professional?.isAvailable ?? true,
+      };
+    }
+
     await customer.save();
     return toProfile(customer);
   }
@@ -302,12 +335,26 @@ function normalizeEmail(raw: string): string {
 }
 
 export function toProfile(customer: CustomerDocument | (Customer & { _id: Types.ObjectId })): CustomerProfile {
+  const pro = customer.professional;
   return {
     id: String(customer._id),
     name: customer.name,
     email: customer.email,
     phone: customer.phone,
     emailVerified: customer.emailVerified,
+    professional: pro
+      ? {
+          profession: pro.profession,
+          // Resolved server-side so the app renders the right Arabic name
+          // for a trade added after that build shipped.
+          professionLabel: professionLabel(pro.profession),
+          headline: pro.headline ?? null,
+          lat: pro.serviceLocation.coordinates[1],
+          lng: pro.serviceLocation.coordinates[0],
+          serviceRadiusMeters: pro.serviceRadiusMeters,
+          isAvailable: pro.isAvailable,
+        }
+      : null,
   };
 }
 

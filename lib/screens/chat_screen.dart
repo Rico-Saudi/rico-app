@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
+import '../models/professional.dart';
+import '../models/professional_flow.dart';
 import '../models/request_flow.dart';
 import '../services/auth_store.dart';
 import '../services/backend_warmup.dart';
@@ -15,6 +17,7 @@ import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
 import '../services/location_service.dart';
 import '../services/places_service.dart';
+import '../services/professionals_service.dart';
 import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
@@ -50,6 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final CatalogService _catalogService = CatalogService();
   final RequestService _requestService = RequestService();
   final TranscribeService _transcribeService = TranscribeService();
+  final ProfessionalsService _professionalsService = ProfessionalsService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
@@ -124,8 +128,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// الرسائل القابلة للحفظ/الإرسال كسياق: نصية فقط، غير قيد التحميل، وبلا
   /// تدفّق طلب مرتبط (لا معنى لاستعادة أزرار/حالات تفاعلية من محادثة سابقة).
-  List<ChatMessage> get _persistableMessages =>
-      _messages.where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null).toList();
+  List<ChatMessage> get _persistableMessages => _messages
+      .where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null && m.professionalFlow == null)
+      .toList();
 
   /// يبني آخر رسائل المحادثة كسياق للتصنيف عبر LLM، لدعم الاستكمالات مثل
   /// "بس أبعد شوي" بدل معاملة كل رسالة بمعزل عمّا سبقها.
@@ -235,14 +240,26 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// يحل نية واحدة (مكان أو عروض) إلى رسالة رد جاهزة، مع عزل الأخطاء داخل
-  /// النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا يوقف البقية).
+  /// يحل نية واحدة (مكان أو عروض أو صاحب مهنة) إلى رسالة رد جاهزة، مع عزل
+  /// الأخطاء داخل النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا
+  /// يوقف البقية).
+  ///
+  /// [index] هو موضع فقاعة التحميل التي ستُستبدل بهذي الرسالة — تحتاجه نتائج
+  /// أصحاب المهن وحدها، لأن أزرارها تعدّل حالة نفس الرسالة لاحقاً (اختيار ثم
+  /// تأكيد)، فلازم تعرف موضعها. لا يصح استنتاجه من [_messages.length] وقت
+  /// الحل: الفقاعة موجودة أصلاً في القائمة، وقد تكون معها فقاعات نوايا أخرى
+  /// من نفس الرسالة تُحل بالتوازي.
   Future<ChatMessage> _resolveIntentMessage(
     String text,
     QueryIntent intent,
     ({double lat, double lng, bool offerSaveHome}) origin,
     bool usedFallback,
+    int index,
   ) async {
+    if (intent.kind == IntentKind.professional) {
+      return _resolveProfessionalMessage(text, intent, origin, index);
+    }
+
     if (intent.kind == IntentKind.deals) {
       try {
         final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
@@ -390,6 +407,185 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// يحل نية "أقرب صاحب مهنة" إلى رسالة فيها قائمة أشخاص قابلة للاختيار.
+  ///
+  /// لا مسار احتياطي خارجي هنا بعكس الأماكن: أصحاب المهن كلهم مسجّلون عندنا
+  /// بأنفسهم، فما فيه Google ولا OSM يكمّل النقص — قائمة فارغة معناها فعلاً
+  /// ما فيه أحد سجّل هالمهنة بالمنطقة بعد، وهذي حالة متوقعة نقولها صراحة
+  /// بدل ما نعرض بديلاً غير مطلوب.
+  Future<ChatMessage> _resolveProfessionalMessage(
+    String text,
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    int index,
+  ) async {
+    final profession = intent.profession;
+    if (profession == null) {
+      return ChatMessage(text: 'ما فهمت أي مهنة تقصد بالضبط 🤔 قل لي المهنة مثل «دهان» أو «كهربائي».', sender: MessageSender.bot);
+    }
+
+    try {
+      final professionals = await _professionalsService.search(
+        lat: origin.lat,
+        lng: origin.lng,
+        profession: profession,
+      );
+
+      if (professionals.isEmpty) {
+        return ChatMessage(
+          text: 'ما لقيت ${intent.label} مسجّل قريب منك الحين 😕 إذا تعرف واحد، قل له يضيف مهنته من حسابه بالتطبيق.',
+          sender: MessageSender.bot,
+        );
+      }
+
+      final composedReply = await ComposeService.composeReply(
+        message: text,
+        intentKind: 'professional',
+        intentLabel: intent.label,
+        rank: 'nearest',
+        items: professionals
+            .take(5)
+            .map((p) => {
+                  'name': p.name,
+                  'professionLabel': p.professionLabel,
+                  'distanceMeters': p.distanceMeters,
+                })
+            .toList(),
+        truncated: professionals.length > 5,
+        history: _buildHistory(),
+      );
+
+      return ChatMessage(
+        text: composedReply ?? 'هذي أقرب ${intent.label} لك:',
+        sender: MessageSender.bot,
+        understandingIntent: intent,
+        professionalFlow: ProfessionalFlow(professionals: professionals),
+        onSelectProfessional: (professional) => _selectProfessional(index, professional),
+        onConfirmProfessionalRequest: (note) => _confirmProfessionalRequest(index, note, origin),
+        onProfessionalRequestLogin: () => _signInThenSendProfessionalRequest(index, origin),
+        onCancelProfessionalSelection: () => _cancelProfessionalSelection(index),
+        onQuickReply: _sendQuickReply,
+      );
+    } on ProfessionalsException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أدوّر على ${intent.label} الحين 😕', sender: MessageSender.bot);
+    }
+  }
+
+  void _selectProfessional(int index, Professional professional) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.confirming,
+          selected: professional,
+          clearError: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _cancelProfessionalSelection(int index) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.browsing,
+          clearSelection: true,
+          clearError: true,
+        ),
+      );
+    });
+  }
+
+  /// يفتح ورقة الدخول من داخل بطاقة الطلب ويكمل الإرسال تلقائياً — نفس منطق
+  /// [_signInThenConfirm] لطلبات الأنشطة التجارية.
+  Future<void> _signInThenSendProfessionalRequest(
+    int index,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final signedIn = await showAuthSheet(
+      context,
+      reason: 'سجّل دخولك عشان يوصله اسمك ورقمك ويقدر يتصل فيك.',
+    );
+    if (!mounted || !signedIn) return;
+    await _confirmProfessionalRequest(index, null, origin);
+  }
+
+  Future<void> _confirmProfessionalRequest(
+    int index,
+    String? note,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final flow = _professionalFlowAt(index);
+    final selected = flow?.selected;
+    if (flow == null || selected == null) return;
+
+    // حارس أخير: البطاقة تعرض زر الدخول للزائر أصلاً، لكن الجلسة قد تنتهي
+    // بين فتح البطاقة والضغط على "أكّد".
+    final token = AuthStore.instance.token;
+    if (token == null) {
+      await _signInThenSendProfessionalRequest(index, origin);
+      return;
+    }
+
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.submitting,
+          note: note,
+          clearError: true,
+        ),
+      );
+    });
+
+    try {
+      await _professionalsService.submitRequest(
+        professionalId: selected.id,
+        token: token,
+        note: note,
+        lat: origin.lat,
+        lng: origin.lng,
+      );
+      if (!mounted) return;
+      _updateProfessionalFlow(index, (f) => f.copyWith(stage: ProfessionalFlowStage.submitted));
+    } on ProfessionalsException catch (e) {
+      if (!mounted) return;
+      _updateProfessionalFlow(
+        index,
+        (f) => f.copyWith(stage: ProfessionalFlowStage.confirming, errorMessage: e.message),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _updateProfessionalFlow(
+        index,
+        (f) => f.copyWith(
+          stage: ProfessionalFlowStage.confirming,
+          errorMessage: 'ما قدرت أرسل طلبك الحين، حاول مرة ثانية.',
+        ),
+      );
+    } finally {
+      _scrollToBottom();
+    }
+  }
+
+  /// التدفّق يُقرأ من [_messages] عند كل استخدام لا يُحتفظ به: الرسالة تُستبدل
+  /// بنسخة جديدة مع كل تغيّر حالة، فنسخة قديمة محفوظة تكتب فوق ما بعدها.
+  ProfessionalFlow? _professionalFlowAt(int index) {
+    if (index >= _messages.length) return null;
+    return _messages[index].professionalFlow;
+  }
+
+  void _updateProfessionalFlow(int index, ProfessionalFlow Function(ProfessionalFlow) update) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() => _messages[index] = _messages[index].copyWith(professionalFlow: update(flow)));
+  }
+
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
@@ -429,7 +625,7 @@ class _ChatScreenState extends State<ChatScreen> {
         // بطيئة) — قبل التخمين المحلي بفئة، افحص إذا كانت الرسالة أصلاً
         // تحية/شكر/دردشة عامة بلا أي إشارة لمكان أو عروض. بدون هالفحص كانت
         // رسالة متل "هلا" ترجع بحث "مطعم" افتراضياً بدل رد بتحية طبيعية.
-        if (!IntentService.hasPlaceOrDealsSignal(text, lastCategorySlug: lastCategorySlug)) {
+        if (!IntentService.hasSearchSignal(text, lastCategorySlug: lastCategorySlug)) {
           final offTopicReply = IntentService.detectOffTopicReply(text);
           if (offTopicReply != null) {
             setState(() {
@@ -451,7 +647,11 @@ class _ChatScreenState extends State<ChatScreen> {
       final placeholders = [
         for (final intent in intents)
           ChatMessage(
-            text: intent.kind == IntentKind.deals ? 'أشوف العروض القريبة…' : 'أدوّر على ${intent.label}…',
+            text: switch (intent.kind) {
+              IntentKind.deals => 'أشوف العروض القريبة…',
+              IntentKind.professional => 'أدوّر لك على أقرب ${intent.label}…',
+              IntentKind.place => 'أدوّر على ${intent.label}…',
+            },
             sender: MessageSender.bot,
             isLoading: true,
             understandingIntent: intent,
@@ -474,9 +674,9 @@ class _ChatScreenState extends State<ChatScreen> {
         // القائمة) نسقط تلقائياً لمسار البحث العادي.
         final resolveFuture = referencedPosition != null
             ? _resolveReferencedMessage(text, intents[i], referencedPosition).then((message) async {
-                return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback);
+                return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback, index);
               })
-            : _resolveIntentMessage(text, intents[i], origin, usedFallback);
+            : _resolveIntentMessage(text, intents[i], origin, usedFallback, index);
         futures.add(
           resolveFuture.then((message) {
             if (!mounted) return;

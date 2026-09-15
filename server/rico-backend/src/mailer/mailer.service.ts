@@ -24,6 +24,18 @@ const OTP_COPY: Record<OtpPurpose, { subject: (brand: string) => string; intro: 
   },
 };
 
+// Everything interpolated into an email body below is user-typed (a display
+// name, a job description), so it is escaped rather than trusted — an email
+// client renders the HTML we send it.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Brand green + gold, matching the app's theme — the email is the first
 // thing a new user sees outside the app, so it shouldn't look like a
 // different product.
@@ -101,13 +113,59 @@ export class MailerService {
       subject: copy.subject(brandName),
       html: otpHtml({
         brandName,
-        greeting: `هلا ${name}،`,
+        greeting: `هلا ${escapeHtml(name)}،`,
         intro: copy.intro,
         code,
         minutes: ttlMinutes,
         note: copy.note,
       }),
       devLine: `${purpose} code for ${email}: ${code}`,
+    });
+  }
+
+  // A customer asked this tradesperson to call them. The lead is already
+  // saved and visible in their in-app inbox before this is attempted — the
+  // email is a nudge, not the delivery mechanism, which is why
+  // ProfessionalsService treats a failure here as a warning and moves on.
+  async sendProfessionalRequestEmail({
+    to,
+    professionalName,
+    customerName,
+    customerPhone,
+    professionLabel,
+    note,
+    brandName,
+  }: {
+    to: string;
+    professionalName: string;
+    customerName: string;
+    customerPhone: string;
+    professionLabel: string;
+    note: string | null;
+    brandName: string;
+  }): Promise<void> {
+    const safeCustomer = escapeHtml(customerName);
+    const safePhone = escapeHtml(customerPhone);
+    await this.send({
+      email: to,
+      subject: `طلب جديد من عميل في ${brandName}`,
+      html: `<div dir="rtl" style="margin:0;padding:24px;background:#FAF8F5;font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;color:#39424B">
+  <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E3DA;border-radius:18px;overflow:hidden">
+    <div style="background:#006C35;padding:18px 22px;color:#FFFFFF;font-size:17px;font-weight:700">${brandName}</div>
+    <div style="padding:24px 22px">
+      <p style="margin:0 0 12px;font-size:15px;color:#131A20">هلا ${escapeHtml(professionalName)}،</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.7">وصلك طلب جديد على مهنتك (${escapeHtml(professionLabel)}):</p>
+      <div style="margin:0 0 16px;padding:16px;background:#EBF4EF;border:1px solid #D7E8DE;border-radius:12px">
+        <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#00532A">${safeCustomer}</p>
+        <p style="margin:0;font-size:15px;color:#00532A;direction:ltr;text-align:right">${safePhone}</p>
+        ${note ? `<p style="margin:10px 0 0;font-size:14px;line-height:1.7;color:#39424B">${escapeHtml(note)}</p>` : ''}
+      </div>
+      <p style="margin:0;font-size:13px;color:#6E7883">تواصل معه مباشرة على رقمه، وتلقى الطلب كمان داخل التطبيق.</p>
+    </div>
+    <div style="border-top:1px solid #E8E3DA;padding:14px 22px;font-size:12px;color:#A0A8B1">${brandName} — لا ترد على هذه الرسالة.</div>
+  </div>
+</div>`,
+      devLine: `professional request for ${to}: ${customerName} ${customerPhone}`,
     });
   }
 

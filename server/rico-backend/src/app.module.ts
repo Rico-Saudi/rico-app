@@ -20,6 +20,7 @@ import { VendorModule } from './vendor/vendor.module';
 import { OwnerModule } from './owner/owner.module';
 import { PublicModule } from './public/public.module';
 import { RequestsModule } from './requests/requests.module';
+import { ProfessionalsModule } from './professionals/professionals.module';
 import { MailerModule } from './mailer/mailer.module';
 import { SpaModule } from './spa/spa.module';
 
@@ -47,6 +48,7 @@ import { SpaModule } from './spa/spa.module';
         '/products*',
         '/discounts*',
         '/requests*',
+        '/professionals*',
         '/auth*',
         '/customer/*',
         '/vendor*',
@@ -70,6 +72,7 @@ import { SpaModule } from './spa/spa.module';
     OwnerModule,
     PublicModule,
     RequestsModule,
+    ProfessionalsModule,
     SpaModule,
   ],
   controllers: [AppController],
