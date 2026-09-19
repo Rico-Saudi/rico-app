@@ -90,11 +90,11 @@ export const professionalRequestLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Attaching a CV writes up to 5MB into Mongo per call. It needs a verified
-// account, so the risk is cost rather than abuse — capped well above the
-// handful of attempts someone makes while getting the photo of their
-// certificate straight.
-export const cvUploadLimiter = rateLimit({
+// Attaching a CV or a profile photo writes megabytes into Mongo per call. It
+// needs a verified account, so the risk is cost rather than abuse — capped
+// well above the handful of attempts someone makes while getting the photo
+// of their certificate, or of themselves, straight.
+export const fileUploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 20,
   standardHeaders: true,

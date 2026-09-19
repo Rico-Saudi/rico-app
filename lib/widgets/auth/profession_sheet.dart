@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -86,6 +89,15 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
   double _radiusKm = 15;
   bool _isAvailable = true;
 
+  /// الصورة المرفوعة حالياً على الخادم (مسار نسبي)، إن وُجدت.
+  String? _savedPhotoPath;
+
+  /// صورة اختارها المستخدم الحين وما رُفعت بعد — تُعرض من القرص مباشرة،
+  /// فيشوف وجهه على البطاقة قبل ما يضغط "تم".
+  String? _pendingPhotoPath;
+
+  bool _photoRemoved = false;
+
   /// السيرة المرفقة حالياً على الخادم (اسم الملف)، إن وُجدت.
   String? _savedCvFileName;
 
@@ -119,6 +131,7 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
       _skills.addAll(existing.skills);
       _yearsController.text = existing.yearsExperience?.toString() ?? '';
       _accent = existing.accent;
+      _savedPhotoPath = existing.photoPath;
       _savedCvFileName = existing.cvFileName;
       _lat = existing.lat;
       _lng = existing.lng;
@@ -264,6 +277,77 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
     _bioController.selection = TextSelection.collapsed(offset: _bioController.text.length);
   }
 
+  // ─── الصورة الشخصية ─────────────────────────────────────────────────────
+
+  /// يلتقط الصورة أو يختارها من المعرض.
+  ///
+  /// تُصغَّر عند الالتقاط لا عند الرفع: البطاقة ترسمها في دائرة ٤٢ بكسل،
+  /// فصورة جوال بـ١٢ ميجابكسل كلها بايتات ما يشوفها أحد — ورفعها على شبكة
+  /// جوال ضعيفة انتظار بلا مقابل.
+  Future<void> _pickPhoto() async {
+    final source = await _askImageSource(
+      cameraLabel: 'صوّر نفسك الحين',
+      cameraHint: 'صورة واضحة لوجهك تطمّن اللي يشوف بطاقتك',
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+
+      setState(() {
+        _pendingPhotoPath = picked.path;
+        _photoRemoved = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'ما قدرت أفتح الصورة، جرّب مرة ثانية.');
+    }
+  }
+
+  /// ورقة صغيرة: كاميرا أو معرض. مشتركة بين الصورة والسيرة المصوّرة.
+  Future<ImageSource?> _askImageSource({required String cameraLabel, String? cameraHint}) {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: RicoColors.canvas,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: RicoColors.primary),
+              title: Text(cameraLabel, style: RicoText.bodyStrong),
+              subtitle: cameraHint == null ? null : Text(cameraHint, style: RicoText.caption),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: RicoColors.primary),
+              title: const Text('اختر من المعرض', style: RicoText.bodyStrong),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// مسار الصورة المعروضة الحين: المختارة محلياً، وإلا المرفوعة على الخادم.
+  ({String? localPath, String? remoteUrl}) get _photoPreview {
+    if (_photoRemoved) return (localPath: null, remoteUrl: null);
+    if (_pendingPhotoPath != null) return (localPath: _pendingPhotoPath, remoteUrl: null);
+    return (localPath: null, remoteUrl: ProfessionalsService.fileUrl(_savedPhotoPath));
+  }
+
   // ─── السيرة الذاتية ─────────────────────────────────────────────────────
 
   Future<void> _pickCv() async {
@@ -304,8 +388,12 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
     try {
       final path = switch (source) {
         _CvSource.file => await _pickPdf(),
-        _CvSource.gallery => (await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 85))?.path,
-        _CvSource.camera => (await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 85))?.path,
+        // السيرة المصوّرة تُصغَّر أقل من الصورة الشخصية: هذي ورقة تُقرأ، لا
+        // دائرة صغيرة — تصغيرها لـ٨٠٠ بكسل يطمس السطور.
+        _CvSource.gallery =>
+          (await _imagePicker.pickImage(source: ImageSource.gallery, maxWidth: 2000, imageQuality: 85))?.path,
+        _CvSource.camera =>
+          (await _imagePicker.pickImage(source: ImageSource.camera, maxWidth: 2000, imageQuality: 85))?.path,
       };
       if (path == null || !mounted) return;
 
@@ -393,21 +481,48 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
         ),
       );
 
-      // الملف بعد النص، لا قبله: مسار رفع السيرة يشترط وجود ملف مهني، وأول
+      // الملفات بعد النص، لا قبله: مسارات الرفع تشترط وجود ملف مهني، وأول
       // بطاقة ما تصير موجودة إلا بعد هذا الحفظ.
+      await _applyPhotoChange();
       await _applyCvChange();
 
       if (mounted) Navigator.of(context).pop(true);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on ProfessionalsException catch (e) {
-      // البطاقة نفسها حُفظت، والذي فشل هو المرفق وحده — نقولها كما هي بدل
+      // البطاقة نفسها حُفظت، والذي فشل هو ملف مرفق وحده — نقولها كما هي بدل
       // ما نوحي أن كل شي ضاع.
       if (mounted) setState(() => _error = '${e.message} (بقية البطاقة محفوظة)');
     } catch (_) {
       if (mounted) setState(() => _error = 'ما قدرت أحفظ بطاقتك، حاول مرة ثانية.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _applyPhotoChange() async {
+    final token = AuthStore.instance.token;
+    if (token == null) return;
+
+    final pending = _pendingPhotoPath;
+    if (pending != null) {
+      final updated = await _professionalsService.uploadPhoto(filePath: pending, token: token);
+      await AuthStore.instance.adoptCustomer(updated);
+      if (mounted) {
+        setState(() {
+          _pendingPhotoPath = null;
+          _savedPhotoPath = updated.professional?.photoPath;
+        });
+      }
+    } else if (_photoRemoved && _savedPhotoPath != null) {
+      final updated = await _professionalsService.removePhoto(token);
+      await AuthStore.instance.adoptCustomer(updated);
+      if (mounted) {
+        setState(() {
+          _photoRemoved = false;
+          _savedPhotoPath = null;
+        });
+      }
     }
   }
 
@@ -534,6 +649,22 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
                   style: RicoText.caption.copyWith(height: 1.65),
                 ),
                 const SizedBox(height: 16),
+
+                const _Label('صورتك'),
+                _PhotoField(
+                  localPath: _photoPreview.localPath,
+                  remoteUrl: _photoPreview.remoteUrl,
+                  initial: AuthStore.instance.customer?.initial ?? '؟',
+                  accent: _accent,
+                  isPending: _pendingPhotoPath != null,
+                  enabled: !_busy,
+                  onPick: _pickPhoto,
+                  onRemove: () => setState(() {
+                    _pendingPhotoPath = null;
+                    if (_savedPhotoPath != null) _photoRemoved = true;
+                  }),
+                ),
+                const SizedBox(height: 14),
 
                 const _Label('المهنة'),
                 // زر يفتح منتقياً بالبحث والأقسام، لا قائمة منسدلة: القائمة
@@ -913,6 +1044,142 @@ class _SkillsField extends StatelessWidget {
       ],
     );
   }
+}
+
+/// صورتك على البطاقة: معاينة دائرية بنفس مقاس البطاقة تقريباً، وزر يبدّلها.
+///
+/// المعاينة من القرص مباشرة للصورة المختارة الحين — يشوف وجهه قبل ما يرفع،
+/// فما ينتظر رفعاً ليكتشف أنه اختار الصورة الغلط.
+class _PhotoField extends StatelessWidget {
+  /// صورة اختيرت الحين وما رُفعت بعد (مسار على الجهاز).
+  final String? localPath;
+
+  /// الصورة المرفوعة على الخادم (رابط مطلق).
+  final String? remoteUrl;
+
+  /// حرف الاسم — ما يُرسم حين ما فيه صورة، تماماً كما ترسمه البطاقة.
+  final String initial;
+
+  final CardAccent accent;
+  final bool isPending;
+  final bool enabled;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _PhotoField({
+    required this.localPath,
+    required this.remoteUrl,
+    required this.initial,
+    required this.accent,
+    required this.isPending,
+    required this.enabled,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  bool get _hasPhoto => localPath != null || remoteUrl != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RicoColors.surface,
+        borderRadius: RicoRadii.cardR,
+        border: Border.all(color: RicoColors.hairline),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: enabled ? onPick : null,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accent.tint,
+                border: Border.all(color: accent.bottom.withValues(alpha: 0.22), width: 2),
+              ),
+              child: ClipOval(child: _face()),
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _hasPhoto ? 'صورتك على البطاقة' : 'بلا صورة',
+                  style: RicoText.labelStrong,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isPending
+                      ? 'تُرفع لما تضغط تم'
+                      : _hasPhoto
+                          ? 'تظهر لكل من يشوف بطاقتك'
+                          : 'بطاقتك تعرض حرف اسمك — صورتك تخليها تطمّن أكثر',
+                  style: RicoText.overline.copyWith(color: RicoColors.inkMuted, height: 1.5),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: enabled ? onPick : null,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 32),
+                      ),
+                      child: Text(_hasPhoto ? 'بدّلها' : 'أضف صورة'),
+                    ),
+                    if (_hasPhoto)
+                      TextButton(
+                        onPressed: enabled ? onRemove : null,
+                        style: TextButton.styleFrom(
+                          foregroundColor: RicoColors.danger,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 32),
+                        ),
+                        child: const Text('شيلها'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _face() {
+    final local = localPath;
+    if (local != null) {
+      return Image.file(File(local), width: 62, height: 62, fit: BoxFit.cover);
+    }
+
+    final remote = remoteUrl;
+    if (remote != null) {
+      return CachedNetworkImage(
+        imageUrl: remote,
+        width: 62,
+        height: 62,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _initialFace(),
+        errorWidget: (_, __, ___) => _initialFace(),
+      );
+    }
+
+    return _initialFace();
+  }
+
+  Widget _initialFace() => Container(
+        alignment: Alignment.center,
+        color: accent.tint,
+        child: Text(initial, style: RicoText.display.copyWith(color: accent.bottom, fontSize: 24)),
+      );
 }
 
 class _CvField extends StatelessWidget {

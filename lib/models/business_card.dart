@@ -46,6 +46,10 @@ class BusinessCardData {
   final String name;
   final String professionLabel;
 
+  /// صورة صاحب البطاقة (رابط مطلق) — null يعني ما رفع صورة، والبطاقة ترسم
+  /// حرف اسمه بدلها.
+  final String? photoUrl;
+
   /// سطر واحد تحت المهنة ("دهانات داخلية وديكورات").
   final String? headline;
 
@@ -72,6 +76,7 @@ class BusinessCardData {
   const BusinessCardData({
     required this.name,
     required this.professionLabel,
+    this.photoUrl,
     this.headline,
     this.bio,
     this.skills = const [],
@@ -83,6 +88,8 @@ class BusinessCardData {
     this.distanceMeters,
     this.serviceRadiusMeters,
   });
+
+  bool get hasPhoto => photoUrl != null && photoUrl!.isNotEmpty;
 
   bool get hasCv => cvUrl != null && cvUrl!.isNotEmpty;
 

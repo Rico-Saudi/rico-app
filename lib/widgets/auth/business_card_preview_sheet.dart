@@ -39,7 +39,8 @@ class _BusinessCardPreviewSheet extends StatelessWidget {
 
     final card = profile.toCard(
       name: customer.name,
-      cvUrl: ProfessionalsService.cvUrl(profile.cvPath),
+      photoUrl: ProfessionalsService.fileUrl(profile.photoPath),
+      cvUrl: ProfessionalsService.fileUrl(profile.cvPath),
     );
 
     return Container(

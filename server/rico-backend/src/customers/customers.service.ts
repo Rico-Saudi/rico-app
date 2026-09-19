@@ -46,6 +46,7 @@ export const GENERIC_OTP_RESPONSE = {
 export interface CustomerProfessionalProfile {
   profession: string;
   professionLabel: string;
+  photoUrl: string | null;
   headline: string | null;
   bio: string | null;
   skills: string[];
@@ -254,8 +255,10 @@ export class CustomersService {
         skills: cleanSkills(next.skills),
         yearsExperience: next.yearsExperience ?? null,
         cardAccent: next.cardAccent ?? current?.cardAccent ?? DEFAULT_CARD_ACCENT,
-        // Carried over, never sent in this body: the CV is a file with its
-        // own endpoints, so saving an edited card must not detach it.
+        // Carried over, never sent in this body: the photo and the CV are
+        // files with their own endpoints, so saving an edited card must not
+        // detach them.
+        photoUrl: current?.photoUrl ?? null,
         cvUrl: current?.cvUrl ?? null,
         cvFileName: current?.cvFileName ?? null,
         cvContentType: current?.cvContentType ?? null,
@@ -382,6 +385,7 @@ export function toProfile(customer: CustomerDocument | (Customer & { _id: Types.
           // Resolved server-side so the app renders the right Arabic name
           // for a trade added after that build shipped.
           professionLabel: professionLabel(pro.profession),
+          photoUrl: pro.photoUrl ?? null,
           headline: pro.headline ?? null,
           bio: pro.bio ?? null,
           skills: pro.skills ?? [],

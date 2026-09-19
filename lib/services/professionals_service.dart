@@ -29,18 +29,22 @@ class ProfessionalsService {
 
   static const Duration _timeout = Duration(seconds: 8);
 
-  /// أقصى حجم للسيرة الذاتية — مطابق لـ`MAX_CV_BYTES` في الخادم. نفحصه هنا
-  /// كمان عشان يوصل الرفض فوراً بدل ما يوصل بعد دقيقة رفع على شبكة جوال.
+  /// أقصى حجم للسيرة الذاتية وللصورة — مطابقان لـ`MAX_CV_BYTES` و
+  /// `MAX_PHOTO_BYTES` في الخادم. نفحصهما هنا كمان عشان يوصل الرفض فوراً بدل
+  /// ما يوصل بعد دقيقة رفع على شبكة جوال.
   static const int maxCvBytes = 5 * 1024 * 1024;
+  static const int maxPhotoBytes = 3 * 1024 * 1024;
 
-  /// أنواع الملفات المقبولة — PDF وصور، لأن "السيرة الذاتية" عند أغلب
-  /// أصحاب المهن ورقة مصوّرة لا ملف مصدّر.
+  /// أنواع السيرة المقبولة — PDF وصور، لأن "السيرة الذاتية" عند أغلب أصحاب
+  /// المهن ورقة مصوّرة لا ملف مصدّر.
   static const List<String> allowedCvExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
-  /// يحوّل مسار السيرة النسبي القادم من الخادم لرابط كامل يُفتح في المتصفح
-  /// أو العارض. يترك الرابط المطلق كما هو، فلو صار الخادم يرجّع رابطاً
-  /// كاملاً يوماً ما تبقى هذي صحيحة.
-  static String? cvUrl(String? path) {
+  /// الصورة صورة فقط — لا PDF.
+  static const List<String> allowedPhotoExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+  /// يحوّل مسار ملف نسبياً قادماً من الخادم لرابط كامل. يترك الرابط المطلق
+  /// كما هو، فلو صار الخادم يرجّع رابطاً كاملاً يوماً ما تبقى هذي صحيحة.
+  static String? fileUrl(String? path) {
     if (path == null || path.isEmpty) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return '$_baseUrl$path';
@@ -193,26 +197,67 @@ class ProfessionalsService {
     }
   }
 
-  /// يرفق السيرة الذاتية (PDF أو صورة) ببطاقتي المهنية، ويرجّع الحساب بعد
-  /// التحديث. يستبدل المرفق السابق: الخادم يحذف البايتات القديمة، فما
-  /// يتراكم عشر نسخ لمن أعاد التصوير عشر مرات.
-  Future<Customer> uploadCv({required String filePath, required String token}) async {
+  /// يرفق السيرة الذاتية (PDF أو صورة) ببطاقتي، ويرجّع الحساب بعد التحديث.
+  /// يستبدل المرفق السابق: الخادم يحذف البايتات القديمة، فما يتراكم عشر نسخ
+  /// لمن أعاد التصوير عشر مرات.
+  Future<Customer> uploadCv({required String filePath, required String token}) {
+    return _uploadFile(
+      filePath: filePath,
+      token: token,
+      path: 'me/cv',
+      maxBytes: maxCvBytes,
+      allowedExtensions: allowedCvExtensions,
+      tooLargeMessage: 'الملف كبير — أقصى حجم ٥ ميجابايت.',
+      wrongTypeMessage: 'نقبل PDF أو صورة فقط.',
+    );
+  }
+
+  /// يرفع صورتي الشخصية — هي وجه البطاقة، فبدونها ترسم حرف الاسم.
+  Future<Customer> uploadPhoto({required String filePath, required String token}) {
+    return _uploadFile(
+      filePath: filePath,
+      token: token,
+      path: 'me/photo',
+      maxBytes: maxPhotoBytes,
+      allowedExtensions: allowedPhotoExtensions,
+      tooLargeMessage: 'الصورة كبيرة — أقصى حجم ٣ ميجابايت.',
+      wrongTypeMessage: 'نقبل صورة فقط (JPG أو PNG).',
+    );
+  }
+
+  /// يشيل السيرة المرفقة ويترك بقية البطاقة كما هي.
+  Future<Customer> removeCv(String token) => _deleteFile('me/cv', token);
+
+  /// يشيل الصورة — البطاقة ترجع لحرف الاسم، ما تنكسر.
+  Future<Customer> removePhoto(String token) => _deleteFile('me/photo', token);
+
+  /// الرفع المشترك للسيرة والصورة: نفس التحقق ونفس الأخطاء ونفس الرد (الحساب
+  /// كاملاً بعد التحديث)، والفرق حجم وامتدادات ومسار.
+  Future<Customer> _uploadFile({
+    required String filePath,
+    required String token,
+    required String path,
+    required int maxBytes,
+    required List<String> allowedExtensions,
+    required String tooLargeMessage,
+    required String wrongTypeMessage,
+  }) async {
     final file = File(filePath);
     if (!await file.exists()) {
       throw ProfessionalsException('ما لقيت الملف، اختره من جديد.');
     }
-    if (await file.length() > maxCvBytes) {
-      throw ProfessionalsException('الملف كبير — أقصى حجم ٥ ميجابايت.');
+    if (await file.length() > maxBytes) {
+      throw ProfessionalsException(tooLargeMessage);
     }
 
     final extension = _extensionOf(filePath);
-    if (!allowedCvExtensions.contains(extension)) {
-      throw ProfessionalsException('نقبل PDF أو صورة فقط.');
+    if (!allowedExtensions.contains(extension)) {
+      throw ProfessionalsException(wrongTypeMessage);
     }
 
     http.Response response;
     try {
-      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/professionals/me/cv'))
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/professionals/$path'))
         ..headers['Authorization'] = 'Bearer $token'
         ..files.add(await http.MultipartFile.fromPath(
           'file',
@@ -221,7 +266,7 @@ class ProfessionalsService {
           // يرفضه الخادم لأنه لا يقول شيئاً عن الملف.
           contentType: _mediaTypeFor(extension),
         ));
-      // أطول من بقية النداءات: هذا رفع ملف فعلي قد يصل ٥ ميجابايت.
+      // أطول من بقية النداءات: هذا رفع ملف فعلي قد يصل ميجابايتات.
       final streamed = await request.send().timeout(const Duration(seconds: 60));
       response = await http.Response.fromStream(streamed);
     } catch (_) {
@@ -229,15 +274,17 @@ class ProfessionalsService {
     }
 
     if (response.statusCode == 401) throw ProfessionalsException('انتهت جلستك، سجّل دخولك من جديد.');
-    if (response.statusCode == 413) throw ProfessionalsException('الملف كبير — أقصى حجم ٥ ميجابايت.');
+    if (response.statusCode == 413) throw ProfessionalsException(tooLargeMessage);
     if (response.statusCode == 429) {
       throw ProfessionalsException('رفعت ملفات كثيرة، انتظر شوي وحاول مرة ثانية.');
     }
     if (response.statusCode == 400) {
       final error = _errorCode(response);
-      if (error == 'unsupported_cv_type') throw ProfessionalsException('نقبل PDF أو صورة فقط.');
+      if (error == 'unsupported_cv_type' || error == 'unsupported_photo_type') {
+        throw ProfessionalsException(wrongTypeMessage);
+      }
       if (error == 'professional_profile_required') {
-        throw ProfessionalsException('احفظ مهنتك أول، بعدها ترفق سيرتك.');
+        throw ProfessionalsException('احفظ بطاقتك أول، بعدها ترفع الملفات.');
       }
       throw ProfessionalsException('ما قدرت أرفع الملف، حاول مرة ثانية.');
     }
@@ -248,12 +295,11 @@ class ProfessionalsService {
     return Customer.fromJson(jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>);
   }
 
-  /// يشيل السيرة المرفقة ويترك بقية البطاقة كما هي.
-  Future<Customer> removeCv(String token) async {
+  Future<Customer> _deleteFile(String path, String token) async {
     http.Response response;
     try {
       response = await http
-          .delete(Uri.parse('$_baseUrl/professionals/me/cv'), headers: _headers(token))
+          .delete(Uri.parse('$_baseUrl/professionals/$path'), headers: _headers(token))
           .timeout(_timeout);
     } catch (_) {
       throw ProfessionalsException('ما قدرت أشيل الملف، تأكد من اتصالك وحاول مرة ثانية.');

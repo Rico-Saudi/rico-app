@@ -11,6 +11,9 @@ class ProfessionalProfile {
   /// عشان مهنة أُضيفت بعد إصدار هذي النسخة تظهر باسمها الصحيح.
   final String professionLabel;
 
+  /// صورتي على البطاقة — مسار نسبي كما يرسله الخادم.
+  final String? photoPath;
+
   /// سطر واحد تحت المهنة على البطاقة.
   final String? headline;
 
@@ -47,6 +50,7 @@ class ProfessionalProfile {
     required this.lng,
     required this.serviceRadiusMeters,
     required this.isAvailable,
+    this.photoPath,
     this.headline,
     this.bio,
     this.skills = const [],
@@ -60,6 +64,7 @@ class ProfessionalProfile {
   factory ProfessionalProfile.fromJson(Map<String, dynamic> json) => ProfessionalProfile(
         profession: json['profession'] as String,
         professionLabel: (json['professionLabel'] as String?) ?? (json['profession'] as String),
+        photoPath: json['photoUrl'] as String?,
         headline: json['headline'] as String?,
         bio: json['bio'] as String?,
         skills: ((json['skills'] as List?) ?? const []).map((s) => '$s').toList(),
@@ -76,9 +81,10 @@ class ProfessionalProfile {
 
   /// بطاقتي كما تُرسم في المعاينة. [name] يجي من الحساب لا من الملف
   /// المهني — الاسم واحد في المكانين، ومحفوظ مرة واحدة.
-  BusinessCardData toCard({required String name, String? cvUrl}) => BusinessCardData(
+  BusinessCardData toCard({required String name, String? photoUrl, String? cvUrl}) => BusinessCardData(
         name: name,
         professionLabel: professionLabel,
+        photoUrl: photoUrl,
         headline: headline,
         bio: bio,
         skills: skills,
@@ -93,6 +99,7 @@ class ProfessionalProfile {
   Map<String, dynamic> toJson() => {
         'profession': profession,
         'professionLabel': professionLabel,
+        'photoUrl': photoPath,
         'headline': headline,
         'bio': bio,
         'skills': skills,

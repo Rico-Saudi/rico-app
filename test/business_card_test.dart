@@ -32,6 +32,35 @@ void main() {
     serviceRadiusMeters: 15000,
   );
 
+  // الصورة تُحمّل عبر الشبكة، وفي الاختبار ما فيه شبكة — فالمطلوب إثباته
+  // أن غيابها (تحميلاً أو فشلاً) يترك البطاقة سليمة بحرف الاسم مكان الوجه،
+  // لا مربع رمادي ولا رمز صورة مكسورة في خيط محادثة.
+  testWidgets('بطاقة بصورة ترسم حرف الاسم ريثما تصل الصورة', (tester) async {
+    const withPhoto = BusinessCardData(
+      name: 'محمد العتيبي',
+      professionLabel: 'دهّان',
+      photoUrl: 'https://app.rico-go.com/professionals/file/abc',
+    );
+
+    await tester.pumpWidget(wrap(const BusinessCard(card: withPhoto, rank: 1)));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(withPhoto.hasPhoto, isTrue);
+    expect(find.text('م'), findsOneWidget);
+    expect(find.text('محمد العتيبي'), findsOneWidget);
+  });
+
+  testWidgets('بطاقة بلا صورة ترسم حرف الاسم', (tester) async {
+    const bare = BusinessCardData(name: 'سعد', professionLabel: 'سبّاك');
+
+    await tester.pumpWidget(wrap(const BusinessCard(card: bare)));
+    await tester.pump();
+
+    expect(bare.hasPhoto, isFalse);
+    expect(find.text('س'), findsOneWidget);
+  });
+
   testWidgets('بطاقة كاملة تعرض كل ما نشره صاحبها', (tester) async {
     await tester.pumpWidget(wrap(BusinessCard(card: full, rank: 1, onRequest: () {})));
     await tester.pump();
@@ -83,12 +112,13 @@ void main() {
       'name': 'محمد',
       'profession': 'painter',
       'professionLabel': 'دهّان',
+      'photoUrl': '/professionals/file/photo123',
       'headline': 'دهانات',
       'bio': 'عن شغلي',
       'skills': ['ورق جدران'],
       'yearsExperience': 14,
       'cardAccent': 'midnight',
-      'cvUrl': '/professionals/cv/abc',
+      'cvUrl': '/professionals/file/abc',
       'cvFileName': 'cv.pdf',
       'cvContentType': 'application/pdf',
       'distanceMeters': 2300,
@@ -97,9 +127,13 @@ void main() {
       'phone': '+966500000000',
     });
 
-    final card = professional.toCard(cvUrl: 'https://app.rico-go.com/professionals/cv/abc');
+    final card = professional.toCard(
+      photoUrl: 'https://app.rico-go.com/professionals/file/photo123',
+      cvUrl: 'https://app.rico-go.com/professionals/file/abc',
+    );
 
     expect(card.accent, CardAccent.midnight);
+    expect(card.hasPhoto, isTrue);
     expect(card.skills, ['ورق جدران']);
     expect(card.hasCv, isTrue);
     expect(card.cvIsImage, isFalse);

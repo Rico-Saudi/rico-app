@@ -12,14 +12,20 @@ import { Customer, CustomerDocument } from '../customers/schemas/customer.schema
 import { ProfessionalRequest, ProfessionalRequestDocument } from './schemas/professional-request.schema';
 import { SearchProfessionalsDto } from './dto/search-professionals.dto';
 import { CreateProfessionalRequestDto } from './dto/create-professional-request.dto';
-import { ProfessionalCv, ProfessionalCvDocument } from './schemas/professional-cv.schema';
+import {
+  ProfessionalFile,
+  ProfessionalFileDocument,
+  ProfessionalFileKind,
+} from './schemas/professional-file.schema';
 import { professionLabel } from './constants/professions.registry';
 import {
   ALLOWED_CV_TYPES,
-  CV_TOKEN_PATTERN,
+  ALLOWED_PHOTO_TYPES,
   DEFAULT_CARD_ACCENT,
+  FILE_TOKEN_PATTERN,
   MAX_CV_BYTES,
-  professionalCvUrl,
+  MAX_PHOTO_BYTES,
+  professionalFileUrl,
 } from './constants/professional-card.constants';
 import { MailerService } from '../mailer/mailer.service';
 import { brandFor } from '../common/constants/brands';
@@ -41,6 +47,7 @@ export interface ProfessionalResult {
   name: string;
   profession: string;
   professionLabel: string;
+  photoUrl: string | null;
   headline: string | null;
   bio: string | null;
   skills: string[];
@@ -60,7 +67,7 @@ export class ProfessionalsService {
   constructor(
     @InjectModel(Customer.name) private readonly customerModel: Model<CustomerDocument>,
     @InjectModel(ProfessionalRequest.name) private readonly requestModel: Model<ProfessionalRequestDocument>,
-    @InjectModel(ProfessionalCv.name) private readonly cvModel: Model<ProfessionalCvDocument>,
+    @InjectModel(ProfessionalFile.name) private readonly fileModel: Model<ProfessionalFileDocument>,
     private readonly mailerService: MailerService,
   ) {}
 
@@ -98,6 +105,7 @@ export class ProfessionalsService {
           name: 1,
           distanceMeters: 1,
           'professional.profession': 1,
+          'professional.photoUrl': 1,
           'professional.headline': 1,
           'professional.bio': 1,
           'professional.skills': 1,
@@ -117,6 +125,7 @@ export class ProfessionalsService {
         name: r.name,
         profession: r.professional.profession,
         professionLabel: professionLabel(r.professional.profession),
+        photoUrl: r.professional.photoUrl ?? null,
         headline: r.professional.headline ?? null,
         bio: r.professional.bio ?? null,
         skills: r.professional.skills ?? [],
@@ -196,39 +205,26 @@ export class ProfessionalsService {
     return { id: String(request._id), status: request.status };
   }
 
-  // ─── The CV on the card ──────────────────────────────────────────────────
+  // ─── The files on the card ───────────────────────────────────────────────
+  // Two kinds, one path: the photo of the professional, and the CV they
+  // published. Both are stored, tokenized and served identically; only the
+  // allowed types, the size cap and the profile fields differ.
 
-  /** Replaces whatever CV was attached: the previous bytes are dropped, so
-   * someone who re-uploads a corrected version ten times doesn't leave ten
-   * orphaned documents behind.
-   *
-   * Requires a profile to exist — a CV with no trade to hang it on has
-   * nowhere to be shown. */
+  /** Attaches the CV. Replaces whatever was there: the previous bytes are
+   * dropped, so someone who re-uploads a corrected version ten times doesn't
+   * leave ten orphaned documents behind. */
   async setCv(customer: CustomerDocument, file: Express.Multer.File | undefined) {
-    if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
-    if (!file?.buffer?.length) throw new BadRequestException({ error: 'file_required' });
-    if (!ALLOWED_CV_TYPES.includes(file.mimetype)) {
-      throw new BadRequestException({ error: 'unsupported_cv_type', allowed: ALLOWED_CV_TYPES });
-    }
-    if (file.size > MAX_CV_BYTES) {
-      throw new PayloadTooLargeException({ error: 'cv_too_large', maxBytes: MAX_CV_BYTES });
-    }
-
-    const document = await this.cvModel.create({
-      token: randomBytes(16).toString('hex'),
-      customerId: customer._id,
-      contentType: file.mimetype,
-      fileName: this.safeFileName(file.originalname, file.mimetype),
-      size: file.size,
-      data: file.buffer,
+    const stored = await this.storeFile(customer, file, {
+      kind: 'cv',
+      allowedTypes: ALLOWED_CV_TYPES,
+      maxBytes: MAX_CV_BYTES,
+      typeError: 'unsupported_cv_type',
+      sizeError: 'cv_too_large',
     });
-    // Only after the new one is safely stored, so a failed write leaves the
-    // card pointing at the CV it already had.
-    await this.cvModel.deleteMany({ customerId: customer._id, _id: { $ne: document._id } });
 
-    customer.professional.cvUrl = professionalCvUrl(document.token);
-    customer.professional.cvFileName = document.fileName;
-    customer.professional.cvContentType = document.contentType;
+    customer.professional!.cvUrl = professionalFileUrl(stored.token);
+    customer.professional!.cvFileName = stored.fileName;
+    customer.professional!.cvContentType = stored.contentType;
     await customer.save();
 
     return customer;
@@ -237,7 +233,7 @@ export class ProfessionalsService {
   async removeCv(customer: CustomerDocument) {
     if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
 
-    await this.cvModel.deleteMany({ customerId: customer._id });
+    await this.fileModel.deleteMany({ customerId: customer._id, kind: 'cv' });
     customer.professional.cvUrl = null;
     customer.professional.cvFileName = null;
     customer.professional.cvContentType = null;
@@ -246,15 +242,85 @@ export class ProfessionalsService {
     return customer;
   }
 
-  /** Public, like the card it hangs off: a customer comparing two painters
-   * in chat has to be able to open it. */
-  async findCv(token: string): Promise<ProfessionalCvDocument> {
+  /** Attaches the photo shown on the card. Images only, and smaller than a
+   * CV: it is rendered into a circle the size of a thumbnail. */
+  async setPhoto(customer: CustomerDocument, file: Express.Multer.File | undefined) {
+    const stored = await this.storeFile(customer, file, {
+      kind: 'photo',
+      allowedTypes: ALLOWED_PHOTO_TYPES,
+      maxBytes: MAX_PHOTO_BYTES,
+      typeError: 'unsupported_photo_type',
+      sizeError: 'photo_too_large',
+    });
+
+    customer.professional!.photoUrl = professionalFileUrl(stored.token);
+    await customer.save();
+
+    return customer;
+  }
+
+  /** Detaching the photo isn't a downgrade: the card falls back to the
+   * monogram it drew before one was uploaded. */
+  async removePhoto(customer: CustomerDocument) {
+    if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
+
+    await this.fileModel.deleteMany({ customerId: customer._id, kind: 'photo' });
+    customer.professional.photoUrl = null;
+    await customer.save();
+
+    return customer;
+  }
+
+  /** Public, like the card these hang off: a customer comparing two painters
+   * in chat has to be able to see the faces and open the CVs. */
+  async findFile(token: string): Promise<ProfessionalFileDocument> {
     // This route is public, so a crawler with a mangled token shouldn't
     // reach the driver and surface as a logged 500 — a malformed one is
     // simply not found.
-    if (!CV_TOKEN_PATTERN.test(token)) throw new NotFoundException({ error: 'cv_not_found' });
-    const document = await this.cvModel.findOne({ token });
-    if (!document) throw new NotFoundException({ error: 'cv_not_found' });
+    if (!FILE_TOKEN_PATTERN.test(token)) throw new NotFoundException({ error: 'file_not_found' });
+    const document = await this.fileModel.findOne({ token });
+    if (!document) throw new NotFoundException({ error: 'file_not_found' });
+    return document;
+  }
+
+  /** Validates and stores one file, dropping the previous one of that kind.
+   *
+   * Requires a profile to exist — a CV or a face with no card to sit on has
+   * nowhere to be shown. */
+  private async storeFile(
+    customer: CustomerDocument,
+    file: Express.Multer.File | undefined,
+    rules: {
+      kind: ProfessionalFileKind;
+      allowedTypes: string[];
+      maxBytes: number;
+      typeError: string;
+      sizeError: string;
+    },
+  ): Promise<ProfessionalFileDocument> {
+    if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
+    if (!file?.buffer?.length) throw new BadRequestException({ error: 'file_required' });
+    if (!rules.allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException({ error: rules.typeError, allowed: rules.allowedTypes });
+    }
+    if (file.size > rules.maxBytes) {
+      throw new PayloadTooLargeException({ error: rules.sizeError, maxBytes: rules.maxBytes });
+    }
+
+    const document = await this.fileModel.create({
+      token: randomBytes(16).toString('hex'),
+      customerId: customer._id,
+      kind: rules.kind,
+      contentType: file.mimetype,
+      fileName: this.safeFileName(file.originalname, file.mimetype),
+      size: file.size,
+      data: file.buffer,
+    });
+    // Only after the new one is safely stored, so a failed write leaves the
+    // card pointing at the file it already had. Scoped by kind, so replacing
+    // a photo never takes the CV with it.
+    await this.fileModel.deleteMany({ customerId: customer._id, kind: rules.kind, _id: { $ne: document._id } });
+
     return document;
   }
 

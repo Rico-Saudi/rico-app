@@ -49,12 +49,22 @@ class UnderstandingCard extends StatelessWidget {
   IconData get _categoryIcon => switch (intent.kind) {
         IntentKind.deals => Icons.local_offer_rounded,
         IntentKind.professional => _professionIcons[intent.profession] ?? Icons.engineering_rounded,
+        IntentKind.order => Icons.shopping_basket_rounded,
         IntentKind.place => CategoryVisuals.iconFor(intent.slug),
       };
 
   List<({IconData icon, String label})> get _tags {
     if (intent.kind == IntentKind.deals) {
       return [(icon: Icons.local_offer_rounded, label: 'العروض القريبة')];
+    }
+
+    // طلب من محل مسمّى: الوسمان الصادقان هما المحل وعدد الأصناف المطلوبة —
+    // لا فئة ولا ترتيب، فالمستخدم حدّد كل شي بنفسه.
+    if (intent.kind == IntentKind.order) {
+      return [
+        (icon: Icons.storefront_rounded, label: intent.placeName ?? intent.label),
+        (icon: Icons.shopping_basket_rounded, label: '${intent.orderItems.length} أصناف'),
+      ];
     }
 
     // أصحاب المهن ما ينطبق عليهم ترتيب بسعر ولا تقييم ولا حالة فتح — الوسم

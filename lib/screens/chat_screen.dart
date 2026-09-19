@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/business_catalog.dart';
 import '../models/cart.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
@@ -259,6 +260,10 @@ class _ChatScreenState extends State<ChatScreen> {
   ) async {
     if (intent.kind == IntentKind.professional) {
       return _resolveProfessionalMessage(text, intent, origin, index);
+    }
+
+    if (intent.kind == IntentKind.order) {
+      return _resolveOrderMessage(intent, index);
     }
 
     if (intent.kind == IntentKind.deals) {
@@ -652,6 +657,7 @@ class _ChatScreenState extends State<ChatScreen> {
               IntentKind.deals => 'أشوف العروض القريبة…',
               IntentKind.professional => 'أدوّر لك على أقرب ${intent.label}…',
               IntentKind.place => 'أدوّر على ${intent.label}…',
+              IntentKind.order => 'أجهّز طلبك من ${intent.placeName ?? intent.label}…',
             },
             sender: MessageSender.bot,
             isLoading: true,
@@ -840,28 +846,7 @@ class _ChatScreenState extends State<ChatScreen> {
           text: 'هذي منتجات وعروض ${place.name}، أضف اللي تبغاه للسلّة:',
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
-          catalogActions: CatalogFlowActions(
-            onAddProduct: (product) => _updateFlow(index, (f) => f.copyWith(
-                  cart: f.cart.add(CartLine.fromProduct(product)),
-                  clearError: true,
-                )),
-            onAddDeal: (deal) => _updateFlow(index, (f) => f.copyWith(
-                  cart: f.cart.add(CartLine.fromDeal(deal)),
-                  clearError: true,
-                )),
-            onSetQuantity: (type, id, quantity) => _setCartQuantity(index, type, id, quantity),
-            onReview: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.confirming, clearError: true)),
-            onSelectCategory: (category) => _updateFlow(
-              index,
-              (f) => category == null
-                  ? f.copyWith(clearCategory: true, showAllProducts: false)
-                  : f.copyWith(activeCategory: category, showAllProducts: false),
-            ),
-            onToggleShowAll: () => _updateFlow(index, (f) => f.copyWith(showAllProducts: !f.showAllProducts)),
-            onConfirm: () => _confirmRequest(index),
-            onRequestLogin: () => _signInThenConfirm(index),
-            onBack: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.browsing, clearError: true)),
-          ),
+          catalogActions: _catalogActionsFor(index),
         );
       });
     } on CatalogException catch (e) {
@@ -872,6 +857,122 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       _scrollToBottom();
     }
+  }
+
+  /// أفعال بطاقة المتجر لرسالة بعينها — تُبنى مرة واحدة هنا لأن للسلّة الآن
+  /// مدخلين: تصفّح المستخدم للقائمة بنفسه، وطلب منطوق جهّزناه له.
+  CatalogFlowActions _catalogActionsFor(int index) {
+    return CatalogFlowActions(
+      onAddProduct: (product) => _updateFlow(index, (f) => f.copyWith(
+            cart: f.cart.add(CartLine.fromProduct(product)),
+            clearError: true,
+          )),
+      onAddDeal: (deal) => _updateFlow(index, (f) => f.copyWith(
+            cart: f.cart.add(CartLine.fromDeal(deal)),
+            clearError: true,
+          )),
+      onSetQuantity: (type, id, quantity) => _setCartQuantity(index, type, id, quantity),
+      onReview: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.confirming, clearError: true)),
+      onSelectCategory: (category) => _updateFlow(
+        index,
+        (f) => category == null
+            ? f.copyWith(clearCategory: true, showAllProducts: false)
+            : f.copyWith(activeCategory: category, showAllProducts: false),
+      ),
+      onToggleShowAll: () => _updateFlow(index, (f) => f.copyWith(showAllProducts: !f.showAllProducts)),
+      onConfirm: () => _confirmRequest(index),
+      onRequestLogin: () => _signInThenConfirm(index),
+      onBack: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.browsing, clearError: true)),
+    );
+  }
+
+  /// "بدي أطلب من مطعم الماهر كنافة نابلسية وأرز بحليب" — يحلّ المحل، يطابق
+  /// الأصناف مع قائمته الحقيقية، ويفتح السلّة جاهزة على خطوة المراجعة.
+  ///
+  /// الأصناف غير الموجودة تُقال صراحةً في نص الرسالة. السكوت عنها أسوأ عطل
+  /// ممكن هنا: المستخدم يضغط "أكّد" وهو يظن أن الأربعة كلها بالسلّة، وما يكتشف
+  /// نقص اثنين إلا حين يتصل المحل.
+  Future<ChatMessage> _resolveOrderMessage(QueryIntent intent, int index) async {
+    final placeName = intent.placeName;
+    if (placeName == null) {
+      return ChatMessage(text: 'ما فهمت من وين تبي تطلب، قل لي اسم المحل 👌', sender: MessageSender.bot);
+    }
+
+    ResolvedOrder resolved;
+    try {
+      resolved = await _catalogService.resolveOrder(placeName: placeName, items: intent.orderItems);
+    } on CatalogException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أجهّز طلبك الحين 😕', sender: MessageSender.bot);
+    }
+
+    final catalog = resolved.catalog;
+    if (catalog == null) {
+      return ChatMessage(
+        text: 'ما لقيت محل باسم "$placeName" 😕 جرّب تكتب اسمه كامل، أو قل لي وش تبي وأنا أدوّر لك على أقرب محل.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    final shop = resolved.businessName ?? placeName;
+    final missing = resolved.unmatched;
+
+    // سمّى المحل بلا أصناف — يبي يشوف قائمتهم، فنفتحها على التصفّح.
+    if (intent.orderItems.isEmpty) {
+      return ChatMessage(
+        text: 'هذي قائمة $shop، أضف اللي تبغاه للسلّة:',
+        sender: MessageSender.bot,
+        requestFlow: RequestFlow(catalog: catalog),
+        catalogActions: _catalogActionsFor(index),
+      );
+    }
+
+    // ولا صنف تطابق: نفتح القائمة على التصفّح بدل ما نوقفه عند رسالة خطأ —
+    // هو أصلاً يبي يطلب من هذا المحل.
+    if (resolved.foundNothing) {
+      return ChatMessage(
+        text: 'ما لقيت ${_itemsPhrase(missing)} في $shop 😕 هذي قائمتهم إذا تبي تختار منها:',
+        sender: MessageSender.bot,
+        requestFlow: RequestFlow(catalog: catalog),
+        catalogActions: _catalogActionsFor(index),
+      );
+    }
+
+    final cart = Cart(
+      lines: resolved.matched
+          .map((m) => CartLine(
+                itemType: m.itemType,
+                itemId: m.itemId,
+                label: m.label,
+                detail: m.detail,
+                unitPrice: m.unitPrice,
+                imageUrl: m.imageUrl,
+                quantity: m.quantity,
+              ))
+          .toList(),
+    );
+
+    final text = missing.isEmpty
+        ? 'جهّزت لك طلبك من $shop — راجعه وأكّده 👇'
+        : 'جهّزت اللي لقيته من $shop. بس ما لقيت ${_itemsPhrase(missing)} عندهم — راجع الطلب وأكّده 👇';
+
+    return ChatMessage(
+      text: text,
+      sender: MessageSender.bot,
+      // مباشرة على المراجعة: هو قال وش يبي، فالخطوة الباقية تأكيد لا تصفّح.
+      requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
+      catalogActions: _catalogActionsFor(index),
+    );
+  }
+
+  /// "كنافة" / "كنافة وأرز بحليب" / "كنافة وأرز بحليب و٢ غيرها" — عربية تُقرأ،
+  /// لا قائمة مفصولة بفواصل.
+  static String _itemsPhrase(List<String> names) {
+    if (names.isEmpty) return '';
+    if (names.length == 1) return '"${names.first}"';
+    final quoted = names.map((n) => '"$n"').toList();
+    return '${quoted.sublist(0, quoted.length - 1).join('، ')} و${quoted.last}';
   }
 
   /// تعديل موضعي على تدفّق طلبٍ داخل رسالة بعينها — كل أفعال بطاقة المتجر

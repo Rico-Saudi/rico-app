@@ -4,8 +4,13 @@ import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } fro
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { isKnownProfession, professionLabel } from '../professionals/constants/professions.registry';
 
+interface OrderItem {
+  name: string;
+  quantity: number;
+}
+
 interface Intent {
-  kind: 'place' | 'deals' | 'professional';
+  kind: 'place' | 'deals' | 'professional' | 'order';
   category: string | null;
   rank: string;
   brandHint: string | null;
@@ -14,6 +19,27 @@ interface Intent {
   referencedPosition: number | null;
   /** Trade slug, for kind='professional' only — null otherwise. */
   profession: string | null;
+  /** Shop the customer named, for kind='order' only — null otherwise. */
+  placeName?: string | null;
+  /** Dishes they asked for, for kind='order' only. */
+  orderItems?: OrderItem[];
+}
+
+const MAX_ORDER_ITEMS = 20;
+
+// The model is told to copy item names verbatim, so nothing here tries to
+// correct them — it only enforces shape and size. Matching them to a real
+// catalogue happens later, against real data (PublicService.resolveOrder).
+function parseOrderItems(raw: any): OrderItem[] {
+  if (!Array.isArray(raw)) return [];
+  const items: OrderItem[] = [];
+  for (const entry of raw.slice(0, MAX_ORDER_ITEMS)) {
+    const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+    if (!name || name.length > 80) continue;
+    const q = entry?.quantity;
+    items.push({ name, quantity: Number.isInteger(q) && q >= 1 && q <= 99 ? q : 1 });
+  }
+  return items;
 }
 
 // Strips characters that could break out of the plain-text block we
@@ -73,6 +99,28 @@ function validateIntent(raw: any): Intent | null {
     };
   }
 
+  // An order needs a shop; the dishes are optional. "بدي أطلب من مطعم الماهر"
+  // names somewhere without saying what, and opening that shop's menu answers
+  // it far better than dropping the intent and falling back to a generic
+  // "nearest restaurant" search.
+  if (raw.kind === 'order') {
+    const placeName = typeof raw.placeName === 'string' ? raw.placeName.trim() : '';
+    const orderItems = parseOrderItems(raw.orderItems);
+    if (!placeName || placeName.length > 120) return null;
+    return {
+      kind: 'order',
+      category: null,
+      rank: 'nearest',
+      brandHint: null,
+      customTag: null,
+      label: null,
+      referencedPosition: null,
+      profession: null,
+      placeName,
+      orderItems,
+    };
+  }
+
   if (raw.kind !== 'place') return null;
 
   const category = raw.category;
@@ -113,6 +161,11 @@ function validateIntent(raw: any): Intent | null {
     profession: null,
   };
 }
+
+// Exposed for tests only: validateIntent is where a malformed model response
+// gets turned into something safe, and that deserves direct coverage rather
+// than being reachable only through a live Groq call.
+export const validateIntentForTest = validateIntent;
 
 @Injectable()
 export class ClassifyService {

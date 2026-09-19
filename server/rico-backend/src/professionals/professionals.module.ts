@@ -1,20 +1,20 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ProfessionalRequest, ProfessionalRequestSchema } from './schemas/professional-request.schema';
-import { ProfessionalCv, ProfessionalCvSchema } from './schemas/professional-cv.schema';
+import { ProfessionalFile, ProfessionalFileSchema } from './schemas/professional-file.schema';
 import { ProfessionEntry, ProfessionEntrySchema } from './schemas/profession.schema';
 import { ProfessionalsService } from './professionals.service';
 import { ProfessionsService } from './professions.service';
 import { ProfessionalsController } from './professionals.controller';
 import { CustomersModule } from '../customers/customers.module';
 import { MailerModule } from '../mailer/mailer.module';
-import { cvUploadLimiter, professionalRequestLimiter } from '../common/middleware/rate-limiters';
+import { fileUploadLimiter, professionalRequestLimiter } from '../common/middleware/rate-limiters';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: ProfessionalRequest.name, schema: ProfessionalRequestSchema },
-      { name: ProfessionalCv.name, schema: ProfessionalCvSchema },
+      { name: ProfessionalFile.name, schema: ProfessionalFileSchema },
       { name: ProfessionEntry.name, schema: ProfessionEntrySchema },
     ]),
     // For the Customer model (professionals are customers with a trade on
@@ -38,7 +38,10 @@ export class ProfessionalsModule implements NestModule {
 
     // Each upload writes megabytes to Mongo. The account behind it is
     // verified, so this is a cost guard rather than an abuse one — loose
-    // enough that re-shooting a CV a few times never hits it.
-    consumer.apply(cvUploadLimiter).forRoutes({ path: 'professionals/me/cv', method: RequestMethod.POST });
+    // enough that re-shooting a CV or a photo a few times never hits it.
+    consumer.apply(fileUploadLimiter).forRoutes(
+      { path: 'professionals/me/cv', method: RequestMethod.POST },
+      { path: 'professionals/me/photo', method: RequestMethod.POST },
+    );
   }
 }

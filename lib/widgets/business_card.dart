@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/business_card.dart';
@@ -159,7 +160,7 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _Monogram(initial: card.initial, accent: accent, rank: rank),
+          _Avatar(card: card, rank: rank),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -209,17 +210,34 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// حرف الاسم داخل دائرة بيضاء، مع رقم الترتيب على حافتها — بديل شخصي
-/// لشارة الرقم المربّعة في بطاقات الأماكن.
-class _Monogram extends StatelessWidget {
-  final String initial;
-  final CardAccent accent;
+/// وجه البطاقة: صورة صاحبها داخل دائرة بيضاء، أو حرف اسمه إن ما رفع صورة —
+/// مع رقم الترتيب على الحافة، بديل شخصي لشارة الرقم المربّعة في بطاقات
+/// الأماكن.
+///
+/// الحرف ليس "حالة خطأ": بطاقة بلا صورة بطاقة كاملة، وهو ما تراه أي بطاقة
+/// أُنشئت قبل ما تصير الصورة ممكنة. لذلك يظهر أثناء التحميل وعند فشله كذلك،
+/// فما يومض المكان فارغاً ولا يطلع رمز صورة مكسورة في خيط محادثة.
+class _Avatar extends StatelessWidget {
+  final BusinessCardData card;
   final int? rank;
 
-  const _Monogram({required this.initial, required this.accent, this.rank});
+  const _Avatar({required this.card, this.rank});
 
   @override
   Widget build(BuildContext context) {
+    final accent = card.accent;
+
+    final Widget face = card.hasPhoto
+        ? CachedNetworkImage(
+            imageUrl: card.photoUrl!,
+            width: 42,
+            height: 42,
+            fit: BoxFit.cover,
+            placeholder: (_, __) => _MonogramFace(initial: card.initial, accent: accent),
+            errorWidget: (_, __, ___) => _MonogramFace(initial: card.initial, accent: accent),
+          )
+        : _MonogramFace(initial: card.initial, accent: accent);
+
     return SizedBox(
       width: 42,
       height: 42,
@@ -229,12 +247,9 @@ class _Monogram extends StatelessWidget {
           Container(
             width: 42,
             height: 42,
-            alignment: Alignment.center,
             decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-            child: Text(
-              initial,
-              style: RicoText.title.copyWith(color: accent.bottom, fontSize: 18),
-            ),
+            // القص دائري لأن الصورة مربعة والإطار دائرة.
+            child: ClipOval(child: face),
           ),
           if (rank != null)
             PositionedDirectional(
@@ -253,6 +268,28 @@ class _Monogram extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// حرف الاسم على أرضية بيضاء — وجه البطاقة حين ما فيه صورة.
+class _MonogramFace extends StatelessWidget {
+  final String initial;
+  final CardAccent accent;
+
+  const _MonogramFace({required this.initial, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      alignment: Alignment.center,
+      color: Colors.white,
+      child: Text(
+        initial,
+        style: RicoText.title.copyWith(color: accent.bottom, fontSize: 18),
       ),
     );
   }

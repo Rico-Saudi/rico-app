@@ -22,7 +22,18 @@ enum RankMode { nearest, cheapest, openNow, bestRated }
 /// نوع النية: بحث عن مكان، أو استفسار عن عروض/خصومات (لا يرتبط بفئة مكان)،
 /// أو طلب **شخص** صاحب مهنة (دهان، كهربائي...) وهذا غير المحل الذي يبيع
 /// أدوات المهنة نفسها — انظر [IntentService.professionFor].
-enum IntentKind { place, deals, professional }
+enum IntentKind { place, deals, professional, order }
+
+/// صنف طلبه المستخدم بالاسم ضمن نية [IntentKind.order] — كما نطقه هو، بلا
+/// تصحيح: المطابقة مع قائمة المحل الحقيقية تصير على الخادم.
+class RequestedItem {
+  final String name;
+  final int quantity;
+
+  const RequestedItem({required this.name, this.quantity = 1});
+
+  Map<String, dynamic> toJson() => {'name': name, 'quantity': quantity};
+}
 
 /// نية واحدة من نوايا رسالة المستخدم (قد تحتوي الرسالة الواحدة عدة نوايا،
 /// انظر [IntentService.parseMulti]).
@@ -35,6 +46,10 @@ class QueryIntent {
 
   /// سلوق المهنة لنوايا [IntentKind.professional] فقط — null لغيرها.
   final String? profession;
+
+  /// اسم المحل والأصناف المطلوبة — لنوايا [IntentKind.order] فقط.
+  final String? placeName;
+  final List<RequestedItem> orderItems;
 
   /// رقم ترتيب عنصر من "آخر نتائج معروضة" أشار له المستخدم صراحة (مثل
   /// "الثاني")، أو null لطلب بحث عادي. عند تحديده يُحل من الذاكرة المحلية
@@ -49,6 +64,8 @@ class QueryIntent {
     this.slug,
     this.profession,
     this.referencedPosition,
+    this.placeName,
+    this.orderItems = const [],
   });
 
   bool get wantsCheapest => rank == RankMode.cheapest;

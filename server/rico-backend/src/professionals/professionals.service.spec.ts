@@ -2,7 +2,7 @@ import mongoose, { Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { ProfessionalsService } from './professionals.service';
 import { ProfessionalRequest, ProfessionalRequestDocument, ProfessionalRequestSchema } from './schemas/professional-request.schema';
-import { ProfessionalCv, ProfessionalCvDocument, ProfessionalCvSchema } from './schemas/professional-cv.schema';
+import { ProfessionalFile, ProfessionalFileDocument, ProfessionalFileSchema } from './schemas/professional-file.schema';
 import { Customer, CustomerDocument, CustomerSchema } from '../customers/schemas/customer.schema';
 import { MailerService } from '../mailer/mailer.service';
 
@@ -14,7 +14,7 @@ describe('ProfessionalsService', () => {
   let service: ProfessionalsService;
   let customerModel: Model<CustomerDocument>;
   let requestModel: Model<ProfessionalRequestDocument>;
-  let cvModel: Model<ProfessionalCvDocument>;
+  let fileModel: Model<ProfessionalFileDocument>;
   let sentEmails: { to: string; customerPhone: string }[];
 
   // Riyadh-ish. Longitude degrees are ~101km apart at this latitude, so a
@@ -75,7 +75,7 @@ describe('ProfessionalsService', () => {
       ProfessionalRequest.name,
       ProfessionalRequestSchema,
     ) as unknown as Model<ProfessionalRequestDocument>;
-    cvModel = mongoose.model(ProfessionalCv.name, ProfessionalCvSchema) as unknown as Model<ProfessionalCvDocument>;
+    fileModel = mongoose.model(ProfessionalFile.name, ProfessionalFileSchema) as unknown as Model<ProfessionalFileDocument>;
 
     // $geoNear needs the 2dsphere index to exist, and mongoose only builds it
     // on connect for models registered before that point.
@@ -88,14 +88,14 @@ describe('ProfessionalsService', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all([customerModel.deleteMany({}), requestModel.deleteMany({}), cvModel.deleteMany({})]);
+    await Promise.all([customerModel.deleteMany({}), requestModel.deleteMany({}), fileModel.deleteMany({})]);
     sentEmails = [];
     const mailer = {
       sendProfessionalRequestEmail: jest.fn(async ({ to, customerPhone }) => {
         sentEmails.push({ to, customerPhone });
       }),
     } as unknown as MailerService;
-    service = new ProfessionalsService(customerModel, requestModel, cvModel, mailer);
+    service = new ProfessionalsService(customerModel, requestModel, fileModel, mailer);
   });
 
   describe('search', () => {
@@ -130,6 +130,7 @@ describe('ProfessionalsService', () => {
           'headline',
           'id',
           'name',
+          'photoUrl',
           'profession',
           'professionLabel',
           'serviceRadiusMeters',
@@ -175,6 +176,7 @@ describe('ProfessionalsService', () => {
         { _id: oldTimer._id },
         {
           $unset: {
+            'professional.photoUrl': '',
             'professional.bio': '',
             'professional.skills': '',
             'professional.yearsExperience': '',
@@ -192,6 +194,7 @@ describe('ProfessionalsService', () => {
         yearsExperience: null,
         cardAccent: 'green',
         cvUrl: null,
+        photoUrl: null,
       });
     });
 
@@ -330,10 +333,10 @@ describe('ProfessionalsService', () => {
 
       const updated = await service.setCv(painter, upload('cv.pdf'));
 
-      expect(updated.professional?.cvUrl).toMatch(/^\/professionals\/cv\/[a-f0-9]{32}$/);
+      expect(updated.professional?.cvUrl).toMatch(/^\/professionals\/file\/[a-f0-9]{32}$/);
       expect(updated.professional?.cvFileName).toBe('cv.pdf');
       expect(updated.professional?.cvContentType).toBe('application/pdf');
-      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(1);
+      expect(await fileModel.countDocuments({ customerId: painter._id, kind: 'cv' })).toBe(1);
     });
 
     // The URL is public, so it must not be something anyone can count their
@@ -342,14 +345,14 @@ describe('ProfessionalsService', () => {
       const painter = await makeProfessional({ name: 'painter' });
       const updated = await service.setCv(painter, upload('cv.pdf'));
 
-      const document = await cvModel.findOne({ customerId: painter._id });
+      const document = await fileModel.findOne({ customerId: painter._id, kind: 'cv' });
       expect(updated.professional?.cvUrl).not.toContain(String(document!._id));
       expect(updated.professional?.cvUrl).toContain(document!.token);
 
-      await expect(service.findCv(String(document!._id))).rejects.toMatchObject({
-        response: { error: 'cv_not_found' },
+      await expect(service.findFile(String(document!._id))).rejects.toMatchObject({
+        response: { error: 'file_not_found' },
       });
-      await expect(service.findCv(document!.token)).resolves.toMatchObject({ fileName: 'cv.pdf' });
+      await expect(service.findFile(document!.token)).resolves.toMatchObject({ fileName: 'cv.pdf' });
     });
 
     it('drops the old bytes when a CV is replaced', async () => {
@@ -359,7 +362,7 @@ describe('ProfessionalsService', () => {
 
       const second = await service.setCv(painter, upload('new.pdf'));
 
-      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(1);
+      expect(await fileModel.countDocuments({ customerId: painter._id, kind: 'cv' })).toBe(1);
       expect(second.professional?.cvUrl).not.toBe(firstUrl);
       expect(second.professional?.cvFileName).toBe('new.pdf');
     });
@@ -405,6 +408,44 @@ describe('ProfessionalsService', () => {
       });
     });
 
+    it('puts the face of the professional on the card', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      const updated = await service.setPhoto(painter, upload('me.jpg', 'image/jpeg'));
+
+      expect(updated.professional?.photoUrl).toMatch(/^\/professionals\/file\/[a-f0-9]{32}$/);
+      expect(await fileModel.countDocuments({ customerId: painter._id, kind: 'photo' })).toBe(1);
+    });
+
+    it('refuses a PDF as a face', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      await expect(service.setPhoto(painter, upload('cv.pdf'))).rejects.toMatchObject({
+        response: { error: 'unsupported_photo_type' },
+      });
+    });
+
+    // The two files live in one collection, so the replace-the-previous-one
+    // sweep has to be scoped by kind — otherwise changing your photo would
+    // silently take your CV down with it.
+    it('keeps the photo and the CV independent of each other', async () => {
+      const created = await makeProfessional({ name: 'painter' });
+      const withCv = await service.setCv(created, upload('cv.pdf'));
+      const withPhoto = await service.setPhoto(withCv, upload('me.jpg', 'image/jpeg'));
+      const cvUrl = withPhoto.professional?.cvUrl;
+      expect(cvUrl).toBeTruthy();
+
+      // Replacing the photo must leave the CV attached...
+      const rephotographed = await service.setPhoto(withPhoto, upload('me2.jpg', 'image/jpeg'));
+      expect(rephotographed.professional?.cvUrl).toBe(cvUrl);
+
+      // ...and detaching it must too.
+      const faceless = await service.removePhoto(rephotographed);
+      expect(faceless.professional?.photoUrl).toBeNull();
+      expect(faceless.professional?.cvUrl).toBe(cvUrl);
+      expect(await fileModel.countDocuments({ customerId: created._id })).toBe(1);
+    });
+
     it('detaches the CV and leaves the rest of the card alone', async () => {
       const painter = await makeProfessional({ name: 'painter' });
       await customerModel.updateOne({ _id: painter._id }, { $set: { 'professional.bio': 'عن شغلي' } });
@@ -415,7 +456,7 @@ describe('ProfessionalsService', () => {
       expect(cleared.professional?.cvUrl).toBeNull();
       expect(cleared.professional?.cvFileName).toBeNull();
       expect(cleared.professional?.bio).toBe('عن شغلي');
-      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(0);
+      expect(await fileModel.countDocuments({ customerId: painter._id, kind: 'cv' })).toBe(0);
     });
   });
 });

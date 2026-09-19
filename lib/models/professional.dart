@@ -13,6 +13,9 @@ class Professional {
   final String profession;
   final String professionLabel;
 
+  /// مسار صورته كما يرسله الخادم (نسبي: `/professionals/file/<token>`).
+  final String? photoPath;
+
   /// وصف قصير يكتبه صاحب المهنة عن شغله ("دهانات داخلية وديكورات").
   final String? headline;
 
@@ -43,6 +46,7 @@ class Professional {
     required this.professionLabel,
     required this.distanceMeters,
     required this.serviceRadiusMeters,
+    this.photoPath,
     this.headline,
     this.bio,
     this.skills = const [],
@@ -58,6 +62,7 @@ class Professional {
         name: (json['name'] as String?) ?? '',
         profession: (json['profession'] as String?) ?? '',
         professionLabel: (json['professionLabel'] as String?) ?? '',
+        photoPath: json['photoUrl'] as String?,
         headline: json['headline'] as String?,
         bio: json['bio'] as String?,
         skills: ((json['skills'] as List?) ?? const []).map((s) => '$s').toList(),
@@ -80,11 +85,12 @@ class Professional {
     return String.fromCharCode(trimmed.runes.first);
   }
 
-  /// بطاقته كما تُرسم في المحادثة. [cvUrl] مطلق — يبنيه المستدعي من عنوان
-  /// الخادم لأن ما يصل من الخادم مسار نسبي.
-  BusinessCardData toCard({String? cvUrl}) => BusinessCardData(
+  /// بطاقته كما تُرسم في المحادثة. الروابط مطلقة — يبنيها المستدعي من عنوان
+  /// الخادم لأن ما يصل من الخادم مسارات نسبية.
+  BusinessCardData toCard({String? photoUrl, String? cvUrl}) => BusinessCardData(
         name: name,
         professionLabel: professionLabel,
+        photoUrl: photoUrl,
         headline: headline,
         bio: bio,
         skills: skills,

@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { PublicService } from './public.service';
 import { SearchPlacesDto } from './dto/search-places.dto';
 import { SubmitDealDto } from './dto/submit-deal.dto';
 import { TrackImpressionsDto } from './dto/track-impressions.dto';
 import { TrackSearchGapDto } from './dto/track-search-gap.dto';
+import { ResolveOrderDto } from './dto/resolve-order.dto';
 
 @Controller()
 export class PublicController {
@@ -17,6 +18,16 @@ export class PublicController {
   @Get('places/:id/catalog')
   getCatalog(@Param('id') id: string) {
     return this.publicService.getCatalog(id);
+  }
+
+  // Turns a spoken order into a basket: resolves the shop by name, matches
+  // each dish against its real catalogue, and says plainly which ones it
+  // couldn't find. Public, like the catalogue itself — placing the order still
+  // needs an account (POST /requests), this only fills the basket.
+  @Post('orders/resolve')
+  @HttpCode(HttpStatus.OK)
+  resolveOrder(@Body() dto: ResolveOrderDto) {
+    return this.publicService.resolveOrder(dto);
   }
 
   @Post('submit-deal')

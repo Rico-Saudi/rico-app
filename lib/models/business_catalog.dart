@@ -125,3 +125,81 @@ class BusinessCatalog {
     return seen;
   }
 }
+
+/// نتيجة تحويل طلب منطوق ("بدي من مطعم الماهر كنافة وأرز بحليب") إلى سلّة —
+/// كما يرجعها POST /orders/resolve.
+///
+/// [unmatched] أهم من [matched]: الصمت عن صنف ما لقيناه أسوأ من قوله، فالمحل
+/// ما عنده كل شي والمستخدم لازم يعرف وش اللي سقط من طلبه.
+class ResolvedOrder {
+  final String? businessId;
+  final String? businessName;
+  final BusinessCatalog? catalog;
+  final List<ResolvedOrderLine> matched;
+  final List<String> unmatched;
+
+  const ResolvedOrder({
+    this.businessId,
+    this.businessName,
+    this.catalog,
+    this.matched = const [],
+    this.unmatched = const [],
+  });
+
+  bool get foundBusiness => catalog != null;
+  bool get foundNothing => matched.isEmpty;
+
+  factory ResolvedOrder.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final business = json['business'] as Map<String, dynamic>?;
+    final catalog = json['catalog'] as Map<String, dynamic>?;
+    return ResolvedOrder(
+      businessId: business?['id'] as String?,
+      businessName: business?['name'] as String?,
+      catalog: catalog == null ? null : BusinessCatalog.fromJson(catalog, baseUrl: baseUrl),
+      matched: ((json['matched'] as List?) ?? [])
+          .map((m) => ResolvedOrderLine.fromJson(m as Map<String, dynamic>, baseUrl: baseUrl))
+          .toList(),
+      unmatched: ((json['unmatched'] as List?) ?? []).map((u) => u as String).toList(),
+    );
+  }
+}
+
+/// سطر طُوبق فعلاً بصنف في قائمة المحل.
+class ResolvedOrderLine {
+  final String itemType;
+  final String itemId;
+  final String label;
+  final String? detail;
+  final double? unitPrice;
+  final String? imageUrl;
+  final int quantity;
+
+  /// ما نطقه المستخدم قبل المطابقة — يُعرض حين يختلف عن [label]، فيعرف أن
+  /// "كنافة" صارت "كنافة نابلسية" ولا يفاجأ.
+  final String requestedAs;
+
+  const ResolvedOrderLine({
+    required this.itemType,
+    required this.itemId,
+    required this.label,
+    this.detail,
+    this.unitPrice,
+    this.imageUrl,
+    this.quantity = 1,
+    this.requestedAs = '',
+  });
+
+  factory ResolvedOrderLine.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final imagePath = json['imageUrl'] as String?;
+    return ResolvedOrderLine(
+      itemType: json['itemType'] as String? ?? 'product',
+      itemId: json['itemId'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      detail: json['detail'] as String?,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble(),
+      imageUrl: imagePath == null ? null : '$baseUrl$imagePath',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      requestedAs: json['requestedAs'] as String? ?? '',
+    );
+  }
+}

@@ -498,7 +498,8 @@ class _ProfessionSection extends StatelessWidget {
     final customer = AuthStore.instance.customer;
     final card = profile.toCard(
       name: customer?.name ?? '',
-      cvUrl: ProfessionalsService.cvUrl(profile.cvPath),
+      photoUrl: ProfessionalsService.fileUrl(profile.photoPath),
+      cvUrl: ProfessionalsService.fileUrl(profile.cvPath),
     );
 
     return Column(

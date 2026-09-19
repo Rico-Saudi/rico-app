@@ -8,17 +8,25 @@ export const MAX_CV_BYTES = 5 * 1024 * 1024;
 // a photo of a printed page as it is a document.
 export const ALLOWED_CV_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-// Keyed by the document's own random token, not by the customer or by a
-// sequential id: replacing a CV mints a new token, so the old URL stops
+// The face on the card. Smaller cap than the CV and images only: this is
+// rendered into a 46px circle, so anything past a downscaled phone photo is
+// bytes nobody will ever see. The app downscales before uploading; this is
+// the backstop for a client that skips it.
+export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+
+export const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Keyed by the file's own random token, not by the customer or by a
+// sequential id: replacing a file mints a new token, so the old URL stops
 // resolving and the new bytes can never be served from a cache in place of
 // the old ones — and nobody can enumerate their way to someone else's CV.
-export function professionalCvUrl(token: string): string {
-  return `/professionals/cv/${token}`;
+export function professionalFileUrl(token: string): string {
+  return `/professionals/file/${token}`;
 }
 
-/// What a CV token looks like. Checked before the lookup so a crawler with a
-/// mangled URL is answered from memory rather than from the database.
-export const CV_TOKEN_PATTERN = /^[a-f0-9]{32}$/;
+/// What a file token looks like. Checked before the lookup so a crawler with
+/// a mangled URL is answered from memory rather than from the database.
+export const FILE_TOKEN_PATTERN = /^[a-f0-9]{32}$/;
 
 // The card's colour scheme, chosen by the professional. Deliberately a short
 // closed list rather than a free colour: every card stays inside the app's

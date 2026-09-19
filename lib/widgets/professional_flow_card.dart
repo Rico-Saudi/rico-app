@@ -60,7 +60,8 @@ class _ProfessionalFlowCardState extends State<ProfessionalFlowCard> {
               // نفس البطاقة التي بناها صاحبها ورآها في المعاينة — الرابط
               // وحده يُبنى هنا، لأن الخادم يرسل مساراً نسبياً.
               card: flow.professionals[i].toCard(
-                cvUrl: ProfessionalsService.cvUrl(flow.professionals[i].cvPath),
+                photoUrl: ProfessionalsService.fileUrl(flow.professionals[i].photoPath),
+                cvUrl: ProfessionalsService.fileUrl(flow.professionals[i].cvPath),
               ),
               rank: i + 1,
               onRequest: widget.onSelect == null ? null : () => widget.onSelect!(flow.professionals[i]),

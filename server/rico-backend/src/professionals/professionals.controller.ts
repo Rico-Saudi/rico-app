@@ -22,7 +22,7 @@ import { ProfessionalsService } from './professionals.service';
 import { ProfessionsService } from './professions.service';
 import { SearchProfessionalsDto } from './dto/search-professionals.dto';
 import { CreateProfessionalRequestDto } from './dto/create-professional-request.dto';
-import { MAX_CV_BYTES } from './constants/professional-card.constants';
+import { MAX_CV_BYTES, MAX_PHOTO_BYTES } from './constants/professional-card.constants';
 import { CustomerAuthGuard } from '../customers/customer-auth.guard';
 import { CurrentCustomer } from '../common/decorators/current-customer.decorator';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
@@ -48,32 +48,46 @@ export class ProfessionalsController {
   }
 
   // Public for the same reason as the card it belongs to: a customer
-  // comparing two painters has to be able to open the CV one of them chose
-  // to attach.
+  // comparing two painters has to be able to see their faces and open the CV
+  // one of them chose to attach.
   //
   // Keyed by an unguessable token rather than a document id, so "public"
   // means "openable by whoever was shown the card" and not "enumerable by
   // anyone" — a CV carries a real person's name, address and sometimes more.
-  // Replacing a CV mints a new token, so the bytes behind a URL never change
-  // and it can be cached forever.
-  @Get('cv/:token')
+  // Replacing a file mints a new token, so the bytes behind a URL never
+  // change and it can be cached forever.
+  @Get('file/:token')
   @Header('Cache-Control', 'public, max-age=31536000, immutable')
-  async getCv(@Param('token') token: string, @Res({ passthrough: true }) res: Response) {
-    const cv = await this.professionalsService.findCv(token);
+  async getFile(@Param('token') token: string, @Res({ passthrough: true }) res: Response) {
+    const file = await this.professionalsService.findFile(token);
     res.set({
-      'Content-Type': cv.contentType,
-      'Content-Length': String(cv.size),
+      'Content-Type': file.contentType,
+      'Content-Length': String(file.size),
       // inline, not attachment: a PDF or a photo should open in the phone's
       // viewer from a chat thread, not land in Downloads.
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(cv.fileName)}`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
     });
-    return new StreamableFile(cv.data);
+    return new StreamableFile(file.data);
   }
 
   // ---- The professional's own card -----------------------------------------
   // The text of the card is saved through PATCH /customer/auth/me, with the
-  // rest of the profile. Only the file needs its own endpoints: it is
-  // multipart, so it can't ride inside that JSON body.
+  // rest of the profile. Only the files need their own endpoints: they are
+  // multipart, so they can't ride inside that JSON body.
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('me/photo')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_PHOTO_BYTES, files: 1 } }))
+  async uploadPhoto(@CurrentCustomer() customer: CustomerDocument, @UploadedFile() file?: Express.Multer.File) {
+    return toProfile(await this.professionalsService.setPhoto(customer, file));
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Delete('me/photo')
+  async removePhoto(@CurrentCustomer() customer: CustomerDocument) {
+    return toProfile(await this.professionalsService.removePhoto(customer));
+  }
 
   @UseGuards(CustomerAuthGuard)
   @Post('me/cv')

@@ -6,7 +6,7 @@ import 'intent_service.dart';
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
 /// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
 class ResolvedIntent {
-  final String kind; // 'place' | 'deals' | 'professional'
+  final String kind; // 'place' | 'deals' | 'professional' | 'order'
   final String? category;
   final String rank; // 'nearest' | 'cheapest' | 'open_now' | 'best_rated'
   final String? brandHint;
@@ -18,6 +18,10 @@ class ResolvedIntent {
   /// سلوق المهنة — لـkind == 'professional' فقط.
   final String? profession;
 
+  /// اسم المحل والأصناف — لـkind == 'order' فقط.
+  final String? placeName;
+  final List<RequestedItem> orderItems;
+
   ResolvedIntent({
     required this.kind,
     this.category,
@@ -28,11 +32,26 @@ class ResolvedIntent {
     this.label,
     this.referencedPosition,
     this.profession,
+    this.placeName,
+    this.orderItems = const [],
   });
 
   QueryIntent? toQueryIntent() {
     if (kind == 'deals') {
       return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض', referencedPosition: referencedPosition);
+    }
+
+    if (kind == 'order') {
+      // قائمة أصناف فارغة مقبولة: "بدي أطلب من مطعم الماهر" طلبُ قائمةٍ
+      // يُفتح على التصفّح. أما بلا اسم محل فما فيه شي نفتحه.
+      final shop = placeName;
+      if (shop == null || shop.isEmpty) return null;
+      return QueryIntent(
+        kind: IntentKind.order,
+        label: shop,
+        placeName: shop,
+        orderItems: orderItems,
+      );
     }
 
     if (kind == 'professional') {
@@ -177,6 +196,17 @@ class LlmIntentService {
         label: map['label'] as String?,
         referencedPosition: map['referencedPosition'] as int?,
         profession: map['profession'] as String?,
+        placeName: map['placeName'] as String?,
+        orderItems: ((map['orderItems'] as List?) ?? [])
+            .map((raw) {
+              final item = raw as Map<String, dynamic>;
+              return RequestedItem(
+                name: (item['name'] as String?)?.trim() ?? '',
+                quantity: (item['quantity'] as num?)?.toInt() ?? 1,
+              );
+            })
+            .where((i) => i.name.isNotEmpty)
+            .toList(),
       );
     }).toList();
 

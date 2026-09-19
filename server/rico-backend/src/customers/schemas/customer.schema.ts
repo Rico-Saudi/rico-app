@@ -8,6 +8,7 @@ import {
   MAX_YEARS_EXPERIENCE,
 } from '../../professionals/constants/professional-card.constants';
 
+
 export type CustomerDocument = HydratedDocument<Customer>;
 
 export const DEFAULT_SERVICE_RADIUS_METERS = 15000;
@@ -30,6 +31,13 @@ export const MAX_SERVICE_RADIUS_METERS = 100000;
 export class ProfessionalProfile {
   @Prop({ type: String, required: true }) // slug from constants/professions.ts
   profession: string;
+
+  // The professional's own photo, denormalized from the professional_files
+  // document so that rendering a card never needs a second query. Null until
+  // one is uploaded, and the card draws a monogram instead — a card with no
+  // face is a card, a card with a broken image is not.
+  @Prop({ type: String, default: null })
+  photoUrl: string | null;
 
   // Free text the professional writes about their work ("دهانات داخلية
   // وديكورات"). Shown as-is, never parsed. The one-line version — it is the
