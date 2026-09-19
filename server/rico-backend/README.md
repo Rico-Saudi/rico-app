@@ -29,7 +29,12 @@ Copy `.env.example` to `.env` and fill in:
 | `GOOGLE_SYNC_COOLDOWN_DAYS` | no | default `30` |
 | `GOOGLE_PHOTOS_MONTHLY_CAP` | no | default `1000` — separate budget for `GET /places/:id/photo`, which bills as the Place Photos SKU ($7/1,000, first 1,000/month free) rather than against the search cap |
 | `GROQ_API_KEY` | only for `/classify` | Groq Cloud API key |
-| `GROQ_MODEL` | no | default `llama-3.3-70b-versatile` |
+| `GROQ_MODEL` | no | default `openai/gpt-oss-120b` |
+| `LLM_PROVIDER` | no | `groq` (default) or `openrouter`. Unset keeps the exact behaviour this app shipped with — a provider swap is a config change, not a release |
+| `OPENROUTER_API_KEY` | only for `LLM_PROVIDER=openrouter` | one key for many models |
+| `OPENROUTER_CLASSIFY_MODELS` | no | comma-separated chain, priority order; OpenRouter fails over down it inside one request and bills whichever answered |
+| `OPENROUTER_COMPOSE_MODELS` | no | as above, separately — classification wants reasoning, composition wants speed |
+| `OPENROUTER_MODEL` | no | fallback when neither per-endpoint chain is set |
 | `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails **and app-customer verification codes** are logged to the console instead of sent — the whole signup flow is testable locally without an email account |
 | `RESEND_FROM_EMAIL` | no | default `Rico <onboarding@resend.dev>` |
 

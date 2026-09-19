@@ -2,8 +2,10 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import cors from 'cors';
 import { ComposeService } from './compose.service';
 import { ComposeController } from './compose.controller';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
+  imports: [LlmModule],
   controllers: [ComposeController],
   providers: [ComposeService],
 })

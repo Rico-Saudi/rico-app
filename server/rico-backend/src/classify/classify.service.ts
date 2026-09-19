@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { LlmService } from '../llm/llm.service';
 import { brandFor } from '../common/constants/brands';
 import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
@@ -169,12 +170,9 @@ export const validateIntentForTest = validateIntent;
 
 @Injectable()
 export class ClassifyService {
-  async classify(dto: ClassifyRequestDto) {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new HttpException({ error: 'server_misconfigured' }, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  constructor(private readonly llm: LlmService) {}
 
+  async classify(dto: ClassifyRequestDto) {
     // A second mid-conversation system-role message isn't something
     // Llama-family chat templates are trained on (system is reserved for
     // position 0), so "last shown results" context is appended to the one
@@ -182,42 +180,17 @@ export class ClassifyService {
     const prompt = buildSystemPrompt(brandFor(dto.brand));
     const systemContent = dto.lastResults ? `${prompt}${buildLastResultsBlock(dto.lastResults)}` : prompt;
 
-    let groqResponse: Response;
-    try {
-      groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
-          messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
-          response_format: { type: 'json_object' },
-          // Was 0 (fully deterministic) — bumped slightly so the `reply`
-          // field (small talk/off-topic text) doesn't sound robotically
-          // identical every time. category/rank/kind are small enums, so a
-          // modest bump is unlikely to destabilize them, but this is a
-          // judgment call worth re-checking if classification quality drops.
-          temperature: 0.2,
-          // gpt-oss models spend tokens on hidden reasoning before the JSON
-          // output; reasoning_effort: 'low' keeps that overhead small enough
-          // to fit the free tier's 8K TPM cap, and max_tokens has headroom
-          // above the old (non-reasoning) budget to cover it.
-          reasoning_effort: 'low',
-          max_tokens: 500,
-        }),
-      });
-    } catch {
-      throw new HttpException({ error: 'upstream_unreachable' }, HttpStatus.BAD_GATEWAY);
-    }
-
-    if (!groqResponse.ok) {
-      throw new HttpException({ error: 'upstream_error', status: groqResponse.status }, HttpStatus.BAD_GATEWAY);
-    }
-
-    const data = await groqResponse.json();
-    const content = data?.choices?.[0]?.message?.content ?? null;
+    const { content } = await this.llm.complete({
+      purpose: 'classify',
+      messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
+      // Was 0 (fully deterministic) — bumped slightly so the `reply` field
+      // (small talk/off-topic text) doesn't sound robotically identical every
+      // time. category/rank/kind are small enums, so a modest bump is unlikely
+      // to destabilize them, but this is a judgment call worth re-checking if
+      // classification quality drops.
+      temperature: 0.2,
+      maxTokens: 500,
+    });
 
     let parsed: any;
     try {
