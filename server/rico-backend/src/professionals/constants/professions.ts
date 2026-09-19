@@ -1,14 +1,20 @@
-// The trades a person can put on their profile ("أنا دهّان") and that a
-// customer can ask for in chat ("أبغى دهان قريب مني").
+// The seed for the trades collection: the list every install starts with.
 //
-// This is the one list: the classifier prompt names these slugs, the search
-// endpoint filters by them, the profile picker renders them grouped by
-// `group`, and Flutter's offline keyword fallback mirrors them
-// (lib/services/profession_catalog.dart) — any trade added here belongs there
-// too, or the local fallback silently stops recognizing it when the
-// classifier is unreachable.
+// This is no longer the live list. Professions are rows the platform owner
+// edits from the dashboard (see schemas/profession.schema.ts), and everything
+// that needs to *read* them — the classifier prompt, the search DTO, the
+// picker endpoint, the label lookup — goes through
+// constants/professions.registry.ts instead. What stays here is what a fresh
+// database is seeded with, and what the registry falls back to before its
+// first read of that collection.
 //
-// `aliases` are what people actually type. They exist for the keyword
+// Flutter's offline keyword fallback mirrors this list
+// (lib/services/profession_catalog.dart). It cannot be mirrored perfectly
+// any more — a trade the owner adds today only reaches a device over the
+// wire — so the Dart copy is the floor, not the ceiling: the trades the app
+// can still recognize with no network.
+//
+// `aliases` are what people actually type. They exist for that keyword
 // fallback and for nothing else — the LLM classifier doesn't need them, it
 // reads the Arabic label.
 //
@@ -171,40 +177,3 @@ export const PROFESSIONS: Profession[] = [
   { slug: 'translator', label: 'مترجم', group: 'professional', aliases: ['مترجم', 'ترجمة', 'ترجمة معتمدة'] },
   { slug: 'calligrapher', label: 'خطّاط', group: 'professional', aliases: ['خطاط', 'خط عربي'] },
 ];
-
-export const PROFESSION_SLUGS = PROFESSIONS.map((p) => p.slug);
-
-const BY_SLUG = new Map(PROFESSIONS.map((p) => [p.slug, p]));
-
-export function professionFor(slug: string): Profession | null {
-  return BY_SLUG.get(slug) ?? null;
-}
-
-/** The Arabic name, or the slug itself for a profession retired from the
- * list — an old profile keeps working, it just shows an unpolished label
- * rather than blanking out. */
-export function professionLabel(slug: string): string {
-  return BY_SLUG.get(slug)?.label ?? slug;
-}
-
-export function isKnownProfession(slug: unknown): slug is string {
-  return typeof slug === 'string' && BY_SLUG.has(slug);
-}
-
-/** The trades grouped for the picker, in the order declared above. */
-export function professionsByGroup() {
-  return PROFESSION_GROUPS.map((group) => ({
-    slug: group.slug,
-    label: group.label,
-    professions: PROFESSIONS.filter((p) => p.group === group.slug).map(({ slug, label }) => ({ slug, label })),
-  }));
-}
-
-/** One line per group, for the classifier prompt: the model reads Arabic
- * names and answers with slugs, so it needs both, and the grouping helps it
- * pick the right neighbour among 100+ similar trades. */
-export function professionPromptLines(): string {
-  return professionsByGroup()
-    .map((g) => `${g.label}: ${g.professions.map((p) => `${p.label}=${p.slug}`).join('، ')}`)
-    .join('\n');
-}

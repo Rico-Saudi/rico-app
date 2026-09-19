@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { VendorService } from './vendor.service';
 import { ClaimBusinessDto } from './dto/claim-business.dto';
 import { CreateOwnDealDto } from './dto/create-own-deal.dto';
@@ -8,6 +9,7 @@ import { RequireApp } from '../common/decorators/require-app.decorator';
 import { AccountId } from '../common/decorators/account-id.decorator';
 import { CreateProductDto } from '../products/dto/create-product.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
+import { MAX_PRODUCT_IMAGE_BYTES } from '../products/constants/product-image.constants';
 import { CreateDiscountDto } from '../discounts/dto/create-discount.dto';
 import { UpdateDiscountDto } from '../discounts/dto/update-discount.dto';
 
@@ -60,6 +62,25 @@ export class VendorController {
   @Delete('products/:id')
   removeProduct(@AccountId() accountId: string, @Param('id') productId: string) {
     return this.vendorService.removeOwnProduct(accountId, productId);
+  }
+
+  // Multipart rather than JSON, so the photo is uploaded as its own step after
+  // the product itself is saved. Multer keeps it in memory — nothing is written
+  // to Render's ephemeral disk — and the cap is enforced here so an oversized
+  // file is refused before it's buffered, not after.
+  @Post('products/:id/image')
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_PRODUCT_IMAGE_BYTES, files: 1 } }))
+  uploadProductImage(
+    @AccountId() accountId: string,
+    @Param('id') productId: string,
+    @UploadedFile() image?: Express.Multer.File,
+  ) {
+    return this.vendorService.setOwnProductImage(accountId, productId, image);
+  }
+
+  @Delete('products/:id/image')
+  removeProductImage(@AccountId() accountId: string, @Param('id') productId: string) {
+    return this.vendorService.removeOwnProductImage(accountId, productId);
   }
 
   @Get('discounts')

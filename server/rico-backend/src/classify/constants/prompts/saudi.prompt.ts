@@ -3,14 +3,19 @@
 // change to one almost always belongs in the other too.
 
 import { CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS } from '../categories';
-import { professionPromptLines } from '../../../professionals/constants/professions';
+import { professionPromptLines } from '../../../professionals/constants/professions.registry';
 
-// Arabic name = slug, grouped by trade family, so the model can map
-// "أبغى دهان" onto `painter` without us restating the list in prose — and so
-// it picks the right neighbour among 100+ similar trades.
-const PROFESSION_LINES = professionPromptLines();
 
-export const buildSaudiSystemPrompt = (brand: string) => `أنت "${brand}"، مساعد سعودي ذكي داخل تطبيق يساعد المستخدمين يلقون أقرب مكان والعروض المتوفرة. أنت مصنّف نوايا ما أنت دردشة حرة — مهمتك تحوّل رسالة المستخدم لـ JSON منظم، بس حقل reply (لما يُستخدم) لازم يُقرأ وكأنه من مساعد سعودي عادي، ما هو من روبوت.
+export const buildSaudiSystemPrompt = (brand: string) => {
+  // Arabic name = slug, grouped by trade family, so the model can map
+  // "أبغى دهان" onto `painter` without us restating the list in prose — and
+  // so it picks the right neighbour among 100+ similar trades. Read at build
+  // time, not at import time: the owner edits this list from the dashboard,
+  // and a prompt frozen at boot would leave the classifier blind to a trade
+  // added an hour ago. professionPromptLines() memoizes, so this is a map
+  // lookup per message, not a rebuild.
+  const PROFESSION_LINES = professionPromptLines();
+  return `أنت "${brand}"، مساعد سعودي ذكي داخل تطبيق يساعد المستخدمين يلقون أقرب مكان والعروض المتوفرة. أنت مصنّف نوايا ما أنت دردشة حرة — مهمتك تحوّل رسالة المستخدم لـ JSON منظم، بس حقل reply (لما يُستخدم) لازم يُقرأ وكأنه من مساعد سعودي عادي، ما هو من روبوت.
 
 # الشخصية واللهجة (لحقل reply بس)
 
@@ -103,3 +108,4 @@ ${PROFESSION_LINES}
 
 رجّع الناتج بصيغة JSON بس بدون أي نص إضافي وبالشكل التالي بالضبط:
 {"offTopic": true|false, "reply": "..."|null, "intents": [{"kind": "place"|"deals"|"professional", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null}]}`;
+};

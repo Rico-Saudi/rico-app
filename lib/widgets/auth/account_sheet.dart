@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/customer.dart';
 import '../../screens/incoming_requests_screen.dart';
+import '../../screens/orders_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_store.dart';
+import '../../services/professionals_service.dart';
 import '../../theme/app_theme.dart';
+import '../business_card.dart';
 import 'profession_sheet.dart';
 
 /// ورقة الحساب — ملخّص بيانات المستخدم مع تعديلها والخروج.
@@ -107,10 +110,11 @@ class _AccountSheetState extends State<AccountSheet> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  /// المهنة تُحرّر في ورقتها الخاصة: ورقة الحساب أصلاً نموذج مكتظ، ومحرّر
-  /// المهنة فيه منتقٍ وموقع ونطاق ومفتاح إتاحة — حشره هنا يطمس الاثنين.
+  /// البطاقة تُحرّر في ورقتها الخاصة: ورقة الحساب أصلاً نموذج مكتظ، ومحرّر
+  /// البطاقة فيه منتقٍ ووصف وسيرة ومهارات وموقع ونطاق — حشره هنا يطمس
+  /// الاثنين.
   Future<void> _openProfessionSheet() async {
-    await showProfessionSheet(context);
+    await showProfessionFlow(context);
     // لا setState: [AuthStore] يبلّغ بنفسه بعد الحفظ، وهذي الورقة مبنية
     // داخل [ListenableBuilder] يستمع له.
   }
@@ -118,6 +122,12 @@ class _AccountSheetState extends State<AccountSheet> {
   void _openIncomingRequests() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const IncomingRequestsScreen()),
+    );
+  }
+
+  void _openOrders() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OrdersScreen()),
     );
   }
 
@@ -212,6 +222,8 @@ class _AccountSheetState extends State<AccountSheet> {
                         child: _editing ? _buildEditor() : _buildDetails(customer.phone),
                       ),
                       if (!_editing) ...[
+                        const SizedBox(height: 12),
+                        _OrdersEntry(onTap: _openOrders),
                         const SizedBox(height: 12),
                         _ProfessionSection(
                           profile: customer.professional,
@@ -375,6 +387,59 @@ class _AccountSheetState extends State<AccountSheet> {
   }
 }
 
+/// مدخل سجلّ الطلبات — صفٌّ واحد بارز في ورقة الحساب. سجلّ الطلبات يخصّ كل
+/// من سجّل دخوله، بعكس قسم المهنة تحته الذي لا يعني إلا من أضاف مهنة، فيسبقه.
+class _OrdersEntry extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _OrdersEntry({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: RicoColors.surface,
+      borderRadius: RicoRadii.cardR,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: RicoRadii.cardR,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: RicoRadii.cardR,
+            border: Border.all(color: RicoColors.hairline),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: RicoColors.primaryTint, shape: BoxShape.circle),
+                child: const Icon(Icons.receipt_long_rounded, size: 19, color: RicoColors.primary),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('طلباتي', style: RicoText.labelStrong),
+                    const SizedBox(height: 2),
+                    Text(
+                      'كل ما طلبته من المحلات وتفاصيله',
+                      style: RicoText.caption.copyWith(color: RicoColors.inkFaint),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: RicoColors.inkFaint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// قسم "مهنتي" في ورقة الحساب — حالتان: من ما أضاف مهنة يرى دعوة سطر واحد،
 /// ومن أضافها يرى مهنته وحالتها ومدخلاً لطلباته الواردة.
 class _ProfessionSection extends StatelessWidget {
@@ -428,72 +493,45 @@ class _ProfessionSection extends StatelessWidget {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: RicoColors.surface,
-        borderRadius: RicoRadii.cardR,
-        border: Border.all(color: RicoColors.hairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.engineering_rounded, size: 17, color: RicoColors.primary),
-              const SizedBox(width: 9),
-              Expanded(child: Text(profile.professionLabel, style: RicoText.labelStrong)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: profile.isAvailable ? RicoColors.primaryTint : RicoColors.surfaceSunken,
-                  borderRadius: RicoRadii.pillR,
-                ),
-                child: Text(
-                  profile.isAvailable ? 'ظاهر للباحثين' : 'مخفي مؤقتاً',
-                  style: RicoText.overline.copyWith(
-                    color: profile.isAvailable ? RicoColors.primaryDeep : RicoColors.inkMuted,
-                  ),
+    // البطاقة نفسها، لا ملخّص لها: ما يشوفه صاحبها هنا هو بالضبط ما يشوفه
+    // العميل في المحادثة، فالتعديل يصير على شي مرئي لا على نموذج.
+    final customer = AuthStore.instance.customer;
+    final card = profile.toCard(
+      name: customer?.name ?? '',
+      cvUrl: ProfessionalsService.cvUrl(profile.cvPath),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(child: Text('بطاقتي المهنية', style: RicoText.labelStrong)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: profile.isAvailable ? RicoColors.primaryTint : RicoColors.surfaceSunken,
+                borderRadius: RicoRadii.pillR,
+              ),
+              child: Text(
+                profile.isAvailable ? 'ظاهرة للباحثين' : 'مخفية مؤقتاً',
+                style: RicoText.overline.copyWith(
+                  color: profile.isAvailable ? RicoColors.primaryDeep : RicoColors.inkMuted,
                 ),
               ),
-            ],
-          ),
-          if (profile.headline != null && profile.headline!.isNotEmpty) ...[
-            const SizedBox(height: 7),
-            Text(profile.headline!, style: RicoText.caption.copyWith(height: 1.6)),
+            ),
           ],
-          const SizedBox(height: 7),
-          Text(
-            'تخدم لين ${(profile.serviceRadiusMeters / 1000).round()} كم من موقع شغلك.',
-            style: RicoText.caption.copyWith(color: RicoColors.inkFaint),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 11),
-            child: Divider(height: 1),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: onOpenRequests,
-                  icon: const Icon(Icons.inbox_rounded, size: 17),
-                  label: const Text('طلبات وصلتني'),
-                  style: TextButton.styleFrom(minimumSize: const Size(0, 36)),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: busy ? null : onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: const Text('تعديل'),
-                style: TextButton.styleFrom(
-                  foregroundColor: RicoColors.inkMuted,
-                  minimumSize: const Size(0, 36),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 9),
+        BusinessCard(card: card, onEdit: busy ? null : onEdit),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: onOpenRequests,
+          icon: const Icon(Icons.inbox_rounded, size: 17),
+          label: const Text('طلبات وصلتني'),
+          style: TextButton.styleFrom(minimumSize: const Size(0, 36)),
+        ),
+      ],
     );
   }
 }

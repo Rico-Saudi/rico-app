@@ -186,6 +186,18 @@ export class VendorService {
     return { ok: true };
   }
 
+  async setOwnProductImage(accountId: string, productId: string, image?: Express.Multer.File) {
+    await this.assertOwnsProduct(accountId, productId);
+    const product = await this.productsService.setImage(productId, image);
+    return { productId: product._id, imageUrl: product.imageUrl };
+  }
+
+  async removeOwnProductImage(accountId: string, productId: string) {
+    await this.assertOwnsProduct(accountId, productId);
+    const product = await this.productsService.clearImage(productId);
+    return { productId: product._id, imageUrl: product.imageUrl };
+  }
+
   private async assertOwnsProduct(accountId: string, productId: string): Promise<void> {
     const product = await this.productsService.findOne(productId);
     const activeBusinessIds = await this.activeBusinessIdsForAccount(accountId);

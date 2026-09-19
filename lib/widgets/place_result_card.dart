@@ -5,11 +5,15 @@ import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../services/favorites_service.dart';
 import '../theme/app_theme.dart';
+import 'place_photo.dart';
 import 'rico_surfaces.dart';
 
-/// بطاقة نتيجة مكان داخل المحادثة — رقم الترتيب، الاسم والعنوان، ثم وسوم
+/// بطاقة نتيجة مكان داخل المحادثة — صورة المكان، ثم الاسم والعنوان، ثم وسوم
 /// البيانات المتوفرة فعلياً فقط (لا وسم لبيانات غير موجودة). النقر على
 /// البطاقة يفتح اتجاهات خرائط جوجل الحقيقية.
+///
+/// رقم الترتيب وزر الحفظ يطفوان فوق الصورة بدل صفٍّ خاص بهما فوق النص: الصورة
+/// أخذت مكانها أصلاً، وإفراد صفٍّ لهما كان يضيف ارتفاعاً لبطاقة صارت أطول.
 class PlaceResultCard extends StatefulWidget {
   final PlaceResult place;
   final int rank;
@@ -72,84 +76,86 @@ class _PlaceResultCardState extends State<PlaceResultCard> {
 
     return RicoCard(
       onTap: _openDirections,
-      padding: const EdgeInsets.all(13),
+      // الصورة تمتد لحواف البطاقة، فالحشو انتقل للنص وحده تحتها.
+      padding: EdgeInsets.zero,
       shadow: RicoShadows.subtle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _RankBadge(rank: widget.rank),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          PlacePhoto(
+            place: place,
+            categorySlug: place.categorySlug,
+            overlays: [
+              PositionedDirectional(
+                top: 10,
+                start: 10,
+                child: _RankBadge(rank: widget.rank),
+              ),
+              PositionedDirectional(
+                top: 8,
+                end: 8,
+                child: PhotoOverlayButton(
+                  icon: _isFavorite ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  tone: _isFavorite ? RicoColors.primary : RicoColors.inkMuted,
+                  tooltip: _isFavorite ? 'إزالة من المفضّلة' : 'حفظ في المفضّلة',
+                  onTap: _toggleFavorite,
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(place.name, style: RicoText.cardTitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+                if (place.address.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(place.address, style: RicoText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    Text(place.name, style: RicoText.cardTitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    if (place.address.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        place.address,
-                        style: RicoText.caption,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    if (place.distanceMeters != null) MetaChip(icon: Icons.near_me_rounded, label: place.distanceLabel),
+                    if (place.ratingLabel != null)
+                      MetaChip(
+                        icon: Icons.star_rounded,
+                        label: place.ratingCount != null
+                            ? '${place.rating!.toStringAsFixed(1)} (${place.ratingCount})'
+                            : place.rating!.toStringAsFixed(1),
+                        tone: RicoColors.goldInk,
                       ),
-                    ],
+                    if (place.priceLevelLabel != null) MetaChip(label: place.priceLevelLabel!),
+                    if (isOpen != null)
+                      MetaChip(
+                        icon: isOpen ? Icons.schedule_rounded : Icons.lock_clock,
+                        label: isOpen ? 'مفتوح الحين' : 'مغلق الحين',
+                        tone: isOpen ? RicoColors.success : RicoColors.danger,
+                      ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 6),
-              _IconAction(
-                icon: _isFavorite ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                tone: _isFavorite ? RicoColors.primary : RicoColors.inkFaint,
-                tooltip: _isFavorite ? 'إزالة من المفضّلة' : 'حفظ في المفضّلة',
-                onTap: _toggleFavorite,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              if (place.distanceMeters != null)
-                MetaChip(icon: Icons.near_me_rounded, label: place.distanceLabel),
-              if (place.ratingLabel != null)
-                MetaChip(
-                  icon: Icons.star_rounded,
-                  label: place.ratingCount != null
-                      ? '${place.rating!.toStringAsFixed(1)} (${place.ratingCount})'
-                      : place.rating!.toStringAsFixed(1),
-                  tone: RicoColors.goldInk,
-                ),
-              if (place.priceLevelLabel != null)
-                MetaChip(label: place.priceLevelLabel!),
-              if (isOpen != null)
-                MetaChip(
-                  icon: isOpen ? Icons.schedule_rounded : Icons.lock_clock,
-                  label: isOpen ? 'مفتوح الحين' : 'مغلق الحين',
-                  tone: isOpen ? RicoColors.success : RicoColors.danger,
-                ),
-            ],
-          ),
-          if (widget.onViewCatalog != null) ...[
-            const SizedBox(height: 11),
-            const Divider(color: RicoColors.hairline, height: 1),
-            const SizedBox(height: 5),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: TextButton.icon(
-                onPressed: widget.onViewCatalog,
-                icon: const Icon(Icons.storefront_rounded, size: 16),
-                label: const Text('شوف المنتجات والعروض'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  minimumSize: const Size(0, 34),
-                ),
-              ),
+                if (widget.onViewCatalog != null) ...[
+                  const SizedBox(height: 11),
+                  const Divider(color: RicoColors.hairline, height: 1),
+                  const SizedBox(height: 5),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      onPressed: widget.onViewCatalog,
+                      icon: const Icon(Icons.storefront_rounded, size: 16),
+                      label: const Text('شوف المنتجات والعروض'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(0, 34),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -201,7 +207,8 @@ class DealResultCard extends StatelessWidget {
                   children: [
                     Text(deal.placeName, style: RicoText.cardTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 3),
-                    Text(deal.titleAr, style: RicoText.label.copyWith(color: RicoColors.goldInk, fontWeight: FontWeight.w600)),
+                    Text(deal.titleAr,
+                        style: RicoText.label.copyWith(color: RicoColors.goldInk, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -217,8 +224,7 @@ class DealResultCard extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                if (deal.distanceMeters != null)
-                  MetaChip(icon: Icons.near_me_rounded, label: deal.distanceLabel),
+                if (deal.distanceMeters != null) MetaChip(icon: Icons.near_me_rounded, label: deal.distanceLabel),
                 if (deal.promoCode != null)
                   // كود الخصم قابل للنسخ — الفائدة الحقيقية منه أن يُلصق في
                   // تطبيق المتجر، لا أن يُقرأ من الشاشة.
@@ -264,30 +270,6 @@ class _RankBadge extends StatelessWidget {
           color: isFirst ? Colors.white : RicoColors.primaryDeep,
           fontWeight: FontWeight.w700,
           fontSize: 12,
-        ),
-      ),
-    );
-  }
-}
-
-class _IconAction extends StatelessWidget {
-  final IconData icon;
-  final Color tone;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _IconAction({required this.icon, required this.tone, required this.tooltip, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Icon(icon, size: 19, color: tone),
         ),
       ),
     );

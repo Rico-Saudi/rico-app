@@ -30,7 +30,7 @@ class CatalogService {
 
     try {
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      return BusinessCatalog.fromJson(data);
+      return BusinessCatalog.fromJson(data, baseUrl: _baseUrl);
     } catch (_) {
       throw CatalogException('ما قدرت أقرأ بيانات المنتجات حالياً.');
     }

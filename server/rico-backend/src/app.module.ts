@@ -10,6 +10,7 @@ import { DiscountsModule } from './discounts/discounts.module';
 import { PricingModule } from './pricing/pricing.module';
 import { DealsModule } from './deals/deals.module';
 import { SearchModule } from './search/search.module';
+import { PhotosModule } from './photos/photos.module';
 import { ClassifyModule } from './classify/classify.module';
 import { ComposeModule } from './compose/compose.module';
 import { TranscribeModule } from './transcribe/transcribe.module';
@@ -61,6 +62,7 @@ import { SpaModule } from './spa/spa.module';
     PricingModule,
     DealsModule,
     SearchModule,
+    PhotosModule,
     ClassifyModule,
     ComposeModule,
     TranscribeModule,

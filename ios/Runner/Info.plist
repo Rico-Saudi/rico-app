@@ -4,6 +4,10 @@
 	<dict>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>ريكو يحتاج المايكروفون عشان تقدر ترسل طلبك بصوتك بدل ما تكتبه.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>ريكو يحتاج الكاميرا عشان تصوّر سيرتك الذاتية وترفقها ببطاقتك المهنية.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>ريكو يحتاج صورك عشان ترفق صورة سيرتك الذاتية ببطاقتك المهنية.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>ريكو يحتاج موقعك عشان يدلّك على أقرب مكان وأفضل عرض حولك.</string>
 		<key>CADisableMinimumFrameDurationOnPhone</key>

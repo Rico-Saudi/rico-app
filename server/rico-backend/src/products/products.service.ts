@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose';
 import { Product, ProductDocument } from './schemas/product.schema';
+import { ProductImage, ProductImageDocument } from './schemas/product-image.schema';
+import { ALLOWED_PRODUCT_IMAGE_TYPES, MAX_PRODUCT_IMAGE_BYTES, productImageUrl } from './constants/product-image.constants';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductDto } from './dto/list-product.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(@InjectModel(Product.name) private readonly productModel: Model<ProductDocument>) {}
+  constructor(
+    @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
+    @InjectModel(ProductImage.name) private readonly productImageModel: Model<ProductImageDocument>,
+  ) {}
 
   async create(dto: CreateProductDto): Promise<ProductDocument> {
     return this.productModel.create({
@@ -70,5 +75,49 @@ export class ProductsService {
 
   async setFinalPrice(id: string, finalPrice: number): Promise<void> {
     await this.productModel.updateOne({ _id: id }, { $set: { finalPrice } });
+  }
+
+  // Replaces whatever photo the product had: the previous bytes are dropped so
+  // a shop that re-shoots a product ten times doesn't leave ten orphans behind.
+  async setImage(id: string, file: Express.Multer.File | undefined): Promise<ProductDocument> {
+    if (!file?.buffer?.length) throw new BadRequestException({ error: 'image_required' });
+    if (!ALLOWED_PRODUCT_IMAGE_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException({ error: 'unsupported_image_type', allowed: ALLOWED_PRODUCT_IMAGE_TYPES });
+    }
+    if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
+      throw new PayloadTooLargeException({ error: 'image_too_large', maxBytes: MAX_PRODUCT_IMAGE_BYTES });
+    }
+
+    const product = await this.findOne(id);
+    const image = await this.productImageModel.create({
+      productId: product._id,
+      contentType: file.mimetype,
+      size: file.size,
+      data: file.buffer,
+    });
+    // Only after the new image is safely stored, so a failed write leaves the
+    // product pointing at the photo it already had.
+    await this.productImageModel.deleteMany({ productId: product._id, _id: { $ne: image._id } });
+
+    product.imageUrl = productImageUrl(image._id);
+    await product.save();
+    return product;
+  }
+
+  async clearImage(id: string): Promise<ProductDocument> {
+    const product = await this.findOne(id);
+    await this.productImageModel.deleteMany({ productId: product._id });
+    product.imageUrl = null;
+    await product.save();
+    return product;
+  }
+
+  async findImage(imageId: string): Promise<ProductImageDocument> {
+    // This route is public, so a crawler with a mangled id shouldn't reach the
+    // driver and surface as a logged 500 — a malformed id is simply not found.
+    if (!isValidObjectId(imageId)) throw new NotFoundException({ error: 'image_not_found' });
+    const image = await this.productImageModel.findById(imageId);
+    if (!image) throw new NotFoundException({ error: 'image_not_found' });
+    return image;
   }
 }

@@ -13,6 +13,7 @@ import { ProductsModule } from '../products/products.module';
 import { DiscountsModule } from '../discounts/discounts.module';
 import { PublicModule } from '../public/public.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { ProfessionalsModule } from '../professionals/professionals.module';
 
 @Module({
   imports: [
@@ -29,6 +30,9 @@ import { MailerModule } from '../mailer/mailer.module';
     DiscountsModule,
     PublicModule,
     MailerModule,
+    // For ProfessionsService — the trades list is edited from this
+    // dashboard but owned by the module that serves it to the app.
+    ProfessionalsModule,
   ],
   controllers: [OwnerController],
   providers: [OwnerService],

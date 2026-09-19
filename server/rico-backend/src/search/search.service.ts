@@ -8,6 +8,7 @@ import { SearchBusinessDto } from './dto/search-business.dto';
 import { parseQuery } from './query-parser';
 import { ApiUsageService } from '../api-usage/api-usage.service';
 import { BusinessesService } from '../businesses/businesses.service';
+import { PhotosService } from '../photos/photos.service';
 import {
   GOOGLE_PLACES_PROVIDER,
   DEFAULT_GOOGLE_PLACES_MONTHLY_CAP,
@@ -40,6 +41,17 @@ interface SearchPlace {
   ratingCount: number | null;
   distanceMeters: number;
   source: 'rico' | 'google';
+  /// Our own proxy URL for this place's photo, or null when it has none. Never
+  /// a Google URL: resolving it needs the API key, which stays server-side.
+  photoUrl: string | null;
+  /// Photo author, to be credited by whoever displays the image.
+  photoAttribution: string | null;
+}
+
+/// The app never sees a Google photo URL — it asks us, and we resolve it (and
+/// pay for it) only if the image is actually displayed.
+function photoUrlFor(placeId: string): string {
+  return `/places/${placeId}/photo`;
 }
 
 function escapeRegex(value: string): string {
@@ -68,6 +80,7 @@ export class SearchService {
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     private readonly apiUsageService: ApiUsageService,
     private readonly businessesService: BusinessesService,
+    private readonly photosService: PhotosService,
   ) {}
 
   // GET /search — ported from routes/search.js. Response shape must stay
@@ -181,6 +194,8 @@ export class SearchService {
       // Auto-cached rows are Google data wearing a Business document — they
       // have no catalog, so they must not unlock ordering in the app.
       source: b.enrichmentSource === LIVE_CACHE_ENRICHMENT ? 'google' : 'rico',
+      photoUrl: b.photoRef ? photoUrlFor(String(b._id)) : null,
+      photoAttribution: b.photoAttribution ?? null,
     };
   }
 
@@ -296,7 +311,12 @@ export class SearchService {
         ratingCount: g.ratingCount,
         distanceMeters: haversineMeters(lat, lng, g.location.coordinates[1], g.location.coordinates[0]),
         source: 'google',
+        // Keyed by Google's id, because this place has no Business row yet —
+        // rememberPendingRef below covers the window until the write lands.
+        photoUrl: g.photoRef ? photoUrlFor(g.sourceId) : null,
+        photoAttribution: g.photoAttribution,
       });
+      this.photosService.rememberPendingRef(g.sourceId, g.photoRef);
     }
 
     // Persist what we just paid for, so the next identical search is served
@@ -316,6 +336,9 @@ export class SearchService {
         const { sourceId, ...rest } = g;
         await this.businessesService.upsertBySource('google', sourceId, {
           ...rest,
+          // Dates the photo reference so it can be retired at 30 days, per
+          // Google's caching terms.
+          photoRefUpdatedAt: rest.photoRef ? new Date() : null,
           enrichmentSource: LIVE_CACHE_ENRICHMENT,
         } as any);
       } catch (e) {
@@ -355,6 +378,7 @@ export class SearchService {
         category: p.category,
         price: p.price,
         finalPrice: p.finalPrice,
+        imageUrl: p.imageUrl ?? null,
         attributes: p.attributes,
       })),
     };

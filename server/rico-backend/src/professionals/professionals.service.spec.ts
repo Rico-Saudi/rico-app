@@ -2,6 +2,7 @@ import mongoose, { Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { ProfessionalsService } from './professionals.service';
 import { ProfessionalRequest, ProfessionalRequestDocument, ProfessionalRequestSchema } from './schemas/professional-request.schema';
+import { ProfessionalCv, ProfessionalCvDocument, ProfessionalCvSchema } from './schemas/professional-cv.schema';
 import { Customer, CustomerDocument, CustomerSchema } from '../customers/schemas/customer.schema';
 import { MailerService } from '../mailer/mailer.service';
 
@@ -13,6 +14,7 @@ describe('ProfessionalsService', () => {
   let service: ProfessionalsService;
   let customerModel: Model<CustomerDocument>;
   let requestModel: Model<ProfessionalRequestDocument>;
+  let cvModel: Model<ProfessionalCvDocument>;
   let sentEmails: { to: string; customerPhone: string }[];
 
   // Riyadh-ish. Longitude degrees are ~101km apart at this latitude, so a
@@ -73,6 +75,7 @@ describe('ProfessionalsService', () => {
       ProfessionalRequest.name,
       ProfessionalRequestSchema,
     ) as unknown as Model<ProfessionalRequestDocument>;
+    cvModel = mongoose.model(ProfessionalCv.name, ProfessionalCvSchema) as unknown as Model<ProfessionalCvDocument>;
 
     // $geoNear needs the 2dsphere index to exist, and mongoose only builds it
     // on connect for models registered before that point.
@@ -85,14 +88,14 @@ describe('ProfessionalsService', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all([customerModel.deleteMany({}), requestModel.deleteMany({})]);
+    await Promise.all([customerModel.deleteMany({}), requestModel.deleteMany({}), cvModel.deleteMany({})]);
     sentEmails = [];
     const mailer = {
       sendProfessionalRequestEmail: jest.fn(async ({ to, customerPhone }) => {
         sentEmails.push({ to, customerPhone });
       }),
     } as unknown as MailerService;
-    service = new ProfessionalsService(customerModel, requestModel, mailer);
+    service = new ProfessionalsService(customerModel, requestModel, cvModel, mailer);
   });
 
   describe('search', () => {
@@ -106,6 +109,10 @@ describe('ProfessionalsService', () => {
       expect(professionals[0].distanceMeters).toBeLessThan(professionals[1].distanceMeters);
     });
 
+    // Asserted as an exact key set, not a couple of `not.toHaveProperty`
+    // checks: the card keeps growing, and the point is that adding a field
+    // to it has to be a deliberate edit here rather than something that
+    // quietly carries a phone number out with it.
     it('never exposes a phone number or email', async () => {
       await makeProfessional({ name: 'someone' });
 
@@ -113,8 +120,79 @@ describe('ProfessionalsService', () => {
 
       expect(professionals).toHaveLength(1);
       expect(Object.keys(professionals[0]).sort()).toEqual(
-        ['distanceMeters', 'headline', 'id', 'name', 'profession', 'professionLabel', 'serviceRadiusMeters'].sort(),
+        [
+          'bio',
+          'cardAccent',
+          'cvContentType',
+          'cvFileName',
+          'cvUrl',
+          'distanceMeters',
+          'headline',
+          'id',
+          'name',
+          'profession',
+          'professionLabel',
+          'serviceRadiusMeters',
+          'skills',
+          'yearsExperience',
+        ].sort(),
       );
+    });
+
+    it('carries the business card the professional filled in', async () => {
+      const someone = await makeProfessional({ name: 'painter' });
+      await customerModel.updateOne(
+        { _id: someone._id },
+        {
+          $set: {
+            'professional.bio': 'أشتغل دهانات داخلية من ٢٠١٠',
+            'professional.skills': ['دهانات داخلية', 'ورق جدران'],
+            'professional.yearsExperience': 14,
+            'professional.cardAccent': 'gold',
+          },
+        },
+      );
+
+      const { professionals } = await search();
+
+      expect(professionals[0]).toMatchObject({
+        bio: 'أشتغل دهانات داخلية من ٢٠١٠',
+        skills: ['دهانات داخلية', 'ورق جدران'],
+        yearsExperience: 14,
+        cardAccent: 'gold',
+      });
+    });
+
+    // A profile saved before the card existed has none of these fields in
+    // Mongo at all. The app renders whatever it is handed, so the gap has to
+    // close here rather than as a null dereference on a phone.
+    it('fills the card in with defaults for a profile saved before it existed', async () => {
+      const oldTimer = await makeProfessional({ name: 'old timer' });
+      // Unset rather than left to the schema defaults: a row written before
+      // these fields existed genuinely has no such keys, which is the case
+      // the projection's `?? null` is there for.
+      await customerModel.collection.updateOne(
+        { _id: oldTimer._id },
+        {
+          $unset: {
+            'professional.bio': '',
+            'professional.skills': '',
+            'professional.yearsExperience': '',
+            'professional.cardAccent': '',
+            'professional.cvUrl': '',
+          },
+        },
+      );
+
+      const { professionals } = await search();
+
+      expect(professionals[0]).toMatchObject({
+        bio: null,
+        skills: [],
+        yearsExperience: null,
+        cardAccent: 'green',
+        cvUrl: null,
+      });
     });
 
     it('hides a professional the customer is outside the service radius of', async () => {
@@ -235,6 +313,109 @@ describe('ProfessionalsService', () => {
       await expect(service.markHandled(requests[0].id, theirs._id)).rejects.toThrow();
       const updated = await service.markHandled(requests[0].id, mine._id);
       expect(updated.status).toBe('handled');
+    });
+  });
+  describe('the CV on the card', () => {
+    function upload(name: string, mimetype = 'application/pdf', bytes = 1024) {
+      return {
+        buffer: Buffer.alloc(bytes, 1),
+        mimetype,
+        size: bytes,
+        originalname: name,
+      } as Express.Multer.File;
+    }
+
+    it('attaches a CV and points the card at it', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      const updated = await service.setCv(painter, upload('cv.pdf'));
+
+      expect(updated.professional?.cvUrl).toMatch(/^\/professionals\/cv\/[a-f0-9]{32}$/);
+      expect(updated.professional?.cvFileName).toBe('cv.pdf');
+      expect(updated.professional?.cvContentType).toBe('application/pdf');
+      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(1);
+    });
+
+    // The URL is public, so it must not be something anyone can count their
+    // way to: a CV carries a real name and address.
+    it('keys the URL by an unguessable token, not the document id', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+      const updated = await service.setCv(painter, upload('cv.pdf'));
+
+      const document = await cvModel.findOne({ customerId: painter._id });
+      expect(updated.professional?.cvUrl).not.toContain(String(document!._id));
+      expect(updated.professional?.cvUrl).toContain(document!.token);
+
+      await expect(service.findCv(String(document!._id))).rejects.toMatchObject({
+        response: { error: 'cv_not_found' },
+      });
+      await expect(service.findCv(document!.token)).resolves.toMatchObject({ fileName: 'cv.pdf' });
+    });
+
+    it('drops the old bytes when a CV is replaced', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+      const first = await service.setCv(painter, upload('old.pdf'));
+      const firstUrl = first.professional?.cvUrl;
+
+      const second = await service.setCv(painter, upload('new.pdf'));
+
+      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(1);
+      expect(second.professional?.cvUrl).not.toBe(firstUrl);
+      expect(second.professional?.cvFileName).toBe('new.pdf');
+    });
+
+    it('accepts a photo of a paper CV, and refuses anything else', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      await expect(service.setCv(painter, upload('cv.jpg', 'image/jpeg'))).resolves.toBeDefined();
+      await expect(service.setCv(painter, upload('cv.exe', 'application/x-msdownload'))).rejects.toMatchObject({
+        response: { error: 'unsupported_cv_type' },
+      });
+    });
+
+    // The name comes off a device and ends up in a Content-Disposition
+    // header, so it is rebuilt rather than trusted.
+    it('strips a path and control characters out of the filename', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      const updated = await service.setCv(painter, upload('../../etc/pa"ss\nwd.pdf'));
+
+      expect(updated.professional?.cvFileName).toBe('passwd.pdf');
+    });
+
+    it('falls back to a generic name when nothing usable is left', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+
+      const updated = await service.setCv(painter, upload('///', 'image/jpeg'));
+
+      expect(updated.professional?.cvFileName).toBe('cv.jpg');
+    });
+
+    it('refuses a CV from someone with no trade to hang it on', async () => {
+      const plain = await customerModel.create({
+        name: 'plain',
+        email: 'plain@example.com',
+        passwordHash: 'x',
+        phone: '+966500000000',
+        emailVerified: true,
+      });
+
+      await expect(service.setCv(plain, upload('cv.pdf'))).rejects.toMatchObject({
+        response: { error: 'professional_profile_required' },
+      });
+    });
+
+    it('detaches the CV and leaves the rest of the card alone', async () => {
+      const painter = await makeProfessional({ name: 'painter' });
+      await customerModel.updateOne({ _id: painter._id }, { $set: { 'professional.bio': 'عن شغلي' } });
+      const withCv = await service.setCv(await customerModel.findById(painter._id).then((c) => c!), upload('cv.pdf'));
+
+      const cleared = await service.removeCv(withCv);
+
+      expect(cleared.professional?.cvUrl).toBeNull();
+      expect(cleared.professional?.cvFileName).toBeNull();
+      expect(cleared.professional?.bio).toBe('عن شغلي');
+      expect(await cvModel.countDocuments({ customerId: painter._id })).toBe(0);
     });
   });
 });

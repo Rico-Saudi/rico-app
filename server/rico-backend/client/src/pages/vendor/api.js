@@ -2,9 +2,15 @@
 // same-origin requests, no Authorization header needed.
 export function createAuthedFetch(onUnauthorized) {
   return async function authedFetch(path, options = {}) {
+    // A FormData body has to set its own Content-Type — it carries the
+    // multipart boundary, and overriding it makes the server read an empty body.
+    const isMultipart = options.body instanceof FormData;
     const res = await fetch(path, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      headers: {
+        ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.headers || {}),
+      },
     });
     if (res.status === 401) {
       onUnauthorized();

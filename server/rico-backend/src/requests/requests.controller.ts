@@ -1,7 +1,7 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
-import { OptionalCustomerAuthGuard } from '../customers/customer-auth.guard';
+import { CustomerAuthGuard, OptionalCustomerAuthGuard } from '../customers/customer-auth.guard';
 import { CurrentCustomer } from '../common/decorators/current-customer.decorator';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
 
@@ -18,5 +18,13 @@ export class RequestsController {
   @Post()
   create(@Body() dto: CreateRequestDto, @CurrentCustomer() customer?: CustomerDocument) {
     return this.requestsService.create(dto, customer);
+  }
+
+  // The customer's own history. Full auth here, not the optional guard: there
+  // is no anonymous reading of someone's past orders.
+  @UseGuards(CustomerAuthGuard)
+  @Get('mine')
+  async mine(@CurrentCustomer() customer: CustomerDocument) {
+    return { orders: await this.requestsService.findForCustomer(String(customer._id)) };
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { OwnerService } from './owner.service';
 import { AccountsService } from '../accounts/accounts.service';
@@ -19,6 +19,8 @@ import { ReviewClaimStatusDto, ReviewDealStatusDto } from './dto/review-status.d
 import { AnalyticsQueryDto, ExpiringDealsQueryDto, TopVendorsQueryDto } from './dto/analytics-query.dto';
 import { SyncGoogleDto } from './dto/sync-google.dto';
 import { ListAuditLogDto } from '../owner-audit/dto/list-audit-log.dto';
+import { ProfessionsService } from '../professionals/professions.service';
+import { CreateProfessionDto, UpdateProfessionDto } from '../professionals/dto/upsert-profession.dto';
 
 @Controller('owner')
 @UseGuards(SessionGuard)
@@ -28,6 +30,7 @@ export class OwnerController {
     private readonly ownerService: OwnerService,
     private readonly accountsService: AccountsService,
     private readonly ownerAuditService: OwnerAuditService,
+    private readonly professionsService: ProfessionsService,
   ) {}
 
   // ---- Staff (owner-role only) --------------------------------------------
@@ -216,6 +219,49 @@ export class OwnerController {
   @Get('analytics/snapshot-summary')
   async getSnapshotSummary(@Query() query: AnalyticsQueryDto) {
     return { summary: await this.ownerService.getSnapshotSummary(query.days ?? 30) };
+  }
+
+  // ---- Professions ----------------------------------------------------------
+  // The trades the app offers. They used to be a constant in the source, so
+  // adding "فني ألواح شمسية" because three people asked for it meant a
+  // release; they are rows now, and this is where they are edited. Every
+  // change is audited like the rest of the dashboard's writes — the list
+  // decides who is findable in the app, so "who added that" has to be
+  // answerable.
+
+  @Get('professions')
+  listProfessions() {
+    return this.professionsService.listForOwner();
+  }
+
+  @Post('professions')
+  async createProfession(@Body() dto: CreateProfessionDto, @AccountId() accountId: string) {
+    const created = await this.professionsService.create(dto);
+    await this.recordAudit(accountId, 'profession.create', 'Profession', created.slug, {
+      label: created.label,
+      group: created.group,
+    });
+    return created;
+  }
+
+  @Patch('professions/:slug')
+  async updateProfession(
+    @Param('slug') slug: string,
+    @Body() dto: UpdateProfessionDto,
+    @AccountId() accountId: string,
+  ) {
+    const updated = await this.professionsService.update(slug, dto);
+    await this.recordAudit(accountId, 'profession.update', 'Profession', slug, dto as Record<string, unknown>);
+    return updated;
+  }
+
+  // Refused while anyone still offers the trade — see
+  // ProfessionsService.remove. Deactivating is the reversible answer.
+  @Delete('professions/:slug')
+  async removeProfession(@Param('slug') slug: string, @AccountId() accountId: string) {
+    const result = await this.professionsService.remove(slug);
+    await this.recordAudit(accountId, 'profession.delete', 'Profession', slug, {});
+    return result;
   }
 
   // ---- Audit log -----------------------------------------------------------

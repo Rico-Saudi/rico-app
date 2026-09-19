@@ -5,9 +5,10 @@ import { SearchController } from './search.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { ProductsModule } from '../products/products.module';
 import { ApiUsageModule } from '../api-usage/api-usage.module';
+import { PhotosModule } from '../photos/photos.module';
 
 @Module({
-  imports: [BusinessesModule, ProductsModule, ApiUsageModule],
+  imports: [BusinessesModule, ProductsModule, ApiUsageModule, PhotosModule],
   controllers: [SearchController],
   providers: [SearchService],
 })

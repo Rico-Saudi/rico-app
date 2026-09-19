@@ -191,7 +191,12 @@ export class OwnerService {
     let updated = 0;
     for (const result of results) {
       const { sourceId, ...business } = result;
-      const { created: wasCreated } = await this.businessesService.upsertBySource('google', sourceId, business as any);
+      const { created: wasCreated } = await this.businessesService.upsertBySource('google', sourceId, {
+        ...business,
+        // Same 30-day clock the live search path stamps — a reference with no
+        // date would read as expired and lose the photo immediately.
+        photoRefUpdatedAt: business.photoRef ? new Date() : null,
+      } as any);
       if (wasCreated) created++;
       else updated++;
     }

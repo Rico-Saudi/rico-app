@@ -63,6 +63,6 @@ class PlacesService {
 
     final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     final places = (data['places'] as List?) ?? [];
-    return places.map((p) => PlaceResult.fromRicoApiJson(p as Map<String, dynamic>)).toList();
+    return places.map((p) => PlaceResult.fromRicoApiJson(p as Map<String, dynamic>, baseUrl: _ricoApiBaseUrl)).toList();
   }
 }

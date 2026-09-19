@@ -62,6 +62,23 @@ export class Business {
   @Prop({ type: String, default: null })
   enrichmentSource: string | null;
 
+  // Google photo resource name for this place's first photo. Storing the
+  // reference (free) rather than the image means we only ever pay for a photo
+  // someone actually looks at.
+  @Prop({ type: String, default: null })
+  photoRef: string | null;
+
+  // Whoever took the photo — Google's terms require crediting them wherever
+  // the image is displayed, so it travels with the reference.
+  @Prop({ type: String, default: null })
+  photoAttribution: string | null;
+
+  // Google Maps Platform allows caching this content for 30 days. Past that
+  // the reference is treated as absent (the card falls back to its category
+  // glyph) until a live search refreshes it.
+  @Prop({ type: Date, default: null })
+  photoRefUpdatedAt: Date | null;
+
   @Prop({ type: [SourceLinkSchema], default: [] })
   sourceLinks: SourceLink[];
 

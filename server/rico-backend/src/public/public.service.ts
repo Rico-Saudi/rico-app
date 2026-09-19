@@ -43,6 +43,7 @@ export class PublicService {
         category: p.category,
         price: p.price,
         finalPrice: p.finalPrice,
+        imageUrl: p.imageUrl ?? null,
       })),
       deals: deals.map((d: any) => ({
         id: d._id,

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/professional.dart';
 import '../models/professional_flow.dart';
 import '../services/auth_store.dart';
+import '../services/professionals_service.dart';
 import '../theme/app_theme.dart';
-import 'professional_card.dart';
+import 'business_card.dart';
 import 'rico_surfaces.dart';
 
 /// قائمة أقرب أصحاب مهنة، ثم تأكيد إرسال طلب تواصل لواحد منهم — نظير
@@ -55,8 +56,12 @@ class _ProfessionalFlowCardState extends State<ProfessionalFlowCard> {
         children: [
           for (var i = 0; i < flow.professionals.length; i++) ...[
             if (i > 0) const SizedBox(height: 8),
-            ProfessionalCard(
-              professional: flow.professionals[i],
+            BusinessCard(
+              // نفس البطاقة التي بناها صاحبها ورآها في المعاينة — الرابط
+              // وحده يُبنى هنا، لأن الخادم يرسل مساراً نسبياً.
+              card: flow.professionals[i].toCard(
+                cvUrl: ProfessionalsService.cvUrl(flow.professionals[i].cvPath),
+              ),
               rank: i + 1,
               onRequest: widget.onSelect == null ? null : () => widget.onSelect!(flow.professionals[i]),
             ),

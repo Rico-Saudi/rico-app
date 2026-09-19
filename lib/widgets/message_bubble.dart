@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
+import '../models/request_flow.dart';
 import '../models/place_result.dart';
 import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
@@ -116,10 +117,7 @@ class MessageBubble extends StatelessWidget {
                     if (message.requestFlow != null)
                       CatalogFlowCard(
                         flow: message.requestFlow!,
-                        onSelectItem: message.onSelectCatalogItem,
-                        onConfirm: message.onConfirmRequest,
-                        onRequestLogin: message.onRequestLogin,
-                        onCancel: message.onCancelCatalogSelection,
+                        actions: message.catalogActions ?? const CatalogFlowActions(),
                       ),
                     if (message.professionalFlow != null)
                       ProfessionalFlowCard(

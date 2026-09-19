@@ -1,3 +1,5 @@
+import 'business_card.dart';
+
 /// الجانب المهني من نفس الحساب: المهنة التي أضافها المستخدم لملفه فصار
 /// قابلاً للإيجاد حين يسأل أحد عن "أقرب دهان".
 ///
@@ -9,7 +11,26 @@ class ProfessionalProfile {
   /// عشان مهنة أُضيفت بعد إصدار هذي النسخة تظهر باسمها الصحيح.
   final String professionLabel;
 
+  /// سطر واحد تحت المهنة على البطاقة.
   final String? headline;
+
+  /// "عن شغلي" — النص الطويل، مكتوباً أو مملى ومحوّلاً لنص عبر
+  /// [TranscribeService].
+  final String? bio;
+
+  /// وسوم قصيرة على البطاقة.
+  final List<String> skills;
+
+  final int? yearsExperience;
+
+  /// لون البطاقة.
+  final CardAccent accent;
+
+  /// السيرة الذاتية المرفقة — مسار نسبي كما يرسله الخادم، مع اسم الملف
+  /// ونوعه. الثلاثة تتحرك معاً: إما مرفقة كاملة أو ما فيه.
+  final String? cvPath;
+  final String? cvFileName;
+  final String? cvContentType;
 
   /// نقطة انطلاق الشغل (تُختار مرة، ما هي GPS حيّ) ونصف قطر الخدمة.
   final double lat;
@@ -27,22 +48,59 @@ class ProfessionalProfile {
     required this.serviceRadiusMeters,
     required this.isAvailable,
     this.headline,
+    this.bio,
+    this.skills = const [],
+    this.yearsExperience,
+    this.accent = CardAccent.green,
+    this.cvPath,
+    this.cvFileName,
+    this.cvContentType,
   });
 
   factory ProfessionalProfile.fromJson(Map<String, dynamic> json) => ProfessionalProfile(
         profession: json['profession'] as String,
         professionLabel: (json['professionLabel'] as String?) ?? (json['profession'] as String),
         headline: json['headline'] as String?,
+        bio: json['bio'] as String?,
+        skills: ((json['skills'] as List?) ?? const []).map((s) => '$s').toList(),
+        yearsExperience: (json['yearsExperience'] as num?)?.round(),
+        accent: CardAccent.fromSlug(json['cardAccent'] as String?),
+        cvPath: json['cvUrl'] as String?,
+        cvFileName: json['cvFileName'] as String?,
+        cvContentType: json['cvContentType'] as String?,
         lat: (json['lat'] as num).toDouble(),
         lng: (json['lng'] as num).toDouble(),
         serviceRadiusMeters: (json['serviceRadiusMeters'] as num?)?.round() ?? 15000,
         isAvailable: json['isAvailable'] as bool? ?? true,
       );
 
+  /// بطاقتي كما تُرسم في المعاينة. [name] يجي من الحساب لا من الملف
+  /// المهني — الاسم واحد في المكانين، ومحفوظ مرة واحدة.
+  BusinessCardData toCard({required String name, String? cvUrl}) => BusinessCardData(
+        name: name,
+        professionLabel: professionLabel,
+        headline: headline,
+        bio: bio,
+        skills: skills,
+        yearsExperience: yearsExperience,
+        accent: accent,
+        cvUrl: cvUrl,
+        cvFileName: cvFileName,
+        cvContentType: cvContentType,
+        serviceRadiusMeters: serviceRadiusMeters,
+      );
+
   Map<String, dynamic> toJson() => {
         'profession': profession,
         'professionLabel': professionLabel,
         'headline': headline,
+        'bio': bio,
+        'skills': skills,
+        'yearsExperience': yearsExperience,
+        'cardAccent': accent.slug,
+        'cvUrl': cvPath,
+        'cvFileName': cvFileName,
+        'cvContentType': cvContentType,
         'lat': lat,
         'lng': lng,
         'serviceRadiusMeters': serviceRadiusMeters,

@@ -39,21 +39,9 @@ class ChatMessage {
   /// الطلب التجريبي القديم الذي كان لا يتصل بأي خادم.
   final RequestFlow? requestFlow;
 
-  /// يُستدعى عند اختيار عنصر (منتج أو عرض) من [requestFlow] — ينقل الحالة
-  /// من تصفّح إلى تأكيد.
-  final void Function(String itemType, String itemId, String label, String? detail)? onSelectCatalogItem;
-
-  /// يُستدعى عند تأكيد الطلب — يرسل الطلب الفعلي للخادم باسم ورقم الحساب
-  /// المسجّل، فلا يمرّر اسماً ورقماً: بعد ربط الطلبات بالحسابات صار مصدرهما
-  /// الحساب الموثّق لا حقلين يُكتبان مع كل طلب.
-  final VoidCallback? onConfirmRequest;
-
-  /// يُستدعى حين يضغط زائر (غير مسجّل) زر التأكيد — يفتح ورقة الدخول، ثم
-  /// يُرسل الطلب تلقائياً إذا نجح الدخول.
-  final VoidCallback? onRequestLogin;
-
-  /// يُستدعى عند الرجوع من مرحلة التأكيد إلى تصفّح القائمة من جديد.
-  final VoidCallback? onCancelCatalogSelection;
+  /// أفعال بطاقة [requestFlow] — الإضافة للسلّة وتغيير الكميات والمراجعة
+  /// والتأكيد، مجموعةً في كائن واحد بدل تسعة ردود تُنسخ يدوياً في [copyWith].
+  final CatalogFlowActions? catalogActions;
 
   /// تدفّق "أقرب أصحاب مهنة + إرسال طلب تواصل لواحد منهم" — نظير
   /// [requestFlow] لنتائج الأشخاص بدل الأنشطة التجارية.
@@ -86,10 +74,7 @@ class ChatMessage {
     this.onOrder,
     this.onQuickReply,
     this.requestFlow,
-    this.onSelectCatalogItem,
-    this.onConfirmRequest,
-    this.onRequestLogin,
-    this.onCancelCatalogSelection,
+    this.catalogActions,
     this.professionalFlow,
     this.onSelectProfessional,
     this.onConfirmProfessionalRequest,
@@ -116,10 +101,7 @@ class ChatMessage {
       onOrder: onOrder,
       onQuickReply: onQuickReply,
       requestFlow: requestFlow ?? this.requestFlow,
-      onSelectCatalogItem: onSelectCatalogItem,
-      onConfirmRequest: onConfirmRequest,
-      onRequestLogin: onRequestLogin,
-      onCancelCatalogSelection: onCancelCatalogSelection,
+      catalogActions: catalogActions,
       professionalFlow: professionalFlow ?? this.professionalFlow,
       onSelectProfessional: onSelectProfessional,
       onConfirmProfessionalRequest: onConfirmProfessionalRequest,

@@ -101,6 +101,17 @@ class AuthStore extends ChangeNotifier {
     await prefs.setString(_customerKey, jsonEncode(updated.toJson()));
   }
 
+  /// يستبدل الحساب المحفوظ بنسخة وصلت من مسار آخر غير `PATCH /me` — رفع
+  /// السيرة الذاتية وحذفها يرجّعان الحساب كاملاً، فالحفظ هنا يخلي البطاقة
+  /// المعروضة تطابق الخادم بلا نداء ثانٍ.
+  Future<void> adoptCustomer(Customer customer) async {
+    _customer = customer;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customerKey, jsonEncode(customer.toJson()));
+  }
+
   /// خروج محلي فوري، وإبطال الرمز على الخادم كأفضل جهد: لو فشلت الشبكة
   /// فالمستخدم خرج فعلاً من جهازه — أسوأ حالة رمز يبقى صالحاً على الخادم
   /// حتى انتهاء صلاحيته، وهو أهون من زر خروج لا يخرج.

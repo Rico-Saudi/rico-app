@@ -28,6 +28,13 @@ export class Product {
   @Prop({ type: Number, required: true })
   finalPrice: number;
 
+  // Denormalized the same way finalPrice is: the bytes live in the
+  // product_images collection, but every read path (lean list queries, search
+  // results, the app) gets a ready-to-serve URL without a second lookup.
+  // Written only by ProductsService.setImage/clearImage.
+  @Prop({ type: String, default: null })
+  imageUrl: string | null;
+
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 }

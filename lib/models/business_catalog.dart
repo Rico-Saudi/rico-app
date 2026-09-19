@@ -6,21 +6,28 @@ class CatalogProduct {
   final double price;
   final double finalPrice;
 
+  /// رابط صورة المنتج كاملاً — الخادم يرجع مساراً نسبياً ويُضاف إليه أصل
+  /// الخدمة هنا، تماماً كما تفعل [PlaceResult] بصور الأماكن.
+  final String? imageUrl;
+
   CatalogProduct({
     required this.id,
     required this.name,
     this.category,
     required this.price,
     required this.finalPrice,
+    this.imageUrl,
   });
 
-  factory CatalogProduct.fromJson(Map<String, dynamic> json) {
+  factory CatalogProduct.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final imagePath = json['imageUrl'] as String?;
     return CatalogProduct(
       id: json['id'] as String,
       name: json['name'] as String,
       category: json['category'] as String?,
       price: (json['price'] as num).toDouble(),
       finalPrice: (json['finalPrice'] as num).toDouble(),
+      imageUrl: imagePath == null ? null : '$baseUrl$imagePath',
     );
   }
 
@@ -90,12 +97,12 @@ class BusinessCatalog {
     required this.deals,
   });
 
-  factory BusinessCatalog.fromJson(Map<String, dynamic> json) {
+  factory BusinessCatalog.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
     return BusinessCatalog(
       businessId: json['businessId'] as String,
       businessName: json['businessName'] as String,
       products: (json['products'] as List? ?? [])
-          .map((p) => CatalogProduct.fromJson(p as Map<String, dynamic>))
+          .map((p) => CatalogProduct.fromJson(p as Map<String, dynamic>, baseUrl: baseUrl))
           .toList(),
       deals: (json['deals'] as List? ?? [])
           .map((d) => CatalogDeal.fromJson(d as Map<String, dynamic>))
@@ -104,4 +111,17 @@ class BusinessCatalog {
   }
 
   bool get isEmpty => products.isEmpty && deals.isEmpty;
+
+  /// فئات المنتجات بترتيب ظهورها — تُعرض كمرشِّحات فقط حين تتعدّد، فمحل
+  /// بفئة واحدة لا يستحق صفّ مرشِّحات لا يفلتر شيئاً.
+  List<String> get categories {
+    final seen = <String>[];
+    for (final product in products) {
+      final category = product.category;
+      if (category != null && category.isNotEmpty && !seen.contains(category)) {
+        seen.add(category);
+      }
+    }
+    return seen;
+  }
 }

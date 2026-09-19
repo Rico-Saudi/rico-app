@@ -27,6 +27,7 @@ Copy `.env.example` to `.env` and fill in:
 | `GOOGLE_PLACES_API_KEY` | only for `/owner/sourcing/sync-google` | Google Places API (New) key |
 | `GOOGLE_PLACES_MONTHLY_CAP` | no | default `200` |
 | `GOOGLE_SYNC_COOLDOWN_DAYS` | no | default `30` |
+| `GOOGLE_PHOTOS_MONTHLY_CAP` | no | default `1000` — separate budget for `GET /places/:id/photo`, which bills as the Place Photos SKU ($7/1,000, first 1,000/month free) rather than against the search cap |
 | `GROQ_API_KEY` | only for `/classify` | Groq Cloud API key |
 | `GROQ_MODEL` | no | default `llama-3.3-70b-versatile` |
 | `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails **and app-customer verification codes** are logged to the console instead of sent — the whole signup flow is testable locally without an email account |

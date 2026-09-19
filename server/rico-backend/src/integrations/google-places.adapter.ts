@@ -9,6 +9,12 @@
 export const GOOGLE_PLACES_PROVIDER = 'google_places';
 export const DEFAULT_GOOGLE_PLACES_MONTHLY_CAP = 200;
 
+// Place Photos bills as its own SKU ($7/1,000, first 1,000/month free), so it
+// gets its own counter and cap rather than eating the search budget — a month
+// heavy on photos must never starve search itself, which is the product.
+export const GOOGLE_PHOTOS_PROVIDER = 'google_place_photos';
+export const DEFAULT_GOOGLE_PHOTOS_MONTHLY_CAP = 1000;
+
 export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
   // Original 21 categories, broadened where Google's Table A (New) has
   // multiple relevant types instead of one narrow type per category.
@@ -60,8 +66,13 @@ export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
 // rating/userRatingCount/priceLevel are Enterprise-SKU fields, so every call
 // here already bills at the Enterprise tier (1,000 free/month, then $35/1000).
 // Address, phone and opening hours sit in that same tier or below, so adding
-// them costs nothing extra — don't add anything outside it (photos, reviews,
+// them costs nothing extra — don't add anything outside it (reviews,
 // editorialSummary) without re-checking the SKU table, that jumps the price.
+//
+// `places.photos` is the one exception worth spelling out: it sits in the
+// IDs-Only/Essentials group, so asking for it here is free at our tier. What
+// it returns is only a photo *resource name* — the money is spent later, and
+// only if someone actually fetches the bytes (see fetchPhotoUri).
 const FIELD_MASK = [
   'places.id',
   'places.displayName',
@@ -72,6 +83,7 @@ const FIELD_MASK = [
   'places.userRatingCount',
   'places.nationalPhoneNumber',
   'places.regularOpeningHours',
+  'places.photos',
 ].join(',');
 
 // Google's enum -> our normalized 1-4 integer scale.
@@ -97,6 +109,12 @@ export interface GooglePlaceResult {
   priceLevel: number | null;
   rating: number | null;
   ratingCount: number | null;
+  /// Google photo resource name ("places/X/photos/Y") for the first photo, or
+  /// null when the place has none. Not a URL and not usable without our key —
+  /// it's resolved to a real image URL by fetchPhotoUri, on demand.
+  photoRef: string | null;
+  /// Google requires the photo's author to be credited wherever it's shown.
+  photoAttribution: string | null;
   enrichmentSource: string;
 }
 
@@ -108,6 +126,10 @@ function apiKeyOrThrow(): string {
 
 function mapPlace(p: any, categorySlug: string): GooglePlaceResult {
   const hours = p.regularOpeningHours;
+  // First photo only. Google returns up to 10, but the app shows one per
+  // place, and every extra one we stored would be a photo we might later pay
+  // to resolve for no reason.
+  const photo = Array.isArray(p.photos) && p.photos.length > 0 ? p.photos[0] : null;
   return {
     sourceId: p.id,
     name: p.displayName?.text ?? 'Unknown',
@@ -122,6 +144,8 @@ function mapPlace(p: any, categorySlug: string): GooglePlaceResult {
     priceLevel: PRICE_LEVEL_MAP[p.priceLevel] || null,
     rating: typeof p.rating === 'number' ? p.rating : null,
     ratingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
+    photoRef: typeof photo?.name === 'string' ? photo.name : null,
+    photoAttribution: photo?.authorAttributions?.[0]?.displayName ?? null,
     enrichmentSource: 'google',
   };
 }
@@ -208,4 +232,27 @@ export async function searchNearby({
   });
 
   return places.map((p: any) => mapPlace(p, categorySlug));
+}
+
+/// Resolves a stored photo resource name to a real, fetchable image URL.
+///
+/// This is the call that costs money ($7/1,000 — see GOOGLE_PHOTOS_PROVIDER),
+/// so it must never be made speculatively: callers resolve a photo only when a
+/// client is asking for that exact image right now.
+///
+/// `skipHttpRedirect` asks Google for the URL as JSON instead of a 302 to the
+/// image. We want the URL itself so we can cache and hand it out repeatedly;
+/// following the redirect would stream the bytes through our server on every
+/// view and bill us for each one.
+export async function fetchPhotoUri(photoRef: string, maxWidthPx: number): Promise<string | null> {
+  const url = `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=${maxWidthPx}&skipHttpRedirect=true`;
+  const response = await fetch(url, { headers: { 'X-Goog-Api-Key': apiKeyOrThrow() } });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`google_photo_error:${response.status}:${text.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return typeof data?.photoUri === 'string' ? data.photoUri : null;
 }

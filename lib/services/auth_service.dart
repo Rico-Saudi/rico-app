@@ -24,6 +24,16 @@ class AuthException implements Exception {
 class ProfessionalUpdate {
   final String profession;
   final String? headline;
+
+  /// "عن شغلي" — النص الطويل على البطاقة.
+  final String? bio;
+
+  final List<String> skills;
+  final int? yearsExperience;
+
+  /// سلوق لون البطاقة ([CardAccent.slug]).
+  final String? cardAccent;
+
   final double lat;
   final double lng;
   final int serviceRadiusMeters;
@@ -36,11 +46,22 @@ class ProfessionalUpdate {
     required this.serviceRadiusMeters,
     required this.isAvailable,
     this.headline,
+    this.bio,
+    this.skills = const [],
+    this.yearsExperience,
+    this.cardAccent,
   });
 
+  /// السيرة الذاتية غائبة عن قصد: هي ملف، فلها مسارها الخاص
+  /// (`POST /professionals/me/cv`) والخادم يحملها معه عند حفظ البطاقة —
+  /// فحفظ تعديل على البطاقة ما يفكّ المرفق عنها.
   Map<String, dynamic> toJson() => {
         'profession': profession,
         if (headline != null && headline!.trim().isNotEmpty) 'headline': headline!.trim(),
+        if (bio != null && bio!.trim().isNotEmpty) 'bio': bio!.trim(),
+        'skills': skills,
+        if (yearsExperience != null) 'yearsExperience': yearsExperience,
+        if (cardAccent != null) 'cardAccent': cardAccent,
         'lat': lat,
         'lng': lng,
         'serviceRadiusMeters': serviceRadiusMeters,
@@ -81,6 +102,11 @@ class AuthService {
     'profession_invalid': 'المهنة المختارة غير معروفة، اختر وحدة من القائمة.',
     'service_location_invalid': 'موقع الخدمة غير صحيح، حدّده من جديد.',
     'service_radius_invalid': 'نطاق الخدمة لازم يكون بين ١ و١٠٠ كم.',
+    'bio_too_long': 'وصف شغلك طويل، اختصره شوي.',
+    'too_many_skills': 'المهارات كثيرة، خلّها ٨ أو أقل.',
+    'skill_too_long': 'وحدة من المهارات طويلة، اختصرها.',
+    'years_experience_invalid': 'سنوات الخبرة لازم تكون رقماً معقولاً.',
+    'card_accent_invalid': 'لون البطاقة غير معروف.',
     'unauthorized': 'انتهت جلستك، سجّل دخولك من جديد.',
     'rate_limited': 'محاولات كثيرة، انتظر شوي وحاول مرة ثانية.',
     'network': 'ما قدرت أتصل بالخدمة، تحقق من اتصالك وحاول مرة ثانية.',

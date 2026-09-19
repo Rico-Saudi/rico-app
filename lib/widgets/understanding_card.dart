@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
+import 'category_visuals.dart';
 import 'rico_surfaces.dart';
 
 /// بطاقة "فهمت طلبك" — تعرض وسوماً مشتقة فعلياً من [QueryIntent] فقط (لا وسوم
@@ -11,29 +12,6 @@ class UnderstandingCard extends StatelessWidget {
 
   const UnderstandingCard({super.key, required this.intent});
 
-  static const Map<String, IconData> _categoryIcons = {
-    'restaurant': Icons.restaurant_rounded,
-    'cafe': Icons.local_cafe_rounded,
-    'pharmacy': Icons.local_pharmacy_rounded,
-    'supermarket': Icons.local_grocery_store_rounded,
-    'fuel': Icons.local_gas_station_rounded,
-    'mall': Icons.storefront_rounded,
-    'atm': Icons.atm_rounded,
-    'bank': Icons.account_balance_rounded,
-    'hospital': Icons.local_hospital_rounded,
-    'clinic': Icons.medical_services_rounded,
-    'fitness_centre': Icons.fitness_center_rounded,
-    'hotel': Icons.hotel_rounded,
-    'clothes': Icons.checkroom_rounded,
-    'mobile_phone': Icons.smartphone_rounded,
-    'electronics': Icons.devices_other_rounded,
-    'hairdresser': Icons.content_cut_rounded,
-    'beauty': Icons.spa_rounded,
-    'car_wash': Icons.local_car_wash_rounded,
-    'dentist': Icons.medical_information_rounded,
-    'mosque': Icons.mosque_rounded,
-    'park': Icons.park_rounded,
-  };
 
   /// أيقونة لكل مهنة. الناقص منها يقع على أيقونة عامة لـ"صاحب مهنة" بدل
   /// أيقونة مكان — المقصود شخص، والفرق يظهر بلمحة قبل وصول النتائج.
@@ -71,7 +49,7 @@ class UnderstandingCard extends StatelessWidget {
   IconData get _categoryIcon => switch (intent.kind) {
         IntentKind.deals => Icons.local_offer_rounded,
         IntentKind.professional => _professionIcons[intent.profession] ?? Icons.engineering_rounded,
-        IntentKind.place => _categoryIcons[intent.slug] ?? Icons.place_rounded,
+        IntentKind.place => CategoryVisuals.iconFor(intent.slug),
       };
 
   List<({IconData icon, String label})> get _tags {

@@ -3,14 +3,14 @@
 // change to one almost always belongs in the other too.
 
 import { CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS } from '../categories';
-import { professionPromptLines } from '../../../professionals/constants/professions';
+import { professionPromptLines } from '../../../professionals/constants/professions.registry';
 
-// Arabic name = slug, grouped by trade family, so the model can map
-// "بدي دهّين" onto `painter` without us restating the list in prose — and so
-// it picks the right neighbour among 100+ similar trades.
-const PROFESSION_LINES = professionPromptLines();
 
-export const buildJordanianSystemPrompt = (brand: string) => `أنت "${brand}"، مساعد أردني ذكي داخل تطبيق يساعد المستخدمين يلاقوا أقرب مكان والعروض المتوفرة. أنت مصنّف نوايا ما أنت دردشة حرة — مهمتك تحوّل رسالة المستخدم لـ JSON منظم، بس حقل reply (لما يُستخدم) لازم يُقرأ وكأنه من مساعد أردني عادي، ما هو من روبوت.
+export const buildJordanianSystemPrompt = (brand: string) => {
+  // نفس سبب النسخة السعودية: القائمة تتغيّر من لوحة المالك وقت التشغيل،
+  // فتُقرأ عند بناء الموجّه لا عند استيراد الملف.
+  const PROFESSION_LINES = professionPromptLines();
+  return `أنت "${brand}"، مساعد أردني ذكي داخل تطبيق يساعد المستخدمين يلاقوا أقرب مكان والعروض المتوفرة. أنت مصنّف نوايا ما أنت دردشة حرة — مهمتك تحوّل رسالة المستخدم لـ JSON منظم، بس حقل reply (لما يُستخدم) لازم يُقرأ وكأنه من مساعد أردني عادي، ما هو من روبوت.
 
 # الشخصية واللهجة (لحقل reply بس)
 
@@ -103,3 +103,4 @@ ${PROFESSION_LINES}
 
 رجّع الناتج بصيغة JSON بس بدون أي نص إضافي وبالشكل التالي بالضبط:
 {"offTopic": true|false, "reply": "..."|null, "intents": [{"kind": "place"|"deals"|"professional", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null}]}`;
+};

@@ -1,24 +1,54 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { randomBytes } from 'node:crypto';
 import { Customer, CustomerDocument } from '../customers/schemas/customer.schema';
 import { ProfessionalRequest, ProfessionalRequestDocument } from './schemas/professional-request.schema';
 import { SearchProfessionalsDto } from './dto/search-professionals.dto';
 import { CreateProfessionalRequestDto } from './dto/create-professional-request.dto';
-import { professionLabel, professionsByGroup } from './constants/professions';
+import { ProfessionalCv, ProfessionalCvDocument } from './schemas/professional-cv.schema';
+import { professionLabel } from './constants/professions.registry';
+import {
+  ALLOWED_CV_TYPES,
+  CV_TOKEN_PATTERN,
+  DEFAULT_CARD_ACCENT,
+  MAX_CV_BYTES,
+  professionalCvUrl,
+} from './constants/professional-card.constants';
 import { MailerService } from '../mailer/mailer.service';
 import { brandFor } from '../common/constants/brands';
 
-// What search hands back to the app. Deliberately missing the professional's
-// phone and email: the customer sends a request and the professional calls
-// back, so a search — which anyone can run, for any trade, anywhere — never
-// becomes a way to harvest the contact details of everyone who signed up.
+// What search hands back to the app: the professional's business card,
+// minus the one thing a card would normally carry.
+//
+// Deliberately missing the phone and email. The card is public — anyone can
+// run this search, for any trade, anywhere — so putting the number on it
+// would turn the whole directory into a phone list. The customer sends a
+// request and the professional calls back; that stays true no matter how
+// much the card grows.
+//
+// Everything else *is* theirs to publish: the bio they wrote, the skills
+// they listed, the years they claim, and the CV they attached, which is a
+// credential they chose to put on it.
 export interface ProfessionalResult {
   id: string;
   name: string;
   profession: string;
   professionLabel: string;
   headline: string | null;
+  bio: string | null;
+  skills: string[];
+  yearsExperience: number | null;
+  cardAccent: string;
+  cvUrl: string | null;
+  cvFileName: string | null;
+  cvContentType: string | null;
   distanceMeters: number;
   serviceRadiusMeters: number;
 }
@@ -30,22 +60,9 @@ export class ProfessionalsService {
   constructor(
     @InjectModel(Customer.name) private readonly customerModel: Model<CustomerDocument>,
     @InjectModel(ProfessionalRequest.name) private readonly requestModel: Model<ProfessionalRequestDocument>,
+    @InjectModel(ProfessionalCv.name) private readonly cvModel: Model<ProfessionalCvDocument>,
     private readonly mailerService: MailerService,
   ) {}
-
-  /** The picker's list, served rather than hardcoded in the app so a trade
-   * added here reaches builds already on people's phones. Grouped, because a
-   * flat list of 100+ trades is not something anyone scrolls through.
-   *
-   * `professions` stays alongside `groups` for clients built before grouping
-   * existed — they render the flat list exactly as they did. */
-  listProfessions() {
-    const groups = professionsByGroup();
-    return {
-      groups,
-      professions: groups.flatMap((g) => g.professions.map((p) => ({ ...p, group: g.slug }))),
-    };
-  }
 
   // Nearest-first, and honest in both directions: the customer's `radius`
   // caps how far they're willing to look, and each professional's own
@@ -82,6 +99,13 @@ export class ProfessionalsService {
           distanceMeters: 1,
           'professional.profession': 1,
           'professional.headline': 1,
+          'professional.bio': 1,
+          'professional.skills': 1,
+          'professional.yearsExperience': 1,
+          'professional.cardAccent': 1,
+          'professional.cvUrl': 1,
+          'professional.cvFileName': 1,
+          'professional.cvContentType': 1,
           'professional.serviceRadiusMeters': 1,
         },
       },
@@ -94,6 +118,13 @@ export class ProfessionalsService {
         profession: r.professional.profession,
         professionLabel: professionLabel(r.professional.profession),
         headline: r.professional.headline ?? null,
+        bio: r.professional.bio ?? null,
+        skills: r.professional.skills ?? [],
+        yearsExperience: r.professional.yearsExperience ?? null,
+        cardAccent: r.professional.cardAccent ?? DEFAULT_CARD_ACCENT,
+        cvUrl: r.professional.cvUrl ?? null,
+        cvFileName: r.professional.cvFileName ?? null,
+        cvContentType: r.professional.cvContentType ?? null,
         distanceMeters: Math.round(r.distanceMeters),
         serviceRadiusMeters: r.professional.serviceRadiusMeters,
       })),
@@ -165,7 +196,85 @@ export class ProfessionalsService {
     return { id: String(request._id), status: request.status };
   }
 
+  // ─── The CV on the card ──────────────────────────────────────────────────
+
+  /** Replaces whatever CV was attached: the previous bytes are dropped, so
+   * someone who re-uploads a corrected version ten times doesn't leave ten
+   * orphaned documents behind.
+   *
+   * Requires a profile to exist — a CV with no trade to hang it on has
+   * nowhere to be shown. */
+  async setCv(customer: CustomerDocument, file: Express.Multer.File | undefined) {
+    if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
+    if (!file?.buffer?.length) throw new BadRequestException({ error: 'file_required' });
+    if (!ALLOWED_CV_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException({ error: 'unsupported_cv_type', allowed: ALLOWED_CV_TYPES });
+    }
+    if (file.size > MAX_CV_BYTES) {
+      throw new PayloadTooLargeException({ error: 'cv_too_large', maxBytes: MAX_CV_BYTES });
+    }
+
+    const document = await this.cvModel.create({
+      token: randomBytes(16).toString('hex'),
+      customerId: customer._id,
+      contentType: file.mimetype,
+      fileName: this.safeFileName(file.originalname, file.mimetype),
+      size: file.size,
+      data: file.buffer,
+    });
+    // Only after the new one is safely stored, so a failed write leaves the
+    // card pointing at the CV it already had.
+    await this.cvModel.deleteMany({ customerId: customer._id, _id: { $ne: document._id } });
+
+    customer.professional.cvUrl = professionalCvUrl(document.token);
+    customer.professional.cvFileName = document.fileName;
+    customer.professional.cvContentType = document.contentType;
+    await customer.save();
+
+    return customer;
+  }
+
+  async removeCv(customer: CustomerDocument) {
+    if (!customer.professional) throw new BadRequestException({ error: 'professional_profile_required' });
+
+    await this.cvModel.deleteMany({ customerId: customer._id });
+    customer.professional.cvUrl = null;
+    customer.professional.cvFileName = null;
+    customer.professional.cvContentType = null;
+    await customer.save();
+
+    return customer;
+  }
+
+  /** Public, like the card it hangs off: a customer comparing two painters
+   * in chat has to be able to open it. */
+  async findCv(token: string): Promise<ProfessionalCvDocument> {
+    // This route is public, so a crawler with a mangled token shouldn't
+    // reach the driver and surface as a logged 500 — a malformed one is
+    // simply not found.
+    if (!CV_TOKEN_PATTERN.test(token)) throw new NotFoundException({ error: 'cv_not_found' });
+    const document = await this.cvModel.findOne({ token });
+    if (!document) throw new NotFoundException({ error: 'cv_not_found' });
+    return document;
+  }
+
   // ─── Internals ──────────────────────────────────────────────────────────
+
+  /** A filename safe to echo back in a Content-Disposition header and to
+   * show on the card. Anything a device might send — a path, a quote, a
+   * newline, an overlong name — is dropped rather than escaped, and a name
+   * left with nothing usable falls back to a generic one with the right
+   * extension. */
+  private safeFileName(original: string | undefined, mimetype: string): string {
+    const fallback = mimetype === 'application/pdf' ? 'cv.pdf' : 'cv.jpg';
+    const base = (original ?? '').split(/[\\/]/).pop() ?? '';
+    const cleaned = base
+      .replace(/[^\p{L}\p{N}._ -]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120);
+    return cleaned.replace(/^[._ -]+/, '') || fallback;
+  }
 
   // Straight-line metres from where the customer was standing to the
   // professional's service point, or null if the app didn't send a position

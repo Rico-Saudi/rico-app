@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { brandFor } from '../common/constants/brands';
 import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
-import { isKnownProfession, professionLabel } from '../professionals/constants/professions';
+import { isKnownProfession, professionLabel } from '../professionals/constants/professions.registry';
 
 interface Intent {
   kind: 'place' | 'deals' | 'professional';

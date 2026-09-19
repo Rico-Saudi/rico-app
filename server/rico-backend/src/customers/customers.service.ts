@@ -16,7 +16,8 @@ import { CustomerToken, CustomerTokenDocument } from './schemas/customer-token.s
 import { MailerService } from '../mailer/mailer.service';
 import { brandFor } from '../common/constants/brands';
 import { generateOtpCode, generateToken, hashPassword, hashToken, verifyPassword } from '../common/utils/auth.util';
-import { professionLabel } from '../professionals/constants/professions';
+import { professionLabel } from '../professionals/constants/professions.registry';
+import { DEFAULT_CARD_ACCENT, MAX_SKILLS } from '../professionals/constants/professional-card.constants';
 import { UpdateCustomerProfileDto } from './dto/update-profile.dto';
 
 export const OTP_TTL_MINUTES = 10;
@@ -39,10 +40,20 @@ export const GENERIC_OTP_RESPONSE = {
   expiresInSeconds: OTP_TTL_MS / 1000,
 };
 
+// The professional's own view of their business card — everything the app
+// needs to render it and to reopen the editor on it. The customer-facing
+// view (ProfessionalResult) is a subset: it never carries the phone.
 export interface CustomerProfessionalProfile {
   profession: string;
   professionLabel: string;
   headline: string | null;
+  bio: string | null;
+  skills: string[];
+  yearsExperience: number | null;
+  cardAccent: string;
+  cvUrl: string | null;
+  cvFileName: string | null;
+  cvContentType: string | null;
   lat: number;
   lng: number;
   serviceRadiusMeters: number;
@@ -235,14 +246,24 @@ export class CustomersService {
       customer.professional = null;
     } else if (updates.professional !== undefined) {
       const next = updates.professional;
+      const current = customer.professional;
       customer.professional = {
         profession: next.profession,
         headline: next.headline?.trim() || null,
+        bio: next.bio?.trim() || null,
+        skills: cleanSkills(next.skills),
+        yearsExperience: next.yearsExperience ?? null,
+        cardAccent: next.cardAccent ?? current?.cardAccent ?? DEFAULT_CARD_ACCENT,
+        // Carried over, never sent in this body: the CV is a file with its
+        // own endpoints, so saving an edited card must not detach it.
+        cvUrl: current?.cvUrl ?? null,
+        cvFileName: current?.cvFileName ?? null,
+        cvContentType: current?.cvContentType ?? null,
         serviceLocation: { type: 'Point', coordinates: [next.lng, next.lat] },
         serviceRadiusMeters: next.serviceRadiusMeters ?? DEFAULT_SERVICE_RADIUS_METERS,
         // Editing your trade shouldn't quietly take you offline, so an
         // omitted flag keeps the current value (true for a new profile).
-        isAvailable: next.isAvailable ?? customer.professional?.isAvailable ?? true,
+        isAvailable: next.isAvailable ?? current?.isAvailable ?? true,
       };
     }
 
@@ -330,6 +351,19 @@ export class CustomersService {
   }
 }
 
+// Blank chips are what an empty row in the editor produces, and the same
+// skill typed twice is what a distracted one produces — neither belongs on
+// the card, and neither is worth an error message.
+function cleanSkills(skills: string[] | undefined): string[] {
+  if (!skills) return [];
+  const seen = new Set<string>();
+  for (const raw of skills) {
+    const skill = raw.trim();
+    if (skill) seen.add(skill);
+  }
+  return [...seen].slice(0, MAX_SKILLS);
+}
+
 function normalizeEmail(raw: string): string {
   return (raw || '').trim().toLowerCase();
 }
@@ -349,6 +383,13 @@ export function toProfile(customer: CustomerDocument | (Customer & { _id: Types.
           // for a trade added after that build shipped.
           professionLabel: professionLabel(pro.profession),
           headline: pro.headline ?? null,
+          bio: pro.bio ?? null,
+          skills: pro.skills ?? [],
+          yearsExperience: pro.yearsExperience ?? null,
+          cardAccent: pro.cardAccent ?? DEFAULT_CARD_ACCENT,
+          cvUrl: pro.cvUrl ?? null,
+          cvFileName: pro.cvFileName ?? null,
+          cvContentType: pro.cvContentType ?? null,
           lat: pro.serviceLocation.coordinates[1],
           lng: pro.serviceLocation.coordinates[0],
           serviceRadiusMeters: pro.serviceRadiusMeters,

@@ -1,6 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { GeoPoint, GeoPointSchema } from '../../common/schemas/geo-point.schema';
+import {
+  CARD_ACCENTS,
+  DEFAULT_CARD_ACCENT,
+  MAX_BIO_LENGTH,
+  MAX_YEARS_EXPERIENCE,
+} from '../../professionals/constants/professional-card.constants';
 
 export type CustomerDocument = HydratedDocument<Customer>;
 
@@ -26,9 +32,42 @@ export class ProfessionalProfile {
   profession: string;
 
   // Free text the professional writes about their work ("دهانات داخلية
-  // وديكورات"). Shown as-is, never parsed.
+  // وديكورات"). Shown as-is, never parsed. The one-line version — it is the
+  // card's subtitle, under the trade.
   @Prop({ type: String, default: null, trim: true, maxlength: 120 })
   headline: string | null;
+
+  // The longer "عن شغلي" the card carries: what they do, how they work, what
+  // they've done before. Often dictated rather than typed — the app records
+  // it and puts the transcript in this field — so it is stored exactly as it
+  // arrives, with no attempt to interpret it.
+  @Prop({ type: String, default: null, trim: true, maxlength: MAX_BIO_LENGTH })
+  bio: string | null;
+
+  // Short tags under the bio ("دهانات داخلية"، "ورق جدران"). A handful of
+  // chips reads at a glance in a chat thread where a paragraph doesn't.
+  @Prop({ type: [String], default: [] })
+  skills: string[];
+
+  @Prop({ type: Number, default: null, min: 0, max: MAX_YEARS_EXPERIENCE })
+  yearsExperience: number | null;
+
+  // The card's colour scheme. A closed list, not a free colour, so every
+  // card stays inside the app's palette.
+  @Prop({ type: String, enum: CARD_ACCENTS, default: DEFAULT_CARD_ACCENT })
+  cardAccent: string;
+
+  // The attached CV, denormalized from the professional_cvs document so that
+  // rendering a card never needs a second query — and never touches the
+  // bytes. Null until one is uploaded; all three move together.
+  @Prop({ type: String, default: null })
+  cvUrl: string | null;
+
+  @Prop({ type: String, default: null })
+  cvFileName: string | null;
+
+  @Prop({ type: String, default: null })
+  cvContentType: string | null;
 
   @Prop({ type: GeoPointSchema, required: true })
   serviceLocation: GeoPoint;

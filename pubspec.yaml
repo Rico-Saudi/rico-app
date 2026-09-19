@@ -21,6 +21,14 @@ dependencies:
   share_plus: ^10.0.2
   record: ^6.2.1
   path_provider: ^2.1.4
+  # يحفظ صور النتائج على القرص، فما تُطلب الصورة نفسها مرتين — هذا وحده
+  # يقطع أغلب تكلفة Place Photos، لأن نفس المحلات تتكرر في كل بحث بالمدينة.
+  cached_network_image: ^3.4.1
+  # لإرفاق السيرة الذاتية ببطاقة صاحب المهنة: file_picker لملف PDF،
+  # وimage_picker للكاميرا والمعرض — لأن "السيرة الذاتية" عند أغلب أصحاب
+  # المهن ورقة يصوّرونها لا ملفاً يصدّرونه.
+  file_picker: ^8.1.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

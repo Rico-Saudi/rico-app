@@ -3,12 +3,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/place_result.dart';
 import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
+import 'place_photo.dart';
 import 'rico_surfaces.dart';
 
-/// بطاقة الترشيح الأول المميّزة — أبرز عنصر بصري في المحادثة: حافة خضراء،
-/// شريحة ذهبية، وظل مرفوع. النص التوضيحي "ليش رشّحته" مشتق من سبب الترتيب
-/// الفعلي ([QueryIntent.rank]) وبيانات [place] الحقيقية فقط، لا صياغة
-/// تسويقية مختلقة. الزر الثانوي يفتح اتجاهات خرائط جوجل الحقيقية.
+/// بطاقة الترشيح الأول المميّزة — أبرز عنصر بصري في المحادثة: صورة كبيرة،
+/// حافة خضراء، شريحة ذهبية، وظل مرفوع. صورتها أعرض من صور بقية النتائج عمداً
+/// (٣:٢ لا ١٦:٩) — هي المرشّح، ويُفترض أن تُرى قبل غيرها.
+///
+/// النص التوضيحي "ليش رشّحته" مشتق من سبب الترتيب الفعلي ([QueryIntent.rank])
+/// وبيانات [place] الحقيقية فقط، لا صياغة تسويقية مختلقة. الزر الثانوي يفتح
+/// اتجاهات خرائط جوجل الحقيقية.
 class RecommendedPickCard extends StatelessWidget {
   final PlaceResult place;
   final QueryIntent intent;
@@ -72,6 +76,11 @@ class RecommendedPickCard extends StatelessWidget {
               ],
             ),
           ),
+          PlacePhoto(
+            place: place,
+            categorySlug: place.categorySlug,
+            aspectRatio: 3 / 2,
+          ),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -87,8 +96,7 @@ class RecommendedPickCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    if (place.distanceMeters != null)
-                      MetaChip(icon: Icons.near_me_rounded, label: place.distanceLabel),
+                    if (place.distanceMeters != null) MetaChip(icon: Icons.near_me_rounded, label: place.distanceLabel),
                     if (place.rating != null)
                       MetaChip(
                         icon: Icons.star_rounded,
@@ -122,7 +130,8 @@ class RecommendedPickCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('ليش رشّحته؟', style: RicoText.caption.copyWith(fontWeight: FontWeight.w700, color: RicoColors.ink)),
+                            Text('ليش رشّحته؟',
+                                style: RicoText.caption.copyWith(fontWeight: FontWeight.w700, color: RicoColors.ink)),
                             const SizedBox(height: 2),
                             Text(_reasonAr, style: RicoText.caption.copyWith(height: 1.6)),
                           ],

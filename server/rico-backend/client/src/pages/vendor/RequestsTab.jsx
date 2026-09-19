@@ -46,19 +46,39 @@ export default function RequestsTab({ authedFetch }) {
               r.status === 'handled' ? 'opacity-60' : ''
             }`}
           >
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                {r.itemType === 'product' ? (
-                  <Package className="w-4 h-4 text-primary" />
-                ) : (
-                  <Tag className="w-4 h-4" style={{ color: '#C9A24A' }} />
-                )}
-                <span className="text-sm font-bold">{r.itemLabel}</span>
-                <span className="text-xs text-on-surface-variant">
-                  ({REQUEST_ITEM_TYPE_LABELS[r.itemType] || r.itemType}
-                  {r.itemDetail ? ` · ${r.itemDetail}` : ''})
-                </span>
+            <div className="space-y-2 min-w-0">
+              {/* A request is a basket now, so every line is listed with its
+                  count — the vendor needs to pick the whole order, not one item. */}
+              <div className="space-y-1.5">
+                {r.items.map((item, i) => (
+                  <div key={`${item.itemId}-${i}`} className="flex items-center gap-2">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover bg-surface-container-high shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0">
+                        {item.itemType === 'product' ? (
+                          <Package className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Tag className="w-4 h-4" style={{ color: '#C9A24A' }} />
+                        )}
+                      </div>
+                    )}
+                    {item.quantity > 1 && (
+                      <span className="text-xs font-extrabold text-primary bg-primary/10 rounded-md px-1.5 py-0.5 shrink-0">
+                        ×{item.quantity}
+                      </span>
+                    )}
+                    <span className="text-sm font-bold truncate">{item.label}</span>
+                    <span className="text-xs text-on-surface-variant shrink-0">
+                      ({REQUEST_ITEM_TYPE_LABELS[item.itemType] || item.itemType}
+                      {item.detail ? ` · ${item.detail}` : ''})
+                    </span>
+                  </div>
+                ))}
               </div>
+              {r.total > 0 && (
+                <div className="text-sm font-extrabold text-primary">الإجمالي: {r.total} ر.س</div>
+              )}
               <div className="flex items-center gap-3 text-xs text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <User className="w-3.5 h-3.5" /> {r.customerName}

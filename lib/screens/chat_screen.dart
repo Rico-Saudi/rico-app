@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/cart.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
@@ -836,13 +837,31 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         _messages[index] = ChatMessage(
-          text: 'هذي منتجات وعروض ${place.name}، اختر اللي يعجبك:',
+          text: 'هذي منتجات وعروض ${place.name}، أضف اللي تبغاه للسلّة:',
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
-          onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
-          onConfirmRequest: () => _confirmRequest(index),
-          onRequestLogin: () => _signInThenConfirm(index),
-          onCancelCatalogSelection: () => _cancelCatalogSelection(index),
+          catalogActions: CatalogFlowActions(
+            onAddProduct: (product) => _updateFlow(index, (f) => f.copyWith(
+                  cart: f.cart.add(CartLine.fromProduct(product)),
+                  clearError: true,
+                )),
+            onAddDeal: (deal) => _updateFlow(index, (f) => f.copyWith(
+                  cart: f.cart.add(CartLine.fromDeal(deal)),
+                  clearError: true,
+                )),
+            onSetQuantity: (type, id, quantity) => _setCartQuantity(index, type, id, quantity),
+            onReview: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.confirming, clearError: true)),
+            onSelectCategory: (category) => _updateFlow(
+              index,
+              (f) => category == null
+                  ? f.copyWith(clearCategory: true, showAllProducts: false)
+                  : f.copyWith(activeCategory: category, showAllProducts: false),
+            ),
+            onToggleShowAll: () => _updateFlow(index, (f) => f.copyWith(showAllProducts: !f.showAllProducts)),
+            onConfirm: () => _confirmRequest(index),
+            onRequestLogin: () => _signInThenConfirm(index),
+            onBack: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.browsing, clearError: true)),
+          ),
         );
       });
     } on CatalogException catch (e) {
@@ -855,34 +874,29 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _selectCatalogItem(int index, String itemType, String itemId, String label, String? detail) {
+  /// تعديل موضعي على تدفّق طلبٍ داخل رسالة بعينها — كل أفعال بطاقة المتجر
+  /// تمرّ من هنا، فيبقى التحقّق من وجود الرسالة وحالتها في مكان واحد.
+  ///
+  /// لا [_scrollToBottom] هنا عمداً: إضافة منتج لا تغيّر ارتفاع البطاقة، وقفزُ
+  /// المحادثة مع كل ضغطة "أضف" يسحب الشبكة من تحت إصبع المستخدم.
+  void _updateFlow(int index, RequestFlow Function(RequestFlow flow) update) {
     if (index >= _messages.length) return;
     final current = _messages[index];
     final flow = current.requestFlow;
     if (flow == null) return;
-    setState(() {
-      _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(
-          stage: RequestFlowStage.confirming,
-          selectedItemType: itemType,
-          selectedItemId: itemId,
-          selectedItemLabel: label,
-          selectedItemDetail: detail,
-          clearError: true,
-        ),
-      );
-    });
-    _scrollToBottom();
+    setState(() => _messages[index] = current.copyWith(requestFlow: update(flow)));
   }
 
-  void _cancelCatalogSelection(int index) {
-    if (index >= _messages.length) return;
-    final current = _messages[index];
-    final flow = current.requestFlow;
-    if (flow == null) return;
-    setState(() {
-      _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(stage: RequestFlowStage.browsing, clearSelection: true, clearError: true),
+  /// تفريغ السلّة من المراجعة يعيد المستخدم للتصفّح بدل أن يتركه أمام سلّة
+  /// فارغة وزر تأكيد لا يرسل شيئاً.
+  void _setCartQuantity(int index, String itemType, String itemId, int quantity) {
+    _updateFlow(index, (flow) {
+      final cart = flow.cart.setQuantity(itemType, itemId, quantity);
+      final backToBrowsing = cart.isEmpty && flow.stage == RequestFlowStage.confirming;
+      return flow.copyWith(
+        cart: cart,
+        stage: backToBrowsing ? RequestFlowStage.browsing : null,
+        clearError: true,
       );
     });
   }
@@ -902,7 +916,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (index >= _messages.length) return;
     final current = _messages[index];
     final flow = current.requestFlow;
-    if (flow == null || flow.selectedItemType == null || flow.selectedItemId == null) return;
+    if (flow == null || flow.cart.isEmpty) return;
 
     // حارس أخير: البطاقة تعرض زر الدخول للزائر أصلاً، لكن الجلسة قد تنتهي
     // بين فتح البطاقة والضغط على "أكّد".
@@ -928,8 +942,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _requestService.submitRequest(
         businessId: flow.catalog.businessId,
         token: token,
-        itemType: flow.selectedItemType!,
-        itemId: flow.selectedItemId!,
+        items: flow.cart.toRequestItems(),
       );
       if (!mounted) return;
       setState(() {

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, X, Package, Loader } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Edit2, X, Package, Loader, ImagePlus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, shrinkImage } from './productImage';
 
-const emptyForm = () => ({ name: '', category: '', price: '', keywords: '' });
+// imageFile = a newly picked photo not uploaded yet; imageUrl = the one already
+// stored on the product; removeImage = the vendor cleared an existing photo.
+const emptyForm = () => ({ name: '', category: '', price: '', keywords: '', imageFile: null, imageUrl: null, removeImage: false });
 
 function toKeywordsArray(text) {
   return text
@@ -18,6 +21,20 @@ export default function ProductsTab({ authedFetch, activeClaims, activeBusinessI
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState(null); // object URL for a freshly picked file
+  const fileInputRef = useRef(null);
+
+  // Object URLs are leaked unless they're released when the picked file changes
+  // or the panel closes.
+  useEffect(() => {
+    if (!form.imageFile) {
+      setPreview(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(form.imageFile);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.imageFile]);
 
   useEffect(() => {
     if (activeBusinessId) load();
@@ -41,10 +58,57 @@ export default function ProductsTab({ authedFetch, activeClaims, activeBusinessI
 
   function openEdit(p) {
     setEditingId(p._id);
-    setForm({ name: p.name, category: p.category || '', price: String(p.price), keywords: (p.keywords || []).join(', ') });
+    setForm({
+      name: p.name,
+      category: p.category || '',
+      price: String(p.price),
+      keywords: (p.keywords || []).join(', '),
+      imageFile: null,
+      imageUrl: p.imageUrl || null,
+      removeImage: false,
+    });
     setError('');
     setPanelOpen(true);
   }
+
+  async function handlePickImage(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // so re-picking the same file still fires onChange
+    if (!file) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setError('يُقبل فقط ملف بصيغة JPG أو PNG أو WebP.');
+      return;
+    }
+    const shrunk = await shrinkImage(file);
+    if (shrunk.size > MAX_IMAGE_BYTES) {
+      setError('حجم الصورة كبير جداً (الحد الأقصى ٢ ميجابايت).');
+      return;
+    }
+    setError('');
+    setForm((f) => ({ ...f, imageFile: shrunk, removeImage: false }));
+  }
+
+  function handleClearImage() {
+    setForm((f) => ({ ...f, imageFile: null, removeImage: true }));
+  }
+
+  // Runs after the product itself is saved, since both endpoints are keyed by
+  // the product id — which only exists once the create call has returned.
+  async function syncImage(productId) {
+    if (form.imageFile) {
+      const body = new FormData();
+      body.append('image', form.imageFile);
+      return authedFetch(`/vendor/products/${productId}/image`, { method: 'POST', body });
+    }
+    if (form.removeImage && form.imageUrl) {
+      return authedFetch(`/vendor/products/${productId}/image`, { method: 'DELETE' });
+    }
+    return { ok: true };
+  }
+
+  // A freshly picked file wins over the stored photo; clearing shows the empty
+  // picker even though the product still has an image until save.
+  const currentImage = preview || (form.removeImage ? null : form.imageUrl);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -65,9 +129,21 @@ export default function ProductsTab({ authedFetch, activeClaims, activeBusinessI
     const res = editingId
       ? await authedFetch(`/vendor/products/${editingId}`, { method: 'PATCH', body: JSON.stringify(payload) })
       : await authedFetch('/vendor/products', { method: 'POST', body: JSON.stringify({ ...payload, businessId: activeBusinessId }) });
-    setSaving(false);
     if (!res || !res.ok) {
+      setSaving(false);
       setError('تعذر حفظ المنتج.');
+      return;
+    }
+
+    const saved = await res.json();
+    const imageRes = await syncImage(editingId || saved._id);
+    setSaving(false);
+    // The product is already saved at this point, so the panel closes either
+    // way — only the photo is reported as failed, and it can be retried by
+    // editing the product again.
+    if (!imageRes || !imageRes.ok) {
+      setError('تم حفظ المنتج، لكن تعذر رفع الصورة.');
+      load();
       return;
     }
     setPanelOpen(false);
@@ -130,6 +206,18 @@ export default function ProductsTab({ authedFetch, activeClaims, activeBusinessI
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {products?.map((p) => (
             <div key={p._id} className="bg-surface-container-lowest rounded-3xl p-5 shadow-sm group">
+              {p.imageUrl ? (
+                <img
+                  src={p.imageUrl}
+                  alt={p.name}
+                  loading="lazy"
+                  className="w-full h-36 object-cover rounded-2xl mb-4 bg-surface-container"
+                />
+              ) : (
+                <div className="w-full h-36 rounded-2xl mb-4 bg-surface-container flex items-center justify-center">
+                  <Package className="w-7 h-7 text-on-surface-variant/30" />
+                </div>
+              )}
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-bold leading-tight">{p.name}</h3>
@@ -169,6 +257,46 @@ export default function ProductsTab({ authedFetch, activeClaims, activeBusinessI
               </button>
             </div>
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase text-on-surface-variant">صورة المنتج (اختياري)</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                  onChange={handlePickImage}
+                  className="hidden"
+                />
+                {currentImage ? (
+                  <div className="relative group/img">
+                    <img src={currentImage} alt="" className="w-full h-44 object-cover rounded-2xl bg-surface-container" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1 bg-surface/90 backdrop-blur text-on-surface py-2 rounded-xl text-xs font-bold"
+                      >
+                        تغيير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearImage}
+                        className="px-3 bg-surface/90 backdrop-blur text-error py-2 rounded-xl text-xs font-bold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-44 rounded-2xl bg-surface-container border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant hover:border-primary/40 transition-colors"
+                  >
+                    <ImagePlus className="w-6 h-6" />
+                    <span className="text-xs font-semibold">اختر صورة (JPG أو PNG أو WebP)</span>
+                  </button>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold uppercase text-on-surface-variant">اسم المنتج</label>
                 <input

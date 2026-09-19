@@ -23,6 +23,17 @@ class PlaceResult {
   /// لا تقابل نشاطاً تجارياً حقيقياً.
   final String source;
 
+  /// رابط صورة المكان عبر خادمنا (لا رابط Google مباشر — مفتاح الصور يبقى
+  /// على الخادم)، أو null إذا ما فيه صورة لهذا المكان. البطاقة ترسم رمز
+  /// الفئة بدلها حينها، فغياب الصورة يظهر مقصوداً لا معطوباً.
+  final String? photoUrl;
+
+  /// صاحب الصورة — شروط Google تلزم بذكره أينما عُرضت صورته.
+  final String? photoAttribution;
+
+  /// فئة المكان كما صنّفها الخادم — تُشتق منها أيقونة البديل حين لا توجد صورة.
+  final String? categorySlug;
+
   PlaceResult({
     required this.osmId,
     required this.name,
@@ -37,11 +48,18 @@ class PlaceResult {
     this.ratingCount,
     this.serverOpenNow,
     this.source = 'google',
+    this.photoUrl,
+    this.photoAttribution,
+    this.categorySlug,
   });
 
   /// يبني عنصر مكان من استجابة rico-api (GET /search) — قد تحتوي بيانات سعر
   /// وتقييم حقيقية من قاعدتنا أو من Google Places حسب source.
-  factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json) {
+  /// [baseUrl] أصل خادم ريكو — الخادم يرسل مسار الصورة نسبياً (`/places/…`)
+  /// لا رابطاً كاملاً، عشان يشتغل نفس الرد محلياً وفي الإنتاج بلا ما يعرف
+  /// الخادم عنوانه العام. الضم يصير هنا عند القراءة.
+  factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final photoPath = json['photoUrl'] as String?;
     return PlaceResult(
       osmId: json['id'] as String,
       name: (json['nameAr'] ?? json['name']) as String,
@@ -56,6 +74,9 @@ class PlaceResult {
       ratingCount: json['ratingCount'] as int?,
       serverOpenNow: json['openNow'] as bool?,
       source: (json['source'] as String?) ?? 'rico',
+      photoUrl: photoPath == null ? null : '$baseUrl$photoPath',
+      photoAttribution: json['photoAttribution'] as String?,
+      categorySlug: json['categorySlug'] as String?,
     );
   }
 
@@ -74,6 +95,9 @@ class PlaceResult {
       ratingCount: ratingCount,
       serverOpenNow: serverOpenNow,
       source: source,
+      photoUrl: photoUrl,
+      photoAttribution: photoAttribution,
+      categorySlug: categorySlug,
     );
   }
 
@@ -98,19 +122,16 @@ class PlaceResult {
   /// بيانات سعر. الكلمة أوضح للمستخدم من تكرار رمز الريال، الذي يُصيّره خط
   /// النص كرباط "ريال" فيصير "ريال ريال" بلا معنى. القيمة مقصورة على المدى
   /// المتوقع تحصيناً من أي مستوى خارجه يصل من الخادم.
-  String? get priceLevelLabel =>
-      priceLevel == null ? null : _priceLevelLabels[priceLevel!.clamp(1, 4) - 1];
+  String? get priceLevelLabel => priceLevel == null ? null : _priceLevelLabels[priceLevel!.clamp(1, 4) - 1];
 
   String? get ratingLabel => rating == null ? null : '★ ${rating!.toStringAsFixed(1)}';
 
   /// رابط خرائط جوجل بالاعتماد على الإحداثيات فقط (بدون الحاجة لـ place_id مدفوع)
-  String get googleMapsUrl =>
-      'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+  String get googleMapsUrl => 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
 
   /// رابط اتجاهات فعلية من موقع المستخدم الحالي إلى المكان (لا يحتاج نقطة بداية،
   /// تطبيق خرائط جوجل يستخدم الموقع الحالي تلقائياً)
-  String get directionsUrl =>
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
+  String get directionsUrl => 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
 
   Map<String, dynamic> toJson() => {
         'osmId': osmId,
@@ -125,6 +146,9 @@ class PlaceResult {
         'ratingCount': ratingCount,
         'openNow': serverOpenNow,
         'source': source,
+        'photoUrl': photoUrl,
+        'photoAttribution': photoAttribution,
+        'categorySlug': categorySlug,
       };
 
   factory PlaceResult.fromJson(Map<String, dynamic> json) {
@@ -141,6 +165,11 @@ class PlaceResult {
       ratingCount: json['ratingCount'] as int?,
       serverOpenNow: json['openNow'] as bool?,
       source: json['source'] as String? ?? 'google',
+      // مخزّن كاملاً (لا كمسار) — المفضّلة قد تُقرأ بعد تغيّر عنوان الخادم،
+      // والرابط المحفوظ يبقى صالحاً لأن مسار الصورة نفسه ما يتغيّر.
+      photoUrl: json['photoUrl'] as String?,
+      photoAttribution: json['photoAttribution'] as String?,
+      categorySlug: json['categorySlug'] as String?,
     );
   }
 }

@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsLatitude, IsLongitude, IsNumber, IsOptional, Max, Min } from 'class-validator';
-import { PROFESSION_SLUGS } from '../constants/professions';
+import { IsLatitude, IsLongitude, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsKnownProfession } from '../validators/is-known-profession.validator';
 
 export class SearchProfessionalsDto {
   @Type(() => Number)
@@ -11,10 +11,12 @@ export class SearchProfessionalsDto {
   @IsLongitude()
   lng: number;
 
-  // Only a known slug: an unknown trade has no professionals by definition,
-  // and letting free text through would turn this into an open query over
-  // the user collection.
-  @IsIn(PROFESSION_SLUGS)
+  // Only a trade the platform actually offers: an unknown one has no
+  // professionals by definition, and letting free text through would turn
+  // this into an open query over the user collection. Checked against the
+  // live registry rather than a list frozen at import time, so a trade the
+  // owner added this morning is searchable this morning.
+  @IsKnownProfession()
   profession: string;
 
   // How far the *customer* is willing to look. The professional's own
