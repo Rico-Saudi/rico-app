@@ -56,3 +56,14 @@ export const REQUEST_STATUS_LABELS = {
   new: 'جديد',
   handled: 'تم التعامل معه',
 };
+
+// Weather a deal can be aimed at. Mirrors WEATHER_BUCKETS on the server;
+// 'mild' is deliberately absent — "show this only when the weather is
+// unremarkable" is not something anyone wants to say.
+export const WEATHER_CONDITIONS = [
+  { value: 'hot', label: '🔥 جو حار' },
+  { value: 'cold', label: '❄️ جو بارد' },
+  { value: 'rain', label: '🌧️ مطر' },
+  { value: 'sandstorm', label: '🌫️ غبار' },
+  { value: 'pleasant', label: '🌤️ جو معتدل' },
+];

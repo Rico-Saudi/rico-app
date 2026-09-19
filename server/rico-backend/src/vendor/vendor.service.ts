@@ -117,6 +117,7 @@ export class VendorService {
       dealType: dto.dealType,
       value: dto.value ?? null,
       promoCode: dto.promoCode?.trim() ?? null,
+      weatherConditions: dto.weatherConditions?.length ? dto.weatherConditions : null,
       status: 'active', // auto-published — the claim review is the trust gate, not each deal
       source: 'business_dashboard',
       ownerAccountId: accountId,

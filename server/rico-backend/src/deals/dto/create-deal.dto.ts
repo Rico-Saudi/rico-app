@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsIn,
   IsInt,
@@ -10,6 +11,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { WEATHER_BUCKETS } from '../../weather/weather.constants';
 
 export const DEAL_TYPES = ['percent', 'fixed', 'bogo', 'free_item', 'bundle'] as const;
 
@@ -53,6 +55,14 @@ export class CreateDealDto {
   @IsOptional()
   @IsArray()
   activeDays?: string[];
+
+  // Weather this deal is for. Empty/absent = always shown, which is what
+  // every deal did before this existed.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsIn(WEATHER_BUCKETS, { each: true })
+  weatherConditions?: string[];
 
   @IsOptional()
   @IsObject()

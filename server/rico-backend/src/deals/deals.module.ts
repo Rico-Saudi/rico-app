@@ -5,9 +5,10 @@ import { Deal, DealSchema } from './schemas/deal.schema';
 import { DealsService } from './deals.service';
 import { DealsController } from './deals.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
+import { WeatherModule } from '../weather/weather.module';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Deal.name, schema: DealSchema }]), BusinessesModule],
+  imports: [WeatherModule, MongooseModule.forFeature([{ name: Deal.name, schema: DealSchema }]), BusinessesModule],
   controllers: [DealsController],
   providers: [DealsService],
   exports: [MongooseModule, DealsService],

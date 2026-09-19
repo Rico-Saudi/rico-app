@@ -1,14 +1,24 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { LlmService } from '../llm/llm.service';
+import { WeatherService } from '../weather/weather.service';
 import { brandFor } from '../common/constants/brands';
 import { buildComposePrompt } from './constants/compose.constants';
 import { ComposeRequestDto } from './dto/compose-request.dto';
 
 @Injectable()
 export class ComposeService {
-  constructor(private readonly llm: LlmService) {}
+  constructor(
+    private readonly llm: LlmService,
+    private readonly weather: WeatherService,
+  ) {}
 
   async compose(dto: ComposeRequestDto) {
+    // Only *notable* weather is passed on. Telling a Riyadh user it's hot in
+    // August is not information, and a model handed a temperature every time
+    // will find a way to mention it every time.
+    const weather =
+      dto.lat !== undefined && dto.lng !== undefined ? await this.weather.getFor(dto.lat, dto.lng) : null;
+
     const userPayload = {
       message: dto.message,
       intentKind: dto.intentKind,
@@ -17,6 +27,7 @@ export class ComposeService {
       items: dto.items,
       truncated: dto.truncated,
       history: dto.history || [],
+      ...(weather?.notable ? { weather: weather.descriptionAr } : {}),
     };
 
     const { content } = await this.llm.complete({

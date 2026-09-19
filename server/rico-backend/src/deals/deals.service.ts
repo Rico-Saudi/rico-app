@@ -5,6 +5,30 @@ import { Deal, DealDocument } from './schemas/deal.schema';
 import { Business, BusinessDocument } from '../businesses/schemas/business.schema';
 import { EARTH_RADIUS_METERS, haversineMeters } from '../common/utils/geo.util';
 import { CreateDealDto } from './dto/create-deal.dto';
+import { WeatherService } from '../weather/weather.service';
+import { CATEGORY_AFFINITY, WEATHER_AFFINITY_FACTOR, WeatherSnapshot } from '../weather/weather.constants';
+
+// A deal a vendor restricted to certain weather is only shown in it. When we
+// don't know the weather — no key, API down — every deal is shown: failing
+// open keeps an outage at OpenWeather from quietly hiding vendors' offers.
+function matchesWeather(deal: { weatherConditions?: string[] | null }, weather: WeatherSnapshot | null): boolean {
+  const wanted = deal.weatherConditions;
+  if (!wanted || wanted.length === 0) return true;
+  if (!weather) return true;
+  return wanted.includes(weather.bucket);
+}
+
+// Does this deal suit the weather — either because its vendor said so, or
+// because its category generally does? Used only to order, never to exclude.
+function suitsWeather(
+  deal: { weatherConditions?: string[] | null },
+  categorySlug: string | undefined,
+  weather: WeatherSnapshot | null,
+): boolean {
+  if (!weather) return false;
+  if (deal.weatherConditions?.includes(weather.bucket)) return true;
+  return categorySlug ? CATEGORY_AFFINITY[weather.bucket].includes(categorySlug) : false;
+}
 
 // active_days/active_time need JS evaluation (day-of-week/time-of-day
 // windows) — ported as-is from the old deals.js.
@@ -31,6 +55,7 @@ export class DealsService {
   constructor(
     @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
+    private readonly weatherService: WeatherService,
   ) {}
 
   // GET /deals — ported from routes/deals.js. Response shape (incl. the
@@ -56,18 +81,30 @@ export class DealsService {
       })
       .lean();
 
+    const weather = await this.weatherService.getFor(lat, lng, now);
+
     const withDistance = deals
       .map((d) => {
         const business = businessById.get(String(d.businessId))!;
         return {
           ...d,
           placeName: business.name,
+          categorySlug: business.categorySlug,
           distanceMeters: haversineMeters(lat, lng, business.location.coordinates[1], business.location.coordinates[0]),
         };
       })
-      .filter((d) => isActiveNow(d, now));
+      .filter((d) => isActiveNow(d, now))
+      .filter((d) => matchesWeather(d, weather));
 
-    withDistance.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    // Ordered by distance, with anything that suits the weather treated as
+    // if it were nearer. A nudge rather than a reordering: the factor is
+    // bounded so the closest useful deal still wins, and nobody is pointed
+    // across town for a cold drink because it happens to be warm out.
+    withDistance.sort(
+      (a, b) =>
+        a.distanceMeters * (suitsWeather(a, a.categorySlug, weather) ? WEATHER_AFFINITY_FACTOR : 1) -
+        b.distanceMeters * (suitsWeather(b, b.categorySlug, weather) ? WEATHER_AFFINITY_FACTOR : 1),
+    );
 
     return {
       deals: withDistance.slice(0, 8).map((d) => ({
@@ -100,6 +137,7 @@ export class DealsService {
       endsAt: dto.endsAt !== undefined ? new Date(dto.endsAt) : null,
       activeDays: dto.activeDays ?? null,
       activeTime: dto.activeTime ?? null,
+      weatherConditions: dto.weatherConditions ?? null,
       status: dto.status ?? 'active',
       source: dto.source ?? 'manual',
       sourceRef: dto.sourceRef ?? null,

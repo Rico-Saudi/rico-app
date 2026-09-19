@@ -100,4 +100,19 @@ export class ComposeRequestDto {
   @IsString()
   @Length(1, 40)
   brand?: string;
+
+  // Where the user is, so the reply can mention the weather when it's worth
+  // mentioning. Optional on purpose: app builds older than this feature send
+  // neither, and the reply is composed exactly as before without them.
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
 }

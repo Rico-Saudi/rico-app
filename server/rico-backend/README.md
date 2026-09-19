@@ -35,6 +35,7 @@ Copy `.env.example` to `.env` and fill in:
 | `OPENROUTER_CLASSIFY_MODELS` | no | comma-separated chain, priority order; OpenRouter fails over down it inside one request and bills whichever answered |
 | `OPENROUTER_COMPOSE_MODELS` | no | as above, separately — classification wants reasoning, composition wants speed |
 | `OPENROUTER_MODEL` | no | fallback when neither per-endpoint chain is set |
+| `OPENWEATHER_API_KEY` | no | classic Current Weather endpoint (60/min, 1M/month free, no card). Unset disables weather entirely — replies stop mentioning it and deals stop being reordered. Cached per ~11km cell for 20 min |
 | `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails **and app-customer verification codes** are logged to the console instead of sent — the whole signup flow is testable locally without an email account |
 | `RESEND_FROM_EMAIL` | no | default `Rico <onboarding@resend.dev>` |
 

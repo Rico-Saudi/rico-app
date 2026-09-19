@@ -21,6 +21,8 @@ class ComposeService {
     required List<Map<String, dynamic>> items,
     required bool truncated,
     List<Map<String, String>>? history,
+    double? lat,
+    double? lng,
   }) async {
     try {
       final response = await http
@@ -36,6 +38,9 @@ class ComposeService {
               'items': items,
               'truncated': truncated,
               if (history != null && history.isNotEmpty) 'history': history,
+              // موقع المستخدم — يستخدمه الخادم ليعرف حالة الجو ويذكرها في
+              // الرد إذا كانت تستاهل الذكر. اختياري: بدونه يُصاغ الرد كما كان.
+              if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
             }),
           )
           .timeout(const Duration(seconds: 5));

@@ -196,7 +196,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// (السعر/التقييم/المصدر) كما هي بدل المجازفة بإعادة بحث بالاسم قد يُرجع
   /// نسخة مختلفة (مصدرها OSM لا ريكو) لنفس المكان. يرجع null إذا لم يعد
   /// الترتيب المطلوب موجوداً (تغيّرت القائمة)، فيعامل الطلب كبحث عادي.
-  Future<ChatMessage?> _resolveReferencedMessage(String text, QueryIntent intent, int position) async {
+  Future<ChatMessage?> _resolveReferencedMessage(
+    String text,
+    QueryIntent intent,
+    int position,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
     final last = _findLastShown();
     final lastPlaces = last?.places;
     final lastDeals = last?.deals;
@@ -229,6 +234,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
       truncated: false,
       history: _buildHistory(),
+      lat: origin.lat,
+      lng: origin.lng,
     );
 
     return ChatMessage(
@@ -289,6 +296,8 @@ class _ChatScreenState extends State<ChatScreen> {
               .toList(),
           truncated: false,
           history: _buildHistory(),
+          lat: origin.lat,
+          lng: origin.lng,
         );
         return ChatMessage(
           text: composedReply ?? 'هذي أقرب العروض المتوفرة لك:',
@@ -361,6 +370,8 @@ class _ChatScreenState extends State<ChatScreen> {
             .toList(),
         truncated: places.length > 5,
         history: _buildHistory(),
+        lat: origin.lat,
+        lng: origin.lng,
       );
 
       // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
@@ -459,6 +470,8 @@ class _ChatScreenState extends State<ChatScreen> {
             .toList(),
         truncated: professionals.length > 5,
         history: _buildHistory(),
+        lat: origin.lat,
+        lng: origin.lng,
       );
 
       return ChatMessage(
@@ -680,7 +693,7 @@ class _ChatScreenState extends State<ChatScreen> {
         // المحلية أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت
         // القائمة) نسقط تلقائياً لمسار البحث العادي.
         final resolveFuture = referencedPosition != null
-            ? _resolveReferencedMessage(text, intents[i], referencedPosition).then((message) async {
+            ? _resolveReferencedMessage(text, intents[i], referencedPosition, origin).then((message) async {
                 return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback, index);
               })
             : _resolveIntentMessage(text, intents[i], origin, usedFallback, index);

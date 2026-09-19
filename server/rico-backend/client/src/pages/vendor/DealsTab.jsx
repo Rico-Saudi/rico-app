@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Plus, Loader, Tag } from 'lucide-react';
-import { DEAL_TYPES, DEAL_STATUS_LABELS } from './api';
+import { DEAL_TYPES, DEAL_STATUS_LABELS, WEATHER_CONDITIONS } from './api';
 
-const emptyDealForm = () => ({ titleAr: '', descriptionAr: '', dealType: 'percent', value: '', promoCode: '' });
+// weatherConditions = [] means "always show", which is what every deal did
+// before weather targeting existed.
+const emptyDealForm = () => ({ titleAr: '', descriptionAr: '', dealType: 'percent', value: '', promoCode: '', weatherConditions: [] });
 
 export default function DealsTab({ authedFetch, activeClaims, activeBusinessId, onChangeBusiness }) {
   const [deals, setDeals] = useState(null);
@@ -32,6 +34,7 @@ export default function DealsTab({ authedFetch, activeClaims, activeBusinessId, 
         ...form,
         businessId: activeBusinessId,
         value: form.value === '' ? null : Number(form.value),
+        weatherConditions: form.weatherConditions.length ? form.weatherConditions : undefined,
       }),
     });
     setSaving(false);
@@ -132,6 +135,36 @@ export default function DealsTab({ authedFetch, activeClaims, activeBusinessId, 
                 className="bg-surface-container-lowest border-none rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
               />
             </div>
+            <div>
+              <label className="text-xs font-bold text-on-surface-variant">
+                اعرضه بس لما يكون الجو… <span className="font-normal">(اختياري — بدون اختيار يظهر دايماً)</span>
+              </label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {WEATHER_CONDITIONS.map((w) => {
+                  const picked = form.weatherConditions.includes(w.value);
+                  return (
+                    <button
+                      key={w.value}
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          weatherConditions: picked
+                            ? form.weatherConditions.filter((v) => v !== w.value)
+                            : [...form.weatherConditions, w.value],
+                        })
+                      }
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition ${
+                        picked ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant'
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button type="button" onClick={() => setFormOpen(false)} className="flex-1 py-2.5 rounded-xl border border-outline-variant bg-transparent text-on-surface text-sm font-semibold">
                 إلغاء

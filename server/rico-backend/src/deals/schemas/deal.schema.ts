@@ -47,6 +47,16 @@ export class Deal {
   @Prop({ type: [String], default: null }) // e.g. ['fri','sat']
   activeDays: string[] | null;
 
+  // Weather this deal is meant for, as WeatherBucket values — a vendor
+  // saying "only show my iced coffee offer when it's hot". null or empty
+  // means the deal is shown whatever the weather, which is the default and
+  // what every existing deal has.
+  //
+  // Enforced as a *filter*, not a ranking hint: a vendor who limits a deal
+  // to rainy days does not want it surfaced in August.
+  @Prop({ type: [String], default: null })
+  weatherConditions: string[] | null;
+
   @Prop({ type: ActiveTimeSchema, default: null })
   activeTime: ActiveTime | null;
 

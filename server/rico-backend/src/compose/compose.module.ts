@@ -3,6 +3,7 @@ import cors from 'cors';
 import { ComposeService } from './compose.service';
 import { ComposeController } from './compose.controller';
 import { LlmModule } from '../llm/llm.module';
+import { WeatherModule } from '../weather/weather.module';
 
 @Module({
   imports: [LlmModule],
