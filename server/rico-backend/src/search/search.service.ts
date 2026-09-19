@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose';
 import { Business, BusinessDocument } from '../businesses/schemas/business.schema';
 import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { EARTH_RADIUS_METERS, haversineMeters } from '../common/utils/geo.util';
@@ -165,6 +165,8 @@ export class SearchService {
     sortByRank(places, rank);
     places = places.slice(0, limit);
 
+    await this.backfillProductPhotos(places);
+
     // Never claim a ranking the data can't back up.
     const priceDataAvailable = rank !== 'cheapest' || places.some((p) => p.priceLevel != null);
     const ratingDataAvailable = rank !== 'best_rated' || places.some((p) => p.rating != null);
@@ -194,9 +196,40 @@ export class SearchService {
       // Auto-cached rows are Google data wearing a Business document — they
       // have no catalog, so they must not unlock ordering in the app.
       source: b.enrichmentSource === LIVE_CACHE_ENRICHMENT ? 'google' : 'rico',
-      photoUrl: b.photoRef ? photoUrlFor(String(b._id)) : null,
-      photoAttribution: b.photoAttribution ?? null,
+      // Order matters: the vendor's own storefront photo beats Google's,
+      // which beats a product close-up (filled in by backfillProductPhotos),
+      // which beats the category glyph the app draws when all three are absent.
+      photoUrl: b.imageUrl ?? (b.photoRef ? photoUrlFor(String(b._id)) : null),
+      // Only Google's photo carries a credit — a vendor crediting themselves
+      // for a photo of their own shop reads as noise.
+      photoAttribution: b.imageUrl ? null : (b.photoAttribution ?? null),
     };
+  }
+
+  /// Last resort before the category glyph: a vendor who never uploaded a
+  /// storefront photo but did photograph their products still has a real
+  /// picture we can show. One query over the handful of results actually being
+  /// returned — not one per business, and never for places that already have a
+  /// photo.
+  private async backfillProductPhotos(places: SearchPlace[]): Promise<void> {
+    const missing = places.filter((p) => !p.photoUrl && p.source === 'rico' && isValidObjectId(p.id));
+    if (missing.length === 0) return;
+
+    const products = await this.productModel
+      .find({ businessId: { $in: missing.map((p) => p.id) }, imageUrl: { $ne: null }, isActive: true })
+      .select('businessId imageUrl')
+      .lean();
+
+    const firstByBusiness = new Map<string, string>();
+    for (const product of products) {
+      const key = String(product.businessId);
+      if (product.imageUrl && !firstByBusiness.has(key)) firstByBusiness.set(key, product.imageUrl);
+    }
+
+    for (const place of missing) {
+      const url = firstByBusiness.get(place.id);
+      if (url) place.photoUrl = url;
+    }
   }
 
   // Google Places is paid and capped monthly, shared with the admin

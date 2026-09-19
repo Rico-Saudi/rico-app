@@ -62,6 +62,12 @@ export class Business {
   @Prop({ type: String, default: null })
   enrichmentSource: string | null;
 
+  // The vendor's own storefront photo, once they upload one. Outranks
+  // anything from Google: they chose it, it's current, and it's the shop as
+  // they want it seen. Written only by BusinessesService.setImage/clearImage.
+  @Prop({ type: String, default: null })
+  imageUrl: string | null;
+
   // Google photo resource name for this place's first photo. Storing the
   // reference (free) rather than the image means we only ever pay for a photo
   // someone actually looks at.

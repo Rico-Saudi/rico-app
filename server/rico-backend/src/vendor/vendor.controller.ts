@@ -10,6 +10,7 @@ import { AccountId } from '../common/decorators/account-id.decorator';
 import { CreateProductDto } from '../products/dto/create-product.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
 import { MAX_PRODUCT_IMAGE_BYTES } from '../products/constants/product-image.constants';
+import { MAX_BUSINESS_IMAGE_BYTES } from '../businesses/constants/business-image.constants';
 import { CreateDiscountDto } from '../discounts/dto/create-discount.dto';
 import { UpdateDiscountDto } from '../discounts/dto/update-discount.dto';
 
@@ -81,6 +82,23 @@ export class VendorController {
   @Delete('products/:id/image')
   removeProductImage(@AccountId() accountId: string, @Param('id') productId: string) {
     return this.vendorService.removeOwnProductImage(accountId, productId);
+  }
+
+  // The vendor's own storefront photo. Same multipart-as-a-second-step shape
+  // as the product upload above, for the same reasons.
+  @Post('places/:id/image')
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_BUSINESS_IMAGE_BYTES, files: 1 } }))
+  uploadPlaceImage(
+    @AccountId() accountId: string,
+    @Param('id') businessId: string,
+    @UploadedFile() image?: Express.Multer.File,
+  ) {
+    return this.vendorService.setOwnBusinessImage(accountId, businessId, image);
+  }
+
+  @Delete('places/:id/image')
+  removePlaceImage(@AccountId() accountId: string, @Param('id') businessId: string) {
+    return this.vendorService.removeOwnBusinessImage(accountId, businessId);
   }
 
   @Get('discounts')

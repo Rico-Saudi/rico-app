@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Edit2, X, Package, Loader, ImagePlus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, shrinkImage } from './productImage';
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, shrinkImage } from './imageUpload';
 
 // imageFile = a newly picked photo not uploaded yet; imageUrl = the one already
 // stored on the product; removeImage = the vendor cleared an existing photo.

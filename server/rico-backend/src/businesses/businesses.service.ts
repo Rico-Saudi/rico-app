@@ -1,14 +1,63 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Business, BusinessDocument } from './schemas/business.schema';
+import { BusinessImage, BusinessImageDocument } from './schemas/business-image.schema';
+import {
+  ALLOWED_BUSINESS_IMAGE_TYPES,
+  MAX_BUSINESS_IMAGE_BYTES,
+  businessImageUrl,
+} from './constants/business-image.constants';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { ListBusinessDto } from './dto/list-business.dto';
 
 @Injectable()
 export class BusinessesService {
-  constructor(@InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>) {}
+  constructor(
+    @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
+    @InjectModel(BusinessImage.name) private readonly businessImageModel: Model<BusinessImageDocument>,
+  ) {}
+
+  /// Stores a vendor's storefront photo and points the business at it.
+  async setImage(id: string, file: Express.Multer.File | undefined): Promise<BusinessDocument> {
+    if (!file?.buffer?.length) throw new BadRequestException({ error: 'image_required' });
+    if (!ALLOWED_BUSINESS_IMAGE_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException({ error: 'unsupported_image_type', allowed: ALLOWED_BUSINESS_IMAGE_TYPES });
+    }
+    if (file.size > MAX_BUSINESS_IMAGE_BYTES) {
+      throw new PayloadTooLargeException({ error: 'image_too_large', maxBytes: MAX_BUSINESS_IMAGE_BYTES });
+    }
+
+    const business = await this.findOne(id);
+    const image = await this.businessImageModel.create({
+      businessId: business._id,
+      contentType: file.mimetype,
+      size: file.size,
+      data: file.buffer,
+    });
+    // Only after the new image is safely stored, so a failed write leaves the
+    // business pointing at the photo it already had.
+    await this.businessImageModel.deleteMany({ businessId: business._id, _id: { $ne: image._id } });
+
+    business.imageUrl = businessImageUrl(image._id);
+    await business.save();
+    return business;
+  }
+
+  async clearImage(id: string): Promise<BusinessDocument> {
+    const business = await this.findOne(id);
+    await this.businessImageModel.deleteMany({ businessId: business._id });
+    business.imageUrl = null;
+    await business.save();
+    return business;
+  }
+
+  async findImage(imageId: string): Promise<BusinessImageDocument> {
+    const image = await this.businessImageModel.findById(imageId);
+    if (!image) throw new NotFoundException({ error: 'image_not_found' });
+    return image;
+  }
 
   async create(dto: CreateBusinessDto): Promise<BusinessDocument> {
     return this.businessModel.create({

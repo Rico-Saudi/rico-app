@@ -7,6 +7,7 @@ import { Business, BusinessDocument } from '../businesses/schemas/business.schem
 import { Deal, DealDocument } from '../deals/schemas/deal.schema';
 import { CreateOwnDealDto } from './dto/create-own-deal.dto';
 import { UpdateOwnDealDto } from './dto/update-own-deal.dto';
+import { BusinessesService } from '../businesses/businesses.service';
 import { ProductsService } from '../products/products.service';
 import { CreateProductDto } from '../products/dto/create-product.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
@@ -22,6 +23,7 @@ export class VendorService {
     @InjectModel(BusinessClaim.name) private readonly claimModel: Model<BusinessClaimDocument>,
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
     @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
+    private readonly businessesService: BusinessesService,
     private readonly productsService: ProductsService,
     private readonly discountsService: DiscountsService,
     private readonly requestsService: RequestsService,
@@ -33,7 +35,7 @@ export class VendorService {
 
     const claims = await this.claimModel
       .find({ accountId: account._id })
-      .populate('businessId', 'name nameAr categorySlug')
+      .populate('businessId', 'name nameAr categorySlug imageUrl')
       .lean();
 
     return {
@@ -42,6 +44,9 @@ export class VendorService {
         placeId: c.businessId._id,
         placeName: c.businessId.nameAr || c.businessId.name,
         categorySlug: c.businessId.categorySlug,
+        // Lets the dashboard show the storefront photo the vendor already has
+        // (or that they have none) without a second round-trip per business.
+        imageUrl: c.businessId.imageUrl ?? null,
         status: c.status,
       })),
     };
@@ -196,6 +201,27 @@ export class VendorService {
     await this.assertOwnsProduct(accountId, productId);
     const product = await this.productsService.clearImage(productId);
     return { productId: product._id, imageUrl: product.imageUrl };
+  }
+
+  async setOwnBusinessImage(accountId: string, businessId: string, image?: Express.Multer.File) {
+    await this.assertOwnsBusiness(accountId, businessId);
+    const business = await this.businessesService.setImage(businessId, image);
+    return { placeId: business._id, imageUrl: business.imageUrl };
+  }
+
+  async removeOwnBusinessImage(accountId: string, businessId: string) {
+    await this.assertOwnsBusiness(accountId, businessId);
+    const business = await this.businessesService.clearImage(businessId);
+    return { placeId: business._id, imageUrl: business.imageUrl };
+  }
+
+  /// A vendor may only touch a business they hold an active claim on — the
+  /// same rule assertOwnsProduct enforces one level down.
+  private async assertOwnsBusiness(accountId: string, businessId: string): Promise<void> {
+    const activeBusinessIds = await this.activeBusinessIdsForAccount(accountId);
+    if (!activeBusinessIds.includes(String(businessId))) {
+      throw new ForbiddenException({ error: 'place_not_claimed' });
+    }
   }
 
   private async assertOwnsProduct(accountId: string, productId: string): Promise<void> {
