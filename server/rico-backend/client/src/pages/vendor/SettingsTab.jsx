@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Search, Store, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, Link2, RefreshCw, Search, Store, Trash2, Unlink, Upload } from 'lucide-react';
 import { CLAIM_STATUS_LABELS } from './api';
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, shrinkImage } from './imageUpload';
 
@@ -108,6 +108,120 @@ function StorefrontPhoto({ authedFetch, claim, onChanged }) {
   );
 }
 
+
+// ربط حساب إنستغرام الخاص بالنشاط. المنشورات التي تحوي عروضاً فعلية تتحوّل
+// لعروض داخل ريكو تلقائياً — والمنشورات العادية (منتج جديد، تهنئة، توظيف)
+// تُتجاهل، لأن تحويل كل منشور لعرض يُفقد كلمة "عرض" معناها عند المستخدم.
+function InstagramLink({ authedFetch, claim }) {
+  const [status, setStatus] = useState(null); // null = قيد التحميل
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claim.placeId]);
+
+  async function load() {
+    const res = await authedFetch(`/vendor/instagram/status?businessId=${claim.placeId}`);
+    if (!res) return;
+    setStatus(await res.json());
+  }
+
+  async function connect() {
+    const res = await authedFetch(`/vendor/instagram/connect?businessId=${claim.placeId}`);
+    if (!res || !res.ok) return setMessage('تعذّر بدء الربط.');
+    const { url } = await res.json();
+    // ننتقل لإنستغرام نفسه — الموافقة تتم عندهم لا عندنا، وما نشوف كلمة
+    // المرور أبداً.
+    window.location.href = url;
+  }
+
+  async function importNow() {
+    setBusy(true);
+    setMessage('');
+    const res = await authedFetch(`/vendor/instagram/import?businessId=${claim.placeId}`, { method: 'POST' });
+    setBusy(false);
+    if (!res || !res.ok) return setMessage('تعذّر جلب المنشورات.');
+    const result = await res.json();
+    setMessage(
+      result.offersFound > 0
+        ? `لقينا ${result.offersFound} عرض من ${result.postsRead} منشور.`
+        : `قرأنا ${result.postsRead} منشور وما فيها عروض واضحة.`,
+    );
+    load();
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    await authedFetch(`/vendor/instagram/disconnect?businessId=${claim.placeId}`, { method: 'DELETE' });
+    setBusy(false);
+    setMessage('فُصل الحساب وحُذفت العروض المستوردة منه.');
+    load();
+  }
+
+  if (status === null) return <p className="text-sm text-on-surface-variant">جاري التحميل...</p>;
+
+  if (!status.configured) {
+    return <p className="text-sm text-on-surface-variant">ربط إنستغرام غير مفعّل على هذا الخادم بعد.</p>;
+  }
+
+  return (
+    <div className="flex items-start gap-4">
+      <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+        <Camera className="w-5 h-5" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold truncate">{claim.placeName}</p>
+        <p className="text-xs text-on-surface-variant mt-0.5">
+          {status.connected ? `مربوط بحساب @${status.username}` : 'اربط حسابك وتتحوّل عروض منشوراتك تلقائياً'}
+        </p>
+        {status.connected && status.lastStatus && (
+          <p className="text-xs text-on-surface-variant mt-0.5">آخر جلب: {status.lastStatus}</p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          {!status.connected && (
+            <button
+              type="button"
+              onClick={connect}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-primary/10 text-primary flex items-center gap-1.5"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              اربط إنستغرام
+            </button>
+          )}
+          {status.connected && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={importNow}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-primary/10 text-primary disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />
+                {busy ? 'جارٍ الجلب…' : 'اجلب العروض الحين'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={disconnect}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-surface-container text-on-surface-variant disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                فصل
+              </button>
+            </>
+          )}
+        </div>
+
+        {message && <p className="text-xs text-primary mt-1.5">{message}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsTab({ authedFetch, me, onClaimed }) {
   // صورة المحل تفيد فقط النشاط المفعّل — غير المفعّل ما يظهر في نتائج البحث.
   const activeClaims = me.claims.filter((c) => c.status === 'active');
@@ -162,6 +276,20 @@ export default function SettingsTab({ authedFetch, me, onClaimed }) {
           </div>
           {activeClaims.map((c) => (
             <StorefrontPhoto key={c.placeId} authedFetch={authedFetch} claim={c} onChanged={onClaimed} />
+          ))}
+        </div>
+      )}
+
+      {activeClaims.length > 0 && (
+        <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm space-y-5">
+          <div>
+            <h2 className="font-bold">إنستغرام</h2>
+            <p className="text-sm text-on-surface-variant mt-1">
+              اربط حساب محلك وتتحوّل منشوراتك اللي فيها عروض لعروض داخل ريكو. المنشورات العادية تُتجاهل.
+            </p>
+          </div>
+          {activeClaims.map((c) => (
+            <InstagramLink key={c.placeId} authedFetch={authedFetch} claim={c} />
           ))}
         </div>
       )}
