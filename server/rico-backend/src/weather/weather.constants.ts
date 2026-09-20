@@ -124,3 +124,112 @@ export const CATEGORY_AFFINITY: Record<WeatherBucket, string[]> = {
 /// the nearest useful thing still wins and nobody is sent across town for a
 /// juice because it happens to be warm.
 export const WEATHER_AFFINITY_FACTOR = 0.7;
+
+/// What Rico offers to look for, given the weather.
+///
+/// Each entry is a line to show plus the prompts behind its chips. The prompts
+/// are ordinary Arabic requests, deliberately — tapping one sends it through
+/// the same classify-and-search path as anything typed, so this needs no
+/// parallel pipeline and inherits every guard that path already has.
+export interface WeatherSuggestion {
+  /// One line, already in the brand's dialect.
+  line: string;
+  /// Chip label -> the message it sends.
+  chips: { label: string; prompt: string }[];
+}
+
+/// Drinks run opposite to the weather: something cold when it's hot, something
+/// warm when it's cold. Obvious stated plainly, easy to invert by accident.
+const SAUDI_SUGGESTIONS: Record<WeatherBucket, WeatherSuggestion | null> = {
+  hot: {
+    line: 'الجو حار الحين 🥵 تبي شي بارد؟',
+    chips: [
+      { label: 'قهوة مثلجة', prompt: 'أقرب كافيه فيه قهوة مثلجة' },
+      { label: 'عصير طازج', prompt: 'أقرب محل عصير طازج' },
+      { label: 'آيس كريم', prompt: 'أقرب محل آيس كريم' },
+    ],
+  },
+  cold: {
+    line: 'الجو بارد 🧣 شي سخن يدفّي؟',
+    chips: [
+      { label: 'قهوة ساخنة', prompt: 'أقرب كافيه' },
+      { label: 'شاي وكرك', prompt: 'أقرب محل شاي وكرك' },
+      { label: 'مطعم دافي', prompt: 'أقرب مطعم مفتوح الحين' },
+    ],
+  },
+  rain: {
+    line: 'الجو ماطر 🌧️ خلنا نلقى لك مكان مسقوف.',
+    chips: [
+      { label: 'كافيه مغلق', prompt: 'أقرب كافيه' },
+      { label: 'مطعم قريب', prompt: 'أقرب مطعم مفتوح الحين' },
+      { label: 'مول', prompt: 'أقرب مول' },
+    ],
+  },
+  sandstorm: {
+    line: 'الجو مغبّر 😷 الأفضل مكان مغلق.',
+    chips: [
+      { label: 'مول', prompt: 'أقرب مول' },
+      { label: 'صيدلية', prompt: 'أقرب صيدلية مفتوحة الحين' },
+      { label: 'مغسلة سيارات', prompt: 'أقرب مغسلة سيارات' },
+    ],
+  },
+  pleasant: {
+    line: 'الجو حلو اليوم 🌤️ استغله.',
+    chips: [
+      { label: 'حديقة', prompt: 'أقرب حديقة' },
+      { label: 'كافيه', prompt: 'أقرب كافيه' },
+      { label: 'مطعم', prompt: 'أقرب مطعم' },
+    ],
+  },
+  // Nothing to say, so nothing is shown — the welcome screen keeps its
+  // ordinary chips.
+  mild: null,
+};
+
+const JORDANIAN_SUGGESTIONS: Record<WeatherBucket, WeatherSuggestion | null> = {
+  hot: {
+    line: 'الجو حر هلأ 🥵 بدك إشي بارد؟',
+    chips: [
+      { label: 'قهوة مثلجة', prompt: 'أقرب كافيه فيه قهوة مثلجة' },
+      { label: 'عصير طازج', prompt: 'أقرب محل عصير طازج' },
+      { label: 'بوظة', prompt: 'أقرب محل بوظة' },
+    ],
+  },
+  cold: {
+    line: 'الجو برد 🧣 إشي سخن بدفّي؟',
+    chips: [
+      { label: 'قهوة سخنة', prompt: 'أقرب كافيه' },
+      { label: 'شاي وسحلب', prompt: 'أقرب محل شاي' },
+      { label: 'مطعم دافي', prompt: 'أقرب مطعم فاتح هلأ' },
+    ],
+  },
+  rain: {
+    line: 'الجو شتي 🌧️ خلينا نلاقي إلك مكان مسقوف.',
+    chips: [
+      { label: 'كافيه مسكّر', prompt: 'أقرب كافيه' },
+      { label: 'مطعم قريب', prompt: 'أقرب مطعم فاتح هلأ' },
+      { label: 'مول', prompt: 'أقرب مول' },
+    ],
+  },
+  sandstorm: {
+    line: 'الجو مغبّر 😷 الأحسن مكان مسكّر.',
+    chips: [
+      { label: 'مول', prompt: 'أقرب مول' },
+      { label: 'صيدلية', prompt: 'أقرب صيدلية فاتحة هلأ' },
+      { label: 'مغسلة سيارات', prompt: 'أقرب مغسلة سيارات' },
+    ],
+  },
+  pleasant: {
+    line: 'الجو حلو اليوم 🌤️ استغله.',
+    chips: [
+      { label: 'حديقة', prompt: 'أقرب حديقة' },
+      { label: 'كافيه', prompt: 'أقرب كافيه' },
+      { label: 'مطعم', prompt: 'أقرب مطعم' },
+    ],
+  },
+  mild: null,
+};
+
+export function suggestionFor(bucket: WeatherBucket, dialect: string): WeatherSuggestion | null {
+  return dialect === 'jordanian' ? JORDANIAN_SUGGESTIONS[bucket] : SAUDI_SUGGESTIONS[bucket];
+}

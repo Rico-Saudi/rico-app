@@ -8,6 +8,7 @@ import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/professional.dart';
 import '../models/professional_flow.dart';
+import '../models/weather_info.dart';
 import '../models/request_flow.dart';
 import '../services/auth_store.dart';
 import '../services/backend_warmup.dart';
@@ -25,6 +26,7 @@ import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
+import '../services/weather_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/auth/account_sheet.dart';
 import '../widgets/auth/auth_sheet.dart';
@@ -41,7 +43,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -56,11 +58,23 @@ class _ChatScreenState extends State<ChatScreen> {
   final RequestService _requestService = RequestService();
   final TranscribeService _transcribeService = TranscribeService();
   final ProfessionalsService _professionalsService = ProfessionalsService();
+  final WeatherService _weatherService = WeatherService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
   Position? _cachedPosition;
   bool _sending = false;
+
+  /// حالة الجو المعروضة في شاشة الترحيب، و null قبل وصولها أو إذا تعذّرت.
+  WeatherInfo? _weather;
+
+  /// متى جُلبت آخر قراءة — نعيد الجلب عند العودة للتطبيق فقط إذا قدمت.
+  /// بلا هذا كان كل تنقّل بين التطبيقات يصرف نداءً على قراءة ما تغيّرت.
+  DateTime? _weatherFetchedAt;
+
+  /// الجو ما يتغيّر أسرع من هذا، ومصدره نفسه يحدّث كل ١٠ دقائق تقريباً —
+  /// وأي تكرار أسرع يرجع نفس البايتات على حساب بطارية المستخدم وباقته.
+  static const Duration _weatherStaleAfter = Duration(minutes: 20);
 
   /// جارٍ تحويل مقطع صوتي إلى نص — يُعطّل المؤلّف كما يفعل [_sending]، لكنه
   /// حالة مستقلة عنه لأنه يسبق الإرسال ولا يضيف فقاعة للمحادثة.
@@ -78,11 +92,21 @@ class _ChatScreenState extends State<ChatScreen> {
     // المفتاحية. انظر [BackendWarmup].
     BackendWarmup.ping();
     _controller.addListener(BackendWarmup.ping);
+    WidgetsBinding.instance.addObserver(this);
     _restoreConversation();
+    _refreshWeather();
+  }
+
+  /// يُعاد الجلب عند العودة من الخلفية لا بمؤقّت: المستخدم اللي يفتح ريكو بعد
+  /// ساعات يستاهل قراءة جديدة، واللي تاركه مفتوح ما يستفيد من واحدة كل دقيقة.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshWeather();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScroll);
     _controller.removeListener(BackendWarmup.ping);
     _scrollController.dispose();
@@ -103,6 +127,29 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || restored.isEmpty) return;
     setState(() => _messages.addAll(restored));
     _scrollToBottom();
+  }
+
+  /// يجلب حالة الجو لموقع المستخدم بهدوء تام: بلا مؤشر تحميل وبلا رسالة خطأ،
+  /// وبلا طلب إذن موقع من أجله وحده — إذا ما كان الموقع متاحاً أصلاً نتخطاه،
+  /// لأن نافذة إذن تظهر بسبب اقتراح جو تُقرأ كتطفّل لا كخدمة.
+  Future<void> _refreshWeather() async {
+    final fetchedAt = _weatherFetchedAt;
+    if (fetchedAt != null && DateTime.now().difference(fetchedAt) < _weatherStaleAfter) return;
+
+    final position = _cachedPosition;
+    if (position == null && !await _locationService.hasPermission()) return;
+
+    try {
+      final origin = position ?? await _getPosition();
+      final weather = await _weatherService.fetch(lat: origin.latitude, lng: origin.longitude);
+      if (!mounted || weather == null) return;
+      setState(() {
+        _weather = weather;
+        _weatherFetchedAt = DateTime.now();
+      });
+    } catch (_) {
+      // الموقع غير متاح أو فشل الجلب — الشاشة تظهر بلا بطاقة جو، وهذا كل شي.
+    }
   }
 
   Future<Position> _getPosition() async {
@@ -609,6 +656,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
 
+    // سؤال عن الجو يُجاب من القراءة المحفوظة مباشرة: بلا تصنيف ولا بحث ولا
+    // انتظار خادم. كان ريكو يرد عليه بـ«ما أقدر أساعدك في هذي» وهو يعرف
+    // الجواب فعلاً — [IntentService.isWeatherQuestion] يتكفّل بألا تُلتقط
+    // رسالة فيها طلب مكان (مثل «الجو حار أبغى كافيه») على أنها سؤال جو.
+    if (IntentService.isWeatherQuestion(text)) {
+      await _answerWeatherQuestion(text);
+      return;
+    }
+
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
@@ -764,6 +820,37 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
       unawaited(_sessionMemory.saveTranscript(_persistableMessages));
     }
+  }
+
+  /// يرد على سؤال الجو من القراءة المحفوظة، ويضيف سطر الاقتراح إن وُجد —
+  /// فيصير الرد جواباً ودعوة لخطوة تالية بدل معلومة معلّقة.
+  Future<void> _answerWeatherQuestion(String text) async {
+    setState(() {
+      _messages.add(ChatMessage(text: text, sender: MessageSender.user));
+      _sending = true;
+    });
+    _controller.clear();
+    _scrollToBottom();
+
+    await _refreshWeather();
+    final weather = _weather;
+
+    setState(() {
+      _messages.add(ChatMessage(
+        // بلا موقع أو بلا قراءة ما نخترع جواباً — نقولها صراحة ونعرض ما نقدر
+        // عليه فعلاً، تماماً مثل بقية حالات تعذّر الموقع.
+        text: weather == null
+            ? 'ما قدرت أعرف حالة الجو عندك الحين 😕 بس أقدر أدلّك على أقرب مكان أو عرض.'
+            : [
+                weather.descriptionAr,
+                if (weather.suggestion != null) weather.suggestion!.line,
+              ].join(' — '),
+        sender: MessageSender.bot,
+      ));
+      _sending = false;
+    });
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 
   /// يحوّل تسجيل المستخدم إلى نص ويحطه في حقل الكتابة — بلا إرسال تلقائي.
@@ -1119,7 +1206,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: showWelcome
-                ? WelcomeHero(onPickSuggestion: _sendQuickReply)
+                ? WelcomeHero(onPickSuggestion: _sendQuickReply, weather: _weather)
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.only(top: 14, bottom: 16),

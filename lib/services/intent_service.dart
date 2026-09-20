@@ -548,7 +548,7 @@ class IntentService {
     ),
     // أسئلة برا الخدمة
     _ChatReply(
-      RegExp('كم الساعة|وش الساعة|وش التاريخ|أي يوم اليوم|اي يوم اليوم|وش الجو|وش الطقس|الطقس|الأخبار|الاخبار'),
+      RegExp('كم الساعة|وش الساعة|وش التاريخ|أي يوم اليوم|اي يوم اليوم|الأخبار|الاخبار'),
       [
         'ما أقدر أساعدك في هذي 🙂 بس أقدر أدلّك على أقرب مكان أو على العروض حولك.',
       ],
@@ -617,6 +617,23 @@ class IntentService {
   /// أو كلمة استكمال لطلب سابق)؟ يُستخدم قبل اعتبار الرسالة تحية/دردشة عامة —
   /// رسالة متل "هلا، وين أقرب مطعم؟" فيها تحية وطلب حقيقي بنفس الوقت، ولازم
   /// تُعامل كطلب بحث لا كتحية فقط.
+  /// أسئلة الجو — صار ريكو يعرف الإجابة (انظر [WeatherService])، فما عادت
+  /// تُعامل كسؤال خارج الخدمة كما كانت في [_chatReplies].
+  static final RegExp _weatherQuestion = RegExp(
+    'وش الجو|كيف الجو|شلون الجو|وش الطقس|كيف الطقس|شو الجو|'
+    'الجو حار|الجو بارد|كم الحرارة|كم درجة الحرارة|درجة الحرارة|'
+    'في شتي|فيه مطر|في مطر|تمطر|الدنيا شتي',
+  );
+
+  /// هل الرسالة سؤال عن الجو وحده؟
+  ///
+  /// وجود أي إشارة بحث يُسقط المطابقة عمداً: «الجو حار أبغى كافيه» طلب مكان
+  /// لا سؤال عن الطقس، والرد عليه بدرجة الحرارة يترك المستخدم بلا كافيه.
+  static bool isWeatherQuestion(String text, {String? lastCategorySlug}) {
+    if (!_weatherQuestion.hasMatch(text)) return false;
+    return !hasSearchSignal(text, lastCategorySlug: lastCategorySlug);
+  }
+
   static bool hasSearchSignal(String text, {String? lastCategorySlug}) {
     if (_dealsWords.hasMatch(text)) return true;
     if (professionFor(text) != null) return true;
