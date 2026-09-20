@@ -214,6 +214,24 @@ class DealResultCard extends StatelessWidget {
               ),
             ],
           ),
+          // عرض مسحوب من موقع المتجر لا من صاحب النشاط — نقولها صراحة بدل ما
+          // يفترض المستخدم إن المحل نفسه أكّده. هو الفرق بين «شفناه معروضاً
+          // عندهم» و«قالوا لنا»، والمستخدم اللي يقطع مشوار يستاهل يعرفه.
+          if (deal.source == 'scraped') ...[
+            const SizedBox(height: 9),
+            Row(
+              children: [
+                const Icon(Icons.travel_explore_rounded, size: 13, color: RicoColors.inkMuted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'من موقع المتجر — ما تأكد منه المحل، يفضّل تتأكد قبل ما تروح',
+                    style: RicoText.caption.copyWith(color: RicoColors.inkMuted, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (deal.descriptionAr != null && deal.descriptionAr!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(deal.descriptionAr!, style: RicoText.caption.copyWith(height: 1.6)),

@@ -12,6 +12,7 @@ import { DealsModule } from './deals/deals.module';
 import { SearchModule } from './search/search.module';
 import { PhotosModule } from './photos/photos.module';
 import { WeatherModule } from './weather/weather.module';
+import { ScrapingModule } from './scraping/scraping.module';
 import { ClassifyModule } from './classify/classify.module';
 import { ComposeModule } from './compose/compose.module';
 import { TranscribeModule } from './transcribe/transcribe.module';
@@ -65,6 +66,7 @@ import { SpaModule } from './spa/spa.module';
     SearchModule,
     PhotosModule,
     WeatherModule,
+    ScrapingModule,
     ClassifyModule,
     ComposeModule,
     TranscribeModule,

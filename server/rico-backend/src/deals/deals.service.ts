@@ -7,6 +7,7 @@ import { EARTH_RADIUS_METERS, haversineMeters } from '../common/utils/geo.util';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { WeatherService } from '../weather/weather.service';
 import { CATEGORY_AFFINITY, WEATHER_AFFINITY_FACTOR, WeatherSnapshot } from '../weather/weather.constants';
+import { SCRAPED_SOURCE, SCRAPED_RANK_PENALTY } from '../scraping/scraping.constants';
 
 // A deal a vendor restricted to certain weather is only shown in it. When we
 // don't know the weather — no key, API down — every deal is shown: failing
@@ -100,11 +101,14 @@ export class DealsService {
     // if it were nearer. A nudge rather than a reordering: the factor is
     // bounded so the closest useful deal still wins, and nobody is pointed
     // across town for a cold drink because it happens to be warm out.
-    withDistance.sort(
-      (a, b) =>
-        a.distanceMeters * (suitsWeather(a, a.categorySlug, weather) ? WEATHER_AFFINITY_FACTOR : 1) -
-        b.distanceMeters * (suitsWeather(b, b.categorySlug, weather) ? WEATHER_AFFINITY_FACTOR : 1),
-    );
+    const rankDistance = (d: (typeof withDistance)[number]) =>
+      d.distanceMeters *
+      (suitsWeather(d, d.categorySlug, weather) ? WEATHER_AFFINITY_FACTOR : 1) *
+      // Scraped offers sit behind vendor-confirmed ones: nobody at the shop
+      // agreed to show them, so they have to be markedly closer to lead.
+      (d.source === SCRAPED_SOURCE ? SCRAPED_RANK_PENALTY : 1);
+
+    withDistance.sort((a, b) => rankDistance(a) - rankDistance(b));
 
     return {
       deals: withDistance.slice(0, 8).map((d) => ({
