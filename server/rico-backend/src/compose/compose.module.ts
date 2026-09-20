@@ -6,7 +6,7 @@ import { LlmModule } from '../llm/llm.module';
 import { WeatherModule } from '../weather/weather.module';
 
 @Module({
-  imports: [LlmModule],
+  imports: [LlmModule, WeatherModule],
   controllers: [ComposeController],
   providers: [ComposeService],
 })
