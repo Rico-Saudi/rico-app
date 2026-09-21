@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { HistoryMessageDto } from '../../classify/dto/classify-request.dto';
+import { MOODS } from '../../classify/constants/moods';
 
 class ComposeItemDto {
   @IsString()
@@ -115,4 +116,11 @@ export class ComposeRequestDto {
   @Min(-180)
   @Max(180)
   lng?: number;
+
+  // How the customer came across, as /classify read them. Optional: app
+  // builds older than this feature send none, and the reply is written
+  // exactly as before — which is also what 'neutral' asks for.
+  @IsOptional()
+  @IsIn(MOODS as unknown as string[])
+  mood?: string;
 }

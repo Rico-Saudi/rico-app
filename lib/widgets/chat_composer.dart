@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
+import '../models/voice_signals.dart';
 import '../services/voice_recording_service.dart';
 import '../theme/app_theme.dart';
 
@@ -19,8 +20,9 @@ class ChatComposer extends StatefulWidget {
   /// شريط الاقتراحات الأفقي، يُخفى تلقائياً أثناء الكتابة.
   final Widget? suggestions;
 
-  /// انتهى تسجيل صوتي صالح — المسار جاهز للتحويل إلى نص.
-  final void Function(String filePath) onRecorded;
+  /// انتهى تسجيل صوتي صالح — المسار جاهز للتحويل إلى نص، ومعه قياسات
+  /// التسجيل نفسه (مدة، علوّ صوت) لقراءة حالة المستخدم.
+  final void Function(String filePath, VoiceSignals signals) onRecorded;
 
   /// رُفض إذن المايكروفون (أو تعذّر تشغيله) — الشاشة تتكفّل برسالة المستخدم.
   final VoidCallback onMicUnavailable;
@@ -63,6 +65,11 @@ class _ChatComposerState extends State<ChatComposer> {
   /// كموجة تتحرك مع الصوت لا كمؤشر تحميل عام.
   final List<double> _levels = [];
   static const int _levelCount = 22;
+
+  /// تجميعة منفصلة لكل المقطع: [_levels] نافذة متدحرجة بـ٢٢ عيّنة للرسم،
+  /// فما ينحسب منها متوسط المقطع كامل.
+  double _levelSum = 0;
+  int _levelSamples = 0;
 
   @override
   void initState() {
@@ -120,6 +127,8 @@ class _ChatComposerState extends State<ChatComposer> {
       _recording = true;
       _elapsed = Duration.zero;
       _levels.clear();
+      _levelSum = 0;
+      _levelSamples = 0;
     });
 
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) {
@@ -140,6 +149,8 @@ class _ChatComposerState extends State<ChatComposer> {
       // dBFS: الصمت قرب ١٦٠- والكلام العادي بين ٤٥- و٥-. نُسقط النطاق
       // المفيد على ٠-١ عشان الأعمدة تتحرك فعلاً بدل ما تبقى ملتصقة بالقاع.
       final level = ((amp.current + 45) / 45).clamp(0.0, 1.0);
+      _levelSum += level;
+      _levelSamples++;
       setState(() {
         _levels.add(level);
         if (_levels.length > _levelCount) _levels.removeAt(0);
@@ -150,6 +161,8 @@ class _ChatComposerState extends State<ChatComposer> {
   Future<void> _stopRecording() async {
     if (!_recording) return;
     final elapsed = _elapsed;
+    // يُلتقط قبل [_endRecordingUi] لأنها تلغي اشتراك السعة وتصفّر الحالة.
+    final loudness = _levelSamples == 0 ? 0.0 : _levelSum / _levelSamples;
     _endRecordingUi();
 
     final path = await _voice.stop();
@@ -162,7 +175,7 @@ class _ChatComposerState extends State<ChatComposer> {
       return;
     }
 
-    widget.onRecorded(path);
+    widget.onRecorded(path, VoiceSignals(duration: elapsed, loudness: loudness));
   }
 
   Future<void> _cancelRecording() async {

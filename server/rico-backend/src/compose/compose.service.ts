@@ -28,6 +28,7 @@ export class ComposeService {
       truncated: dto.truncated,
       history: dto.history || [],
       ...(weather?.notable ? { weather: weather.descriptionAr } : {}),
+      ...(dto.mood && dto.mood !== 'neutral' ? { mood: dto.mood } : {}),
     };
 
     const { content } = await this.llm.complete({
@@ -37,7 +38,10 @@ export class ComposeService {
         { role: 'user', content: JSON.stringify(userPayload) },
       ],
       temperature: 0.3,
-      maxTokens: 260,
+      // A rushed customer gets a hard ceiling, not just a polite request for
+      // brevity: the instruction alone lets the model write four warm lines
+      // to someone standing over a burst pipe.
+      maxTokens: dto.mood === 'urgent' || dto.mood === 'angry' ? 90 : 260,
     });
 
     let parsed: any;

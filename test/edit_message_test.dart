@@ -77,7 +77,7 @@ void main() {
                 controller: controller,
                 onSend: () {},
                 busy: false,
-                onRecorded: (_) {},
+                onRecorded: (_, __) {},
                 onMicUnavailable: () {},
                 editing: editing,
                 onCancelEdit: onCancelEdit ?? () {},

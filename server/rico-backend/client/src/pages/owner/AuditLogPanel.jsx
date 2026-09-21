@@ -7,6 +7,11 @@ const ACTION_LABELS = {
   'staff.create': 'إضافة حساب',
   'staff.update': 'تعديل حساب',
   'vendor.invite': 'دعوة صاحب نشاط',
+  'learning.train': 'جولة تدريب لريكو',
+  'learning.approve': 'اعتماد درس',
+  'learning.reject': 'رفض اقتراح',
+  'learning.retire': 'سحب درس من البرومبت',
+  'learning.gapStatus': 'تغيير حالة سؤال',
 };
 
 function describeDetail(action, detail) {
@@ -20,6 +25,9 @@ function describeDetail(action, detail) {
     return parts.join(' · ');
   }
   if (action === 'vendor.invite') return detail.email || '';
+  if (action === 'learning.train') return `${detail.proposalsCreated ?? 0} اقتراح`;
+  if (action === 'learning.gapStatus') return detail.status === 'ignored' ? 'تجاهُل' : 'رجّعه للطابور';
+  if (action.startsWith('learning.')) return detail.message || '';
   return '';
 }
 

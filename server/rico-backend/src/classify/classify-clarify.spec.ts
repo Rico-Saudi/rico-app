@@ -5,10 +5,14 @@
 // These lock in the clarification path that replaced it.
 import { ClassifyService } from './classify.service';
 import { LlmService } from '../llm/llm.service';
+import { LearningService } from '../learning/learning.service';
 
 describe('classify: a message with no usable intent', () => {
-  const serviceReplying = (content: string) =>
-    new ClassifyService({ complete: async () => ({ content }) } as unknown as LlmService);
+  const serviceReplying = (content: string, learning: Partial<LearningService> = {}) =>
+    new ClassifyService({ complete: async () => ({ content }) } as unknown as LlmService, {
+      record: async () => {},
+      ...learning,
+    } as unknown as LearningService);
 
   it('asks for clarification instead of failing when every intent is invalid', async () => {
     // category "مطعم فخم" is not in CATEGORIES, so validateIntent drops it.
@@ -53,6 +57,45 @@ describe('classify: a message with no usable intent', () => {
     expect(result.offTopic).toBe(false);
     expect(result.intents).toHaveLength(1);
     expect(result.intents[0]).toMatchObject({ kind: 'place', category: 'pharmacy' });
+  });
+
+  // ── what the owner dashboard is fed ──────────────────────────────────────
+
+  it('records the question so it can be taught later', async () => {
+    const recorded: any[] = [];
+    const service = serviceReplying(JSON.stringify({ offTopic: false, reply: null, intents: [] }), {
+      record: async (entry: any) => void recorded.push(entry),
+    });
+
+    await service.classify({ message: 'بدي حدا يصلّح لي البويلر', brand: 'tadallal' } as any);
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ message: 'بدي حدا يصلّح لي البويلر', brand: 'tadallal', dialect: 'jordanian' });
+    expect(recorded[0].ricoReply).toBeTruthy();
+  });
+
+  it('records nothing when the model itself called the message off-topic', async () => {
+    // Greetings, thanks and "how do you work?" are off-topic and answered
+    // well. Logging them would bury the real gaps under small talk.
+    const recorded: any[] = [];
+    const service = serviceReplying(JSON.stringify({ offTopic: true, reply: 'هلا والله', intents: [] }), {
+      record: async (entry: any) => void recorded.push(entry),
+    });
+
+    await service.classify({ message: 'هلا كيفك', brand: 'tadallal' } as any);
+    expect(recorded).toEqual([]);
+  });
+
+  it('answers the customer even when recording the gap fails', async () => {
+    // The write is a side effect of someone waiting on a reply — a dead
+    // Mongo must not turn a working answer into an error.
+    const service = serviceReplying(JSON.stringify({ offTopic: false, reply: null, intents: [] }), {
+      record: async () => {
+        throw new Error('mongo is down');
+      },
+    });
+
+    await expect(service.classify({ message: 'x' } as any)).resolves.toMatchObject({ offTopic: true });
   });
 
   it('still errors on output that is not JSON at all — that is a real failure', async () => {

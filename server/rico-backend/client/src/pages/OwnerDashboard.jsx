@@ -9,6 +9,7 @@ import VendorsPanel from './owner/VendorsPanel';
 import VendorDetail from './owner/VendorDetail';
 import SourcingPanel from './owner/SourcingPanel';
 import ProfessionsPanel from './owner/ProfessionsPanel';
+import LearningPanel from './owner/LearningPanel';
 import StaffPanel from './owner/StaffPanel';
 import AuditLogPanel from './owner/AuditLogPanel';
 
@@ -20,6 +21,7 @@ const BASE_TABS = [
   { id: 'vendors', label: 'أصحاب الأنشطة' },
   { id: 'sourcing', label: 'إضافة بيانات' },
   { id: 'professions', label: 'المهن' },
+  { id: 'learning', label: 'تعليم ريكو' },
   { id: 'auditLog', label: 'سجل النشاطات' },
 ];
 const OWNER_ONLY_TAB = { id: 'staff', label: 'الفريق' };
@@ -137,6 +139,7 @@ export default function OwnerDashboard() {
         )}
         {nav.tab === 'sourcing' && <SourcingPanel authedFetch={authedFetch} />}
         {nav.tab === 'professions' && <ProfessionsPanel authedFetch={authedFetch} />}
+        {nav.tab === 'learning' && <LearningPanel authedFetch={authedFetch} />}
         {nav.tab === 'auditLog' && <AuditLogPanel authedFetch={authedFetch} />}
         {nav.tab === 'staff' && me.platformRole === 'owner' && <StaffPanel authedFetch={authedFetch} currentOwnerId={me.id} />}
       </main>

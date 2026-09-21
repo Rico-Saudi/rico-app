@@ -13,6 +13,7 @@
  */
 import { ClassifyService } from '../src/classify/classify.service';
 import { LlmService } from '../src/llm/llm.service';
+import { LearningService } from '../src/learning/learning.service';
 
 export interface Expected {
   kind: 'place' | 'deals' | 'professional';
@@ -70,6 +71,13 @@ export const CASES: Case[] = [
   // --- deals ------------------------------------------------------------
   { message: 'فيه خصومات قريبة؟', expect: [{ kind: 'deals' }], note: 'deals, no place category' },
 
+  // --- a customer who says how they feel instead of naming a category ---
+  { message: 'أنا جوعان', expect: [{ kind: 'place', category: 'restaurant' }], note: 'a bodily need with one obvious category IS a search' },
+  { message: 'عطشان', expect: [{ kind: 'place', category: 'cafe' }], note: 'thirsty → cafe, with no category word in the message' },
+  { message: 'أنا زعلان', expect: [], note: 'a feeling has no single category — empathy and options, never a guess' },
+  { message: 'رهقان كتير اليوم', brand: 'tadallal', expect: [], note: 'Jordanian "exhausted" — must not collapse into a cafe search' },
+  { message: 'أنا مريض', expect: [], note: 'pharmacy vs clinic vs hospital is not ours to guess for someone unwell' },
+
   // --- off-topic: the regression that started the keyword guard ---------
   { message: 'هلا', expect: [], note: 'a greeting must NOT become a restaurant search' },
   { message: 'شكراً يا ريكو', expect: [], note: 'thanks is not a search' },
@@ -107,7 +115,10 @@ export function scoreCase(intents: any[], expected: Expected[]): boolean {
 
 async function runModel(model: string | null): Promise<void> {
   if (model) process.env.OPENROUTER_CLASSIFY_MODELS = model;
-  const service = new ClassifyService(new LlmService());
+  // A no-op recorder rather than the real one: an eval run asks dozens of
+  // deliberately hard questions, and every miss would land in the owner's
+  // "what Rico didn't understand" queue as if a customer had asked it.
+  const service = new ClassifyService(new LlmService(), { record: async () => {} } as unknown as LearningService);
 
   let passed = 0;
   let totalMs = 0;

@@ -15,6 +15,7 @@ import { WeatherModule } from './weather/weather.module';
 import { ScrapingModule } from './scraping/scraping.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { ClassifyModule } from './classify/classify.module';
+import { LearningModule } from './learning/learning.module';
 import { ComposeModule } from './compose/compose.module';
 import { TranscribeModule } from './transcribe/transcribe.module';
 import { AccountsModule } from './accounts/accounts.module';
@@ -70,6 +71,7 @@ import { SpaModule } from './spa/spa.module';
     ScrapingModule,
     InstagramModule,
     ClassifyModule,
+    LearningModule,
     ComposeModule,
     TranscribeModule,
     MailerModule,

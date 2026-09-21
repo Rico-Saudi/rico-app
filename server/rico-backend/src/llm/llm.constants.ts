@@ -7,7 +7,11 @@
 /// existed, so deploying this changes nothing until LLM_PROVIDER is set. A
 /// provider swap is a config change, not a release.
 
-export type LlmPurpose = 'classify' | 'compose';
+/// 'training' is the nightly pass over the questions Rico failed to answer
+/// (see learning/training.service). It reasons about the same taxonomy the
+/// classifier does, so it rides the classifier's model chain rather than
+/// naming its own — one fewer env var to keep in step.
+export type LlmPurpose = 'classify' | 'compose' | 'training';
 
 export type ProviderName = 'groq' | 'openrouter';
 
@@ -49,9 +53,9 @@ export function providerFor(purpose: LlmPurpose): ProviderConfig {
 
   if (provider === 'openrouter') {
     const perPurpose =
-      purpose === 'classify'
-        ? parseModelList(process.env.OPENROUTER_CLASSIFY_MODELS)
-        : parseModelList(process.env.OPENROUTER_COMPOSE_MODELS);
+      purpose === 'compose'
+        ? parseModelList(process.env.OPENROUTER_COMPOSE_MODELS)
+        : parseModelList(process.env.OPENROUTER_CLASSIFY_MODELS);
     const models = perPurpose.length > 0 ? perPurpose : parseModelList(process.env.OPENROUTER_MODEL);
 
     return {

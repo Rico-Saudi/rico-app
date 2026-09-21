@@ -51,6 +51,8 @@ describe('classify eval scoring', () => {
     const messages = CASES.map((c) => c.message);
     expect(messages).toContain('هلا'); // greeting became a restaurant search
     expect(messages).toContain('أبغى دهان'); // painter vs paint shop
+    expect(messages).toContain('أنا زعلان'); // a feeling guessed into a category
+    expect(messages).toContain('عطشان'); // a bodily need read as small talk
     expect(CASES.filter((c) => c.expect.length > 1).length).toBeGreaterThan(0); // multi-intent
     expect(CASES.filter((c) => c.brand === 'tadallal').length).toBeGreaterThan(0); // Jordanian
   });

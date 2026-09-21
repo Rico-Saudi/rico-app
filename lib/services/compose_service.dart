@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../brand.dart';
+import '../models/customer_mood.dart';
 
 /// يولّد رد ريكو الطبيعي (لهجة سعودية — تُفرضها تعليمات الخادم لا العميل)
 /// بالاعتماد على نتائج بحث فعلية تم
@@ -23,6 +24,7 @@ class ComposeService {
     List<Map<String, String>>? history,
     double? lat,
     double? lng,
+    CustomerMood mood = CustomerMood.neutral,
   }) async {
     try {
       final response = await http
@@ -41,6 +43,9 @@ class ComposeService {
               // موقع المستخدم — يستخدمه الخادم ليعرف حالة الجو ويذكرها في
               // الرد إذا كانت تستاهل الذكر. اختياري: بدونه يُصاغ الرد كما كان.
               if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
+              // «عادي» هو سلوك الخادم الافتراضي أصلاً، فما نبعثه — أقل حقل
+              // بالحمولة وأقل تعليمة يقرأها النموذج بلا داعي.
+              if (mood != CustomerMood.neutral) 'mood': mood.wireValue,
             }),
           )
           .timeout(const Duration(seconds: 5));

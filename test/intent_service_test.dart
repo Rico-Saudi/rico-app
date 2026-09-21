@@ -340,4 +340,55 @@ void main() {
     });
   });
 
+  group('الحالات والمشاعر', () {
+    // المستخدم غالباً يقول حالته بدل ما يسمّي فئة. الحالة الجسدية الواضحة
+    // لها فئة وحدة فتروح بحثاً، والشعور ما له فئة وحدة فيُعرض عليه خيارات.
+    test('حاجة جسدية واضحة تصير بحثاً مباشراً', () {
+      expect(IntentService.parseMulti('أنا جوعان').first.slug, 'restaurant');
+      expect(IntentService.parseMulti('جعان موت').first.slug, 'restaurant');
+      expect(IntentService.parseMulti('عطشان').first.slug, 'cafe');
+      expect(route('أنا جوعان'), 'search');
+      expect(route('عطشان'), 'search');
+    });
+
+    test('الشعور يرد عليه بتعاطف وخيارات، لا ببحث مخمّن', () {
+      for (final text in ['انا زعلان', 'انا رهقان', 'متوتر من الشغل', 'مبسوط اليوم']) {
+        expect(route(text), 'chat', reason: text);
+      }
+
+      final sad = IntentService.detectOffTopicReply('انا زعلان')!;
+      // ثلاثة خيارات كل واحد بسطر، وسطر أخير يدعوه يطلب من ريكو.
+      expect(sad.split('\n').length, greaterThanOrEqualTo(4));
+      expect(sad.contains('كافيه'), isTrue);
+      expect(sad.trimRight().endsWith('👌'), isTrue);
+
+      final tired = IntentService.detectOffTopicReply('انا رهقان')!;
+      expect(tired.contains('العافية'), isTrue);
+    });
+
+    test('"مريض" ما تُخمَّن صيدلية ولا عيادة — تُعرض الخيارات', () {
+      final reply = IntentService.detectOffTopicReply('أنا مريض')!;
+      expect(reply.contains('صيدلية'), isTrue);
+      expect(reply.contains('عيادة'), isTrue);
+      expect(reply.contains('دكتور'), isTrue);
+    });
+
+    test('الضيق الشديد لا يُجاب بقائمة كافيهات', () {
+      // "مليت من حياتي" تطابق "مليت" في نمط المزاج الغامض، فلولا أسبقية
+      // نمط الضيق لرد عليها ريكو بـ«تبي: 🍔 مطاعم ☕ كافيهات».
+      for (final text in ['مليت من حياتي', 'تعبت من حياتي', 'أبي أموت']) {
+        final reply = IntentService.detectOffTopicReply(text)!;
+        expect(reply.contains('دكتور'), isTrue, reason: text);
+        expect(reply.contains('🍔'), isFalse, reason: text);
+        expect(reply.contains('مطاعم'), isFalse, reason: text);
+      }
+    });
+
+    test('الملل يظل على قائمته العامة', () {
+      final reply = IntentService.detectOffTopicReply('طفشان')!;
+      expect(reply.contains('مطاعم'), isTrue);
+      expect(reply.contains('كافيهات'), isTrue);
+    });
+  });
+
 }

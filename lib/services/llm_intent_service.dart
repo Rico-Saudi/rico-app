@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../brand.dart';
+import '../models/customer_mood.dart';
+import '../models/voice_signals.dart';
 import 'intent_service.dart';
 
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
@@ -108,10 +110,15 @@ class LlmClassification {
   final String? reply;
   final List<ResolvedIntent> intents;
 
+  /// حالة العميل كما قرأها المصنّف — تغيّر شكل الرد لا محتوى البحث.
+  /// انظر [CustomerMood].
+  final CustomerMood mood;
+
   LlmClassification({
     required this.isOffTopic,
     this.reply,
     this.intents = const [],
+    this.mood = CustomerMood.neutral,
   });
 
   List<QueryIntent> toQueryIntents() =>
@@ -139,12 +146,16 @@ class LlmIntentService {
     String message, {
     List<Map<String, String>>? history,
     Map<String, dynamic>? lastResults,
+    VoiceSignals? voice,
   }) async {
     final body = jsonEncode({
       'message': message,
       'brand': Brand.slug,
       if (history != null && history.isNotEmpty) 'history': history,
       if (lastResults != null) 'lastResults': lastResults,
+      // تُبعث للرسائل الصوتية وحدها — رسالة مكتوبة ما لها نبرة نقيسها،
+      // وبعث قياسات فاضية يخلّي المصنّف يتخيّل ما لم نعطه.
+      if (voice != null) 'voice': voice.toJson(),
     });
 
     for (final timeout in _attemptTimeouts) {
@@ -176,8 +187,10 @@ class LlmIntentService {
 
     final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
+    final mood = CustomerMood.fromString(data['mood'] as String?);
+
     if (data['offTopic'] == true) {
-      return LlmClassification(isOffTopic: true, reply: data['reply'] as String?);
+      return LlmClassification(isOffTopic: true, reply: data['reply'] as String?, mood: mood);
     }
 
     final rawIntents = (data['intents'] as List?) ?? [];
@@ -210,7 +223,7 @@ class LlmIntentService {
       );
     }).toList();
 
-    return LlmClassification(isOffTopic: false, intents: intents);
+    return LlmClassification(isOffTopic: false, intents: intents, mood: mood);
   }
 }
 

@@ -3,9 +3,10 @@ import cors from 'cors';
 import { ClassifyService } from './classify.service';
 import { ClassifyController } from './classify.controller';
 import { LlmModule } from '../llm/llm.module';
+import { LearningModule } from '../learning/learning.module';
 
 @Module({
-  imports: [LlmModule],
+  imports: [LlmModule, LearningModule],
   controllers: [ClassifyController],
   providers: [ClassifyService],
 })

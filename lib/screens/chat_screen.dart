@@ -25,6 +25,8 @@ import '../services/professionals_service.dart';
 import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
+import '../models/customer_mood.dart';
+import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
 import '../services/weather_service.dart';
@@ -83,6 +85,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// هل نزل المستخدم عن أعلى المحادثة؟ يفعّل ظل الترويسة فقط عند الحاجة.
   bool _headerElevated = false;
+
+  /// قياسات آخر تسجيل صوتي، تنتظر إرسالها مع نص التحويل — تُستهلك مرة
+  /// وحدة وتُصفّر، عشان رسالة مكتوبة بعدها ما ترث نبرة تسجيل قديم.
+  VoiceSignals? _pendingVoice;
+
+  /// حالة العميل بالرسالة الجاري الرد عليها — تُقرأ من رد المصنّف وتُمرّر
+  /// لكل من يصوغ أو يعرض الرد. تُصفّر لـ[CustomerMood.neutral] مع كل رسالة
+  /// جديدة: المزاج صفة الرسالة، لا صفة ثابتة بالمستخدم.
+  CustomerMood _mood = CustomerMood.neutral;
 
   /// رسالة المستخدم الجاري تعديلها — نمسك الكائن نفسه لا موضعه، لأن الموضع
   /// يصير قديماً لو أُضيفت فقاعات وشريط التعديل مفتوح.
@@ -434,6 +445,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           intentKind: 'deals',
           intentLabel: intent.label,
           rank: 'nearest',
+          mood: _mood,
           items: deals
               .map((d) => {
                     'name': d.placeName,
@@ -443,8 +455,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               .toList(),
           truncated: false,
           history: _buildHistory(),
-          lat: origin.lat,
-          lng: origin.lng,
+          lat: _mood.allowsWeatherLine ? origin.lat : null,
+          lng: _mood.allowsWeatherLine ? origin.lng : null,
         );
         return ChatMessage(
           text: composedReply ?? 'هذي أقرب العروض المتوفرة لك:',
@@ -499,12 +511,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         RankMode.nearest => 'nearest',
       };
 
+      // المستعجل يشوف وحدة والمتردد يشوف أكثر — نفس البحث ونفس النتائج،
+      // بس عرضٌ يناسب وقت صاحبه. انظر [CustomerMood.placeLimit].
+      final limit = _mood.placeLimit;
+      final shown = limit == null ? places : places.take(limit).toList();
+
       final composedReply = await ComposeService.composeReply(
         message: text,
         intentKind: 'place',
         intentLabel: intent.label,
         rank: rankStr,
-        items: places
+        mood: _mood,
+        items: shown
             .take(5)
             .map((p) => {
                   'name': p.name,
@@ -515,10 +533,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   if (p.isOpenNow != null) 'openNow': p.isOpenNow,
                 })
             .toList(),
-        truncated: places.length > 5,
+        truncated: places.length > shown.length || shown.length > 5,
         history: _buildHistory(),
-        lat: origin.lat,
-        lng: origin.lng,
+        // بلا موقع = بلا سطر جو. نمنعه من المصدر بدل ما نعتمد على التزام
+        // النموذج بتعليمة «لا تذكر الجو» وهو مستعجل.
+        lat: _mood.allowsWeatherLine ? origin.lat : null,
+        lng: _mood.allowsWeatherLine ? origin.lng : null,
       );
 
       // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
@@ -559,10 +579,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return ChatMessage(
         text: introText,
         sender: MessageSender.bot,
-        places: places,
+        places: shown,
         understandingIntent: intent,
         onOrder: _openCatalog,
-        onQuickReply: _sendQuickReply,
+        onQuickReply: _mood.showsQuickReplyChips ? _sendQuickReply : null,
       );
     } on PlacesException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
@@ -602,35 +622,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         );
       }
 
+      // الحالة اللي هالميزة موجودة عشانها: واحد فوق تسريب مياه ما يتصفّح
+      // قائمة — نحط الأقرب جاهزاً للتأكيد، فيصير بينه وبين اتصال فعلي ضغطة
+      // وحدة. القائمة كاملة تبقى داخل التدفّق فزر الرجوع يشتغل عادي.
+      final rushed = _mood.wantsItShort;
+
       final composedReply = await ComposeService.composeReply(
         message: text,
         intentKind: 'professional',
         intentLabel: intent.label,
         rank: 'nearest',
+        mood: _mood,
         items: professionals
-            .take(5)
+            .take(rushed ? 1 : 5)
             .map((p) => {
                   'name': p.name,
                   'professionLabel': p.professionLabel,
                   'distanceMeters': p.distanceMeters,
                 })
             .toList(),
-        truncated: professionals.length > 5,
+        truncated: professionals.length > (rushed ? 1 : 5),
         history: _buildHistory(),
-        lat: origin.lat,
-        lng: origin.lng,
+        lat: _mood.allowsWeatherLine ? origin.lat : null,
+        lng: _mood.allowsWeatherLine ? origin.lng : null,
       );
 
       return ChatMessage(
         text: composedReply ?? 'هذي أقرب ${intent.label} لك:',
         sender: MessageSender.bot,
         understandingIntent: intent,
-        professionalFlow: ProfessionalFlow(professionals: professionals),
+        professionalFlow: ProfessionalFlow(
+          professionals: professionals,
+          stage: rushed ? ProfessionalFlowStage.confirming : ProfessionalFlowStage.browsing,
+          selected: rushed ? professionals.first : null,
+        ),
         onSelectProfessional: (professional) => _selectProfessional(index, professional),
         onConfirmProfessionalRequest: (note) => _confirmProfessionalRequest(index, note, origin),
         onProfessionalRequestLogin: () => _signInThenSendProfessionalRequest(index, origin),
         onCancelProfessionalSelection: () => _cancelProfessionalSelection(index),
-        onQuickReply: _sendQuickReply,
+        onQuickReply: _mood.showsQuickReplyChips ? _sendQuickReply : null,
       );
     } on ProfessionalsException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
@@ -794,10 +824,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // القياسات تُستهلك هنا لا في [_handleRecorded]: بين التحويل والإرسال
+    // يقدر المستخدم يعدّل النص أو يكتب غيره، فالنبرة تتبع الرسالة اللي
+    // انبعثت فعلاً، ورسالة مكتوبة بعدها تنطلق بلا نبرة.
+    final voice = _pendingVoice;
+    _pendingVoice = null;
+
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
       _sending = true;
+      _mood = CustomerMood.neutral;
     });
     _controller.clear();
     _scrollToBottom();
@@ -807,7 +844,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         text,
         history: _buildHistory(),
         lastResults: _buildLastResultsPayload(),
+        voice: voice,
       );
+
+      // يُقرأ قبل أي تفرّع: حتى الرد خارج الموضوع (شكوى مثلاً) يستاهل
+      // يوصل بطول يناسب حالة صاحبه.
+      if (classification != null) _mood = classification.mood;
 
       if (classification != null && classification.isOffTopic) {
         setState(() {
@@ -1022,7 +1064,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// مستخدم الصوت اختار ألا يكتب أصلاً، فإيقافه عند حقل ممتلئ ينتظر ضغطة
   /// يلغي فائدة المايك. النص يظهر في فقاعة المستخدم على كل حال، فإن أخطأ
   /// التحويل يبان الخطأ ويُعاد الطلب بدل ما ينتظر مراجعة قبل كل إرسال.
-  Future<void> _handleRecorded(String filePath) async {
+  Future<void> _handleRecorded(String filePath, VoiceSignals signals) async {
     if (_transcribing || _sending) return;
     setState(() => _transcribing = true);
 
@@ -1039,6 +1081,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         case TranscriptionStatus.ok:
           _controller.text = result.text;
           _controller.selection = TextSelection.collapsed(offset: result.text.length);
+          // سرعة الكلام ما تنحسب إلا الحين: عدد الكلمات ما نعرفه قبل التحويل.
+          _pendingVoice = signals.withTranscript(result.text);
           transcribed = true;
         case TranscriptionStatus.noSpeech:
           _showBotNote('ما سمعتك زين 🎙 قرّب الجوال شوي وجرّب مرة ثانية.');
