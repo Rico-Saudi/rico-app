@@ -92,16 +92,43 @@ export interface MatchResult<T extends Candidate> {
   score: number;
 }
 
-/** Best candidate above the threshold, or null when nothing is close enough. */
-export function bestMatch<T extends Candidate>(
-  query: string,
-  candidates: T[],
-  threshold = 0.6,
-): MatchResult<T> | null {
+/** Score at or above which a request IS the catalogue row, no question asked. */
+export const MATCH_THRESHOLD = 0.6;
+
+/**
+ * Score below MATCH_THRESHOLD but worth offering as "did you mean ...?".
+ *
+ * The band is wide enough to catch a real near-miss and narrow enough to stay
+ * quiet on a genuine absence. Measured against a five-row menu: a customer
+ * saying "بودنغ أرز" scores 0.5 on "أرز بحليب", while an item the shop truly
+ * has nothing like lands at 0.13 and below. Suggesting the closest row at 0.13
+ * would be noise — the point of the floor is that silence beats a bad guess.
+ */
+export const SUGGESTION_THRESHOLD = 0.35;
+
+/**
+ * Closest candidate however weak the match — the caller decides what to do
+ * with a weak one.
+ *
+ * Split out from [bestMatch] because throwing the score away is what forced
+ * "ما لقيت X" on a request the catalogue almost answered: the work of finding
+ * the nearest row was already done, and only the threshold check discarded it.
+ */
+export function closestMatch<T extends Candidate>(query: string, candidates: T[]): MatchResult<T> | null {
   let best: MatchResult<T> | null = null;
   for (const item of candidates) {
     const score = similarity(query, item.name);
     if (score > (best?.score ?? 0)) best = { item, score };
   }
-  return best && best.score >= threshold ? best : null;
+  return best;
+}
+
+/** Best candidate above the threshold, or null when nothing is close enough. */
+export function bestMatch<T extends Candidate>(
+  query: string,
+  candidates: T[],
+  threshold = MATCH_THRESHOLD,
+): MatchResult<T> | null {
+  const closest = closestMatch(query, candidates);
+  return closest && closest.score >= threshold ? closest : null;
 }

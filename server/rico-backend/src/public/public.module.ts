@@ -8,6 +8,7 @@ import { DealsModule } from '../deals/deals.module';
 import { ProductsModule } from '../products/products.module';
 import { VendorImpression, VendorImpressionSchema } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapSchema } from './schemas/search-gap.schema';
+import { CatalogGap, CatalogGapSchema } from './schemas/catalog-gap.schema';
 import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-limiters';
 
 @Module({
@@ -18,6 +19,7 @@ import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-
     MongooseModule.forFeature([
       { name: VendorImpression.name, schema: VendorImpressionSchema },
       { name: SearchGap.name, schema: SearchGapSchema },
+      { name: CatalogGap.name, schema: CatalogGapSchema },
     ]),
   ],
   controllers: [PublicController],

@@ -25,6 +25,13 @@ class ChatComposer extends StatefulWidget {
   /// رُفض إذن المايكروفون (أو تعذّر تشغيله) — الشاشة تتكفّل برسالة المستخدم.
   final VoidCallback onMicUnavailable;
 
+  /// الحقل يحمل الآن نص رسالة سابقة يعاد كتابتها — يظهر شريط تعريفي فوقه
+  /// عشان المستخدم ما يظن إنه يكتب رسالة جديدة.
+  final bool editing;
+
+  /// تراجع عن التعديل — يرجّع الحقل فاضياً وما يمسّ المحادثة.
+  final VoidCallback onCancelEdit;
+
   const ChatComposer({
     super.key,
     required this.controller,
@@ -32,6 +39,8 @@ class ChatComposer extends StatefulWidget {
     required this.busy,
     required this.onRecorded,
     required this.onMicUnavailable,
+    this.editing = false,
+    required this.onCancelEdit,
     this.suggestions,
   });
 
@@ -60,6 +69,17 @@ class _ChatComposerState extends State<ChatComposer> {
     super.initState();
     _hasText = widget.controller.text.trim().isNotEmpty;
     widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // فتح التعديل يفتح لوحة المفاتيح مباشرة: المستخدم ضغط «تعديل» عشان
+    // يكتب، فتركه يضغط الحقل ضغطة ثانية عمل زايد بلا سبب.
+    if (widget.editing && !oldWidget.editing) {
+      if (_recording) unawaited(_cancelRecording());
+      _focusNode.requestFocus();
+    }
   }
 
   @override
@@ -181,6 +201,7 @@ class _ChatComposerState extends State<ChatComposer> {
                 curve: Curves.easeOut,
                 child: _hasText || _recording ? const SizedBox(width: double.infinity) : suggestions,
               ),
+            if (widget.editing) _EditingBanner(onCancel: widget.onCancelEdit),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Row(
@@ -219,7 +240,7 @@ class _ChatComposerState extends State<ChatComposer> {
                               onSubmitted: (_) => _canSend ? widget.onSend() : null,
                               decoration: InputDecoration(
                                 isDense: true,
-                                hintText: 'اكتب طلبك… مثل «أقرب مطعم»',
+                                hintText: widget.editing ? 'عدّل رسالتك…' : 'اكتب طلبك… مثل «أقرب مطعم»',
                                 hintStyle: RicoText.body.copyWith(color: RicoColors.inkFaint),
                                 filled: false,
                                 border: InputBorder.none,
@@ -241,7 +262,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       onTap: _stopRecording,
                       filled: true,
                     )
-                  else if (_hasText || widget.busy)
+                  else if (_hasText || widget.busy || widget.editing)
                     _SendButton(enabled: _canSend, busy: widget.busy, onTap: widget.onSend)
                   else
                     _CircleButton(
@@ -255,6 +276,45 @@ class _ChatComposerState extends State<ChatComposer> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// شريط «تعديل رسالتك» فوق حقل الكتابة — يقول صراحةً إن الإرسال سيمسح الرد
+/// القديم، لأن الحذف يصير عند الإرسال لا عند فتح التعديل، والمستخدم يستحق
+/// يعرف قبل ما يضغط.
+class _EditingBanner extends StatelessWidget {
+  final VoidCallback onCancel;
+
+  const _EditingBanner({required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsetsDirectional.only(start: 16, end: 6, top: 6, bottom: 2),
+      child: Row(
+        children: [
+          const Icon(Icons.edit_rounded, size: 15, color: RicoColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'تعديل رسالتك — الرد القديم بينحذف',
+              style: RicoText.label.copyWith(color: RicoColors.inkMuted),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'إلغاء التعديل',
+            child: IconButton(
+              onPressed: onCancel,
+              icon: const Icon(Icons.close_rounded, size: 18, color: RicoColors.inkMuted),
+              splashRadius: 18,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ],
       ),
     );
   }

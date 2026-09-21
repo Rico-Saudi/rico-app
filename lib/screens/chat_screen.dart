@@ -6,6 +6,7 @@ import '../models/cart.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
+import '../models/place_section.dart';
 import '../models/professional.dart';
 import '../models/professional_flow.dart';
 import '../models/weather_info.dart';
@@ -82,6 +83,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// هل نزل المستخدم عن أعلى المحادثة؟ يفعّل ظل الترويسة فقط عند الحاجة.
   bool _headerElevated = false;
+
+  /// رسالة المستخدم الجاري تعديلها — نمسك الكائن نفسه لا موضعه، لأن الموضع
+  /// يصير قديماً لو أُضيفت فقاعات وشريط التعديل مفتوح.
+  ///
+  /// التعديل لا يمسّ المحادثة إلا لحظة الإرسال: قبلها الرسالة القديمة وردها
+  /// باقيان كما هما، فضغطة «تعديل» بالغلط ما تخسّر المستخدم شيئاً.
+  ChatMessage? _editingMessage;
 
   @override
   void initState() {
@@ -305,6 +313,98 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// تأكيد)، فلازم تعرف موضعها. لا يصح استنتاجه من [_messages.length] وقت
   /// الحل: الفقاعة موجودة أصلاً في القائمة، وقد تكون معها فقاعات نوايا أخرى
   /// من نفس الرسالة تُحل بالتوازي.
+  /// نية واحدة → رسالتها، مع مسار "الإشارة لنتيجة سابقة" قبل البحث الشبكي.
+  ///
+  /// إشارة لعنصر محدد من آخر نتائج (مثل "الثاني") تُحل من الذاكرة المحلية
+  /// أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت القائمة) نسقط
+  /// تلقائياً لمسار البحث العادي.
+  Future<ChatMessage> _resolveOne(
+    String text,
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    bool usedFallback,
+    int index,
+  ) async {
+    final referencedPosition = intent.referencedPosition;
+    if (referencedPosition != null) {
+      final message = await _resolveReferencedMessage(text, intent, referencedPosition, origin);
+      if (message != null) return message;
+    }
+    return _resolveIntentMessage(text, intent, origin, usedFallback, index);
+  }
+
+  /// يسقط النوايا المكررة حرفياً من رسالة واحدة.
+  ///
+  /// المصنّف أحياناً يرجّع نفس الطلب مرتين لما يتكرر بالجملة ("أبي مطعم
+  /// وأبي مطعم") — تنفيذها مرتين بحثان مدفوعان لنفس الجواب بالضبط. أما
+  /// اختلاف المعيار (أقرب/أرخص) فليس تكراراً: هو طلبان فعلاً، ولكل واحد
+  /// جوابه.
+  static List<QueryIntent> _dedupeIntents(List<QueryIntent> intents) {
+    final seen = <String>{};
+    return [
+      for (final i in intents)
+        if (seen.add([
+          i.kind.name,
+          i.slug ?? '',
+          i.label,
+          i.rank.name,
+          i.brandHint ?? '',
+          i.profession ?? '',
+          i.placeName ?? '',
+          i.referencedPosition?.toString() ?? '',
+        ].join('|')))
+          i,
+    ];
+  }
+
+  /// يدمج ردود عدة نوايا أماكن بفقاعة واحدة ذات مقاطع مسمّاة.
+  ///
+  /// كل نية تبقى ببحثها الخاص عمداً: الخادم يرجّع **صفوفاً مختلفة** لا
+  /// ترتيباً مختلفاً — "الأقرب" استعلام ‎$near بحد ٨، و"الأرخص" استعلام
+  /// ‎$geoWithin على النطاق كله ثم فرز بالسعر — فإعادة فرز نتيجة "الأقرب"
+  /// محلياً تعطي "أرخص الثمانية الأقرب"، وهذا جواب ثانٍ غير اللي انطلب.
+  ChatMessage _mergePlaceMessages(List<QueryIntent> intents, List<ChatMessage> messages) {
+    final sections = <PlaceSection>[];
+    for (var i = 0; i < intents.length; i++) {
+      final places = messages[i].places ?? const <PlaceResult>[];
+      sections.add(PlaceSection(
+        intent: intents[i],
+        places: places,
+        emptyNote: places.isEmpty ? messages[i].text : null,
+      ));
+    }
+
+    // القائمة المسطّحة بلا تكرار: عليها تعتمد الإشارة لنتيجة سابقة
+    // ("الثاني")، ونفس المحل قد يطلع بمقطعين (الأقرب والأرخص معاً).
+    final flat = <PlaceResult>[];
+    final seen = <String>{};
+    for (final section in sections) {
+      for (final place in section.places) {
+        if (seen.add(place.osmId)) flat.add(place);
+      }
+    }
+
+    final withResults = sections.where((s) => !s.isEmpty).length;
+    final lead = withResults == 0
+        ? 'ما لقيت لك ولا وحدة منها قريبة الحين 😕'
+        : withResults == sections.length
+            ? 'لقيت لك اللي طلبته 👌'
+            : 'لقيت لك جزء من طلبك 👌';
+
+    final withOrder = messages.firstWhere((m) => m.onOrder != null, orElse: () => messages.first);
+    final withQuickReply = messages.firstWhere((m) => m.onQuickReply != null, orElse: () => messages.first);
+
+    return ChatMessage(
+      text: lead,
+      sender: MessageSender.bot,
+      places: flat.isEmpty ? null : flat,
+      placeSections: sections,
+      understandingIntent: intents.first,
+      onOrder: withOrder.onOrder,
+      onQuickReply: withQuickReply.onQuickReply,
+    );
+  }
+
   Future<ChatMessage> _resolveIntentMessage(
     String text,
     QueryIntent intent,
@@ -652,9 +752,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => _messages[index] = _messages[index].copyWith(professionalFlow: update(flow)));
   }
 
+  /// يفتح تعديل رسالة مستخدم سابقة: نصها ينزل في حقل الكتابة ويظهر شريط
+  /// «تعديل رسالتك» فوقه. الحذف الفعلي مؤجّل للإرسال (انظر [_handleSend]).
+  void _beginEditMessage(ChatMessage message) {
+    if (_sending || _transcribing) return;
+    setState(() => _editingMessage = message);
+    _controller.text = message.text;
+    _controller.selection = TextSelection.collapsed(offset: message.text.length);
+  }
+
+  /// يتراجع عن التعديل ويرجّع الحقل فاضياً — المحادثة أصلاً ما تغيّرت.
+  void _cancelEditMessage() {
+    if (_editingMessage == null) return;
+    setState(() => _editingMessage = null);
+    _controller.clear();
+  }
+
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
+
+    // تعديل رسالة سابقة: نرمي الرسالة القديمة وكل ما تفرّع عنها، ثم نكمل
+    // بالمسار الطبيعي — فالنص المعدّل يمر بنفس التصنيف والبحث ويدخل نفس
+    // سياق [_buildHistory]، بدل ترقيع الرد القديم مكانه. الرد الملغى هو
+    // جواب سؤال ما عاد موجوداً، وتركه يخلّي ريكو يناقض نفسه بنفس الشاشة.
+    final editing = _editingMessage;
+    if (editing != null) {
+      final index = _messages.indexOf(editing);
+      setState(() {
+        _editingMessage = null;
+        if (index != -1) _messages.removeRange(index, _messages.length);
+      });
+    }
 
     // سؤال عن الجو يُجاب من القراءة المحفوظة مباشرة: بلا تصنيف ولا بحث ولا
     // انتظار خادم. كان ريكو يرد عليه بـ«ما أقدر أساعدك في هذي» وهو يعرف
@@ -713,24 +842,60 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         intents = IntentService.parseMulti(text, lastCategorySlug: lastCategorySlug);
       }
 
+      // لا مصنّف LLM ولا مطابقة محلية ولا نمط دردشة معروف: ما فهمنا الرسالة.
+      // كان [IntentService.parse] يرجع "مطعم" كافتراضي صامت بهذي الحالة، فأي
+      // سؤال غير مفهوم يُجاب ببحث عن مطاعم قريبة. طلب التوضيح أصدق.
+      if (intents.isEmpty) {
+        setState(() {
+          _messages.removeLast(); // إزالة رسالة "ريكو يدوّر لك الحين…"
+          _messages.add(ChatMessage(text: IntentService.clarifyReply(text), sender: MessageSender.bot));
+        });
+        return;
+      }
+
       final origin = await _resolveOrigin(text);
 
-      // نستبدل رسالة "يبحث..." الواحدة بفقاعة تحميل واحدة لكل نية مستقلة،
-      // بنفس ترتيب النوايا، ثم نملأ كل واحدة بمجرد جاهزيتها (بالتوازي، دون
-      // انتظار بعضها البعض) — هذا ما يجعل الرد على رسالة مركّبة (مثل "أقرب
-      // مطعم أو أرخص كافيه، وايش العروض المتوفرة؟") يظهر كفقاعات منفصلة.
+      intents = _dedupeIntents(intents);
+
+      // خانات العرض: كل خانة = فقاعة واحدة.
+      //
+      // نوايا الأماكن كلها تجتمع بخانة وحدة: المستخدم كتبها برسالة وحدة
+      // ("أقرب مطعم وأرخص مطعم") فيردّها رد واحد بمقاطع مسمّاة، بدل فقاعتين
+      // متطابقتي الشكل يصعب ربط كل وحدة بطلبها. وما عداها — العروض وأصحاب
+      // المهن والطلبات — يبقى كل واحد بفقاعته، لأن كل واحد منها تدفّق
+      // تفاعلي قائم بذاته (سلّة، اختيار صاحب مهنة) ما ينضم لغيره.
+      final slots = <List<QueryIntent>>[];
+      List<QueryIntent>? placeSlot;
+      for (final intent in intents) {
+        if (intent.kind == IntentKind.place) {
+          if (placeSlot == null) {
+            placeSlot = [intent];
+            slots.add(placeSlot);
+          } else {
+            placeSlot.add(intent);
+          }
+        } else {
+          slots.add([intent]);
+        }
+      }
+
+      // نستبدل رسالة "يبحث..." الواحدة بفقاعة تحميل واحدة لكل خانة، بنفس
+      // الترتيب، ثم نملأ كل وحدة بمجرد جاهزيتها (بالتوازي، دون انتظار بعضها
+      // البعض).
       final placeholders = [
-        for (final intent in intents)
+        for (final slot in slots)
           ChatMessage(
-            text: switch (intent.kind) {
-              IntentKind.deals => 'أشوف العروض القريبة…',
-              IntentKind.professional => 'أدوّر لك على أقرب ${intent.label}…',
-              IntentKind.place => 'أدوّر على ${intent.label}…',
-              IntentKind.order => 'أجهّز طلبك من ${intent.placeName ?? intent.label}…',
-            },
+            text: slot.length > 1
+                ? 'أدوّر على ${slot.map((i) => i.label).toSet().join(' و')}…'
+                : switch (slot.first.kind) {
+                    IntentKind.deals => 'أشوف العروض القريبة…',
+                    IntentKind.professional => 'أدوّر لك على أقرب ${slot.first.label}…',
+                    IntentKind.place => 'أدوّر على ${slot.first.label}…',
+                    IntentKind.order => 'أجهّز طلبك من ${slot.first.placeName ?? slot.first.label}…',
+                  },
             sender: MessageSender.bot,
             isLoading: true,
-            understandingIntent: intent,
+            understandingIntent: slot.first,
           ),
       ];
 
@@ -742,17 +907,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _scrollToBottom();
 
       final futures = <Future<void>>[];
-      for (var i = 0; i < intents.length; i++) {
+      for (var i = 0; i < slots.length; i++) {
         final index = startIndex + i;
-        final referencedPosition = intents[i].referencedPosition;
-        // إشارة لعنصر محدد من آخر نتائج (مثل "الثاني") تُحل من الذاكرة
-        // المحلية أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت
-        // القائمة) نسقط تلقائياً لمسار البحث العادي.
-        final resolveFuture = referencedPosition != null
-            ? _resolveReferencedMessage(text, intents[i], referencedPosition, origin).then((message) async {
-                return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback, index);
-              })
-            : _resolveIntentMessage(text, intents[i], origin, usedFallback, index);
+        final slot = slots[i];
+        // كل نوايا الخانة تُحلّ بنفس الـindex عمداً: ردود النتيجة (فتح
+        // السلّة مثلاً) تستبدل فقاعتها بمكانها، وفقاعة الخانة واحدة مهما
+        // كان عدد نواياها.
+        final resolveFuture = slot.length > 1
+            ? Future.wait([for (final intent in slot) _resolveOne(text, intent, origin, usedFallback, index)])
+                .then((messages) => _mergePlaceMessages(slot, messages))
+            : _resolveOne(text, slot.first, origin, usedFallback, index);
         futures.add(
           resolveFuture.then((message) {
             if (!mounted) return;
@@ -853,11 +1017,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 
-  /// يحوّل تسجيل المستخدم إلى نص ويحطه في حقل الكتابة — بلا إرسال تلقائي.
+  /// يحوّل تسجيل المستخدم إلى نص ويرسله فوراً — بلا ضغطة إرسال ثانية.
   ///
-  /// النص يظهر للمستخدم قبل الإرسال عن قصد: تحويل الكلام باللهجة يخطئ أحياناً،
-  /// ونظرة سريعة على «أقرب صيدلية» قبل الضغط أرخص بكثير من بحث غلط + نداء
-  /// تصنيف مصروف على طلب ما قاله أصلاً.
+  /// مستخدم الصوت اختار ألا يكتب أصلاً، فإيقافه عند حقل ممتلئ ينتظر ضغطة
+  /// يلغي فائدة المايك. النص يظهر في فقاعة المستخدم على كل حال، فإن أخطأ
+  /// التحويل يبان الخطأ ويُعاد الطلب بدل ما ينتظر مراجعة قبل كل إرسال.
   Future<void> _handleRecorded(String filePath) async {
     if (_transcribing || _sending) return;
     setState(() => _transcribing = true);
@@ -866,6 +1030,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // هالنداء يوصل أول تسجيل لخادم نايم فيدفع زمن الإيقاظ فوق زمن التحويل.
     BackendWarmup.ping();
 
+    var transcribed = false;
     try {
       final result = await _transcribeService.transcribe(filePath);
       if (!mounted) return;
@@ -874,6 +1039,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         case TranscriptionStatus.ok:
           _controller.text = result.text;
           _controller.selection = TextSelection.collapsed(offset: result.text.length);
+          transcribed = true;
         case TranscriptionStatus.noSpeech:
           _showBotNote('ما سمعتك زين 🎙 قرّب الجوال شوي وجرّب مرة ثانية.');
         case TranscriptionStatus.failed:
@@ -884,6 +1050,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       unawaited(VoiceRecordingService.deleteFile(filePath));
       if (mounted) setState(() => _transcribing = false);
     }
+
+    // الإرسال بعد إطفاء [_transcribing] لا داخله: [_handleSend] يمسك حالة
+    // الانشغال بنفسه، ولو تداخلت الحالتان لبقي المؤلّف معطّلاً بعد الرد.
+    if (transcribed) await _handleSend();
   }
 
   /// رُفض إذن المايك أو تعذّر تشغيله — نفس أسلوب رسائل الموقع: سبب مفهوم
@@ -915,6 +1085,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// المعروضة، تماماً كما تفعل chips الاقتراحات الأولية أعلى الشاشة.
   void _sendQuickReply(String text) {
     if (_sending) return;
+    // حبة اقتراح أثناء تعديل مفتوح = تخلٍّ عن التعديل، لا تعديل بنصها.
+    if (_editingMessage != null) setState(() => _editingMessage = null);
     _controller.text = text;
     _handleSend();
   }
@@ -961,6 +1133,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// أفعال بطاقة المتجر لرسالة بعينها — تُبنى مرة واحدة هنا لأن للسلّة الآن
   /// مدخلين: تصفّح المستخدم للقائمة بنفسه، وطلب منطوق جهّزناه له.
+  /// يضيف صنفاً اقترحناه («تقصد أرز بحليب؟») للسلّة عند ضغط حبّته.
+  ///
+  /// يحل المعرّف من الكتالوج الواصل مع الرد نفسه بدل ما يطلبه من جديد، ويشيل
+  /// الحبّة بعد الإضافة — السؤال انجاوب، فعرضه مرة ثانية يخلي المستخدم يشك
+  /// إذا ضغطته أصلاً.
+  void _addSuggestion(int index, OrderSuggestion suggestion) {
+    if (index >= _messages.length) return;
+    final message = _messages[index];
+    final catalog = message.requestFlow?.catalog;
+    if (catalog == null) return;
+
+    final remaining = (message.orderSuggestions ?? const <OrderSuggestion>[])
+        .where((s) => s.itemId != suggestion.itemId)
+        .toList();
+
+    if (suggestion.itemType == 'deal') {
+      final deals = catalog.deals.where((d) => d.id == suggestion.itemId);
+      if (deals.isEmpty) return;
+      _updateFlow(index, (f) => f.copyWith(cart: f.cart.add(CartLine.fromDeal(deals.first)), clearError: true));
+    } else {
+      final products = catalog.products.where((p) => p.id == suggestion.itemId);
+      if (products.isEmpty) return;
+      _updateFlow(index, (f) => f.copyWith(cart: f.cart.add(CartLine.fromProduct(products.first)), clearError: true));
+    }
+
+    if (!mounted) return;
+    setState(() => _messages[index] = _messages[index].copyWith(orderSuggestions: remaining));
+  }
+
   CatalogFlowActions _catalogActionsFor(int index) {
     return CatalogFlowActions(
       onAddProduct: (product) => _updateFlow(index, (f) => f.copyWith(
@@ -1031,9 +1232,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // ولا صنف تطابق: نفتح القائمة على التصفّح بدل ما نوقفه عند رسالة خطأ —
     // هو أصلاً يبي يطلب من هذا المحل.
     if (resolved.foundNothing) {
+      final suggestions = resolved.suggestions;
       return ChatMessage(
-        text: 'ما لقيت ${_itemsPhrase(missing)} في $shop 😕 هذي قائمتهم إذا تبي تختار منها:',
+        text: suggestions.isEmpty
+            ? 'ما لقيت ${_itemsPhrase(missing)} في $shop 😕 هذي قائمتهم إذا تبي تختار منها:'
+            : 'ما لقيت ${_itemsPhrase(missing)} في $shop، بس أقرب شي عندهم '
+                '${_itemsPhrase(suggestions.map((s) => s.label).toList())} — تبيه؟',
         sender: MessageSender.bot,
+        orderSuggestions: suggestions.isEmpty ? null : suggestions,
+        onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
         requestFlow: RequestFlow(catalog: catalog),
         catalogActions: _catalogActionsFor(index),
       );
@@ -1053,13 +1260,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .toList(),
     );
 
+    // لما يكون عندنا بديل قريب نسأل عنه بدل ما نكتفي بـ"ما لقيت": الصنف
+    // الناقص صار سؤالاً له جواب بضغطة، لا طريقاً مسدوداً يرجّع المستخدم
+    // يتصفّح القائمة كلها بنفسه.
+    final suggestions = resolved.suggestions;
     final text = missing.isEmpty
         ? 'جهّزت لك طلبك من $shop — راجعه وأكّده 👇'
-        : 'جهّزت اللي لقيته من $shop. بس ما لقيت ${_itemsPhrase(missing)} عندهم — راجع الطلب وأكّده 👇';
+        : suggestions.isEmpty
+            ? 'جهّزت اللي لقيته من $shop. بس ما لقيت ${_itemsPhrase(missing)} عندهم — راجع الطلب وأكّده 👇'
+            : 'جهّزت اللي لقيته من $shop. ما لقيت ${_itemsPhrase(missing)} عندهم — '
+                'أقرب شي عندهم ${_itemsPhrase(suggestions.map((s) => s.label).toList())}، تبيه؟';
 
     return ChatMessage(
       text: text,
       sender: MessageSender.bot,
+      orderSuggestions: suggestions.isEmpty ? null : suggestions,
+      onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
       // مباشرة على المراجعة: هو قال وش يبي، فالخطوة الباقية تأكيد لا تصفّح.
       requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
       catalogActions: _catalogActionsFor(index),
@@ -1211,10 +1427,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     controller: _scrollController,
                     padding: const EdgeInsets.only(top: 14, bottom: 16),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) => MessageBubble(
-                      message: _messages[index],
-                      showAvatar: _startsBotGroup(index),
-                    ),
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return MessageBubble(
+                        message: message,
+                        showAvatar: _startsBotGroup(index),
+                        // التعديل لرسائل المستخدم وحدها، ومعطّل أثناء انشغال
+                        // ريكو — تعديل سؤال وجوابه لسه جاي يترك المحادثة نصّين.
+                        onEdit: message.sender == MessageSender.user && !_sending && !_transcribing
+                            ? () => _beginEditMessage(message)
+                            : null,
+                        editing: identical(message, _editingMessage),
+                      );
+                    },
                   ),
           ),
           ChatComposer(
@@ -1223,6 +1448,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             busy: _sending || _transcribing,
             onRecorded: _handleRecorded,
             onMicUnavailable: _handleMicUnavailable,
+            editing: _editingMessage != null,
+            onCancelEdit: _cancelEditMessage,
             // شريط الاقتراحات يفيد في المحادثة الجارية؛ شاشة الترحيب تعرض
             // اقتراحاتها الخاصة بمساحة أوسع، فلا داعي لتكرارها.
             suggestions: showWelcome ? null : SuggestionRail(onPick: _sendQuickReply),

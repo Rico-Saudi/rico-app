@@ -263,4 +263,81 @@ void main() {
       });
     });
   });
+
+  group('الواو الملتصقة تفصل نيّتين', () {
+    // الواو تلتصق بالكلمة التالية أكثر مما تنفصل عنها؛ وبالمسافتين وحدهما
+    // كانت الرسالة تبقى جزءاً واحداً فتُبتلع نيّة كاملة.
+    test('"وأرخص" الملتصقة تُقرأ طلباً ثانياً', () {
+      final both = IntentService.parseMulti('لاقيلي اقرب مطعم وارخص مطعم');
+      expect(both.length, 2);
+      expect(both[0].slug, 'restaurant');
+      expect(both[0].rank, RankMode.nearest);
+      expect(both[1].slug, 'restaurant');
+      expect(both[1].rank, RankMode.cheapest);
+    });
+
+    test('الفئة الأولى ما تُبتلع لما تختلف الفئتان', () {
+      // كانت ترجع "كافيه" وحدها والمطعم يسقط بلا أثر.
+      final mixed = IntentService.parseMulti('أقرب مطعم وأرخص كافيه');
+      expect(mixed.map((i) => i.slug).toList(), ['restaurant', 'cafe']);
+    });
+
+    test('"ووش العروض" الملتصقة تُقرأ نية عروض', () {
+      final three = IntentService.parseMulti('أقرب مطعم وأرخص مطعم ووش العروض');
+      expect(three.length, 3);
+      expect(three[2].kind, IntentKind.deals);
+    });
+
+    test('كلمة تبدأ بواو ما تتقطّع', () {
+      // "وين" و"ورد" و"وش أخبارك" كلمات قائمة بذاتها لا فاصل نوايا.
+      expect(IntentService.parseMulti('وين أقرب صيدلية').length, 1);
+      expect(IntentService.parseMulti('وين أقرب صيدلية').first.slug, 'pharmacy');
+      expect(IntentService.parseMulti('أبي محل ورد').length, 1);
+      expect(IntentService.parseMulti('أبي محل ورد').first.slug, 'florist');
+    });
+  });
+
+  group('رسالة غير مفهومة لا تُخمَّن بمطعم', () {
+    // جوهر العطل: كل رسالة بلا كلمة فئة كانت تسقط على _categories.first
+    // (مطعم)، فسؤال غير مفهوم يُجاب ببحث عن مطاعم قريبة.
+    test('نص بلا أي إشارة يرجع بلا نوايا بدل "مطعم"', () {
+      for (final text in [
+        'اسدجفه',
+        'وش رايك بالموضوع اللي قلت لك عنه امس',
+        'ممكن تساعدني بشي مهم',
+        '؟؟؟',
+      ]) {
+        expect(IntentService.parseMulti(text), isEmpty, reason: text);
+      }
+    });
+
+    test('parse نفسها ترجع null لا فئة افتراضية', () {
+      expect(IntentService.parse('اسدجفه'), isNull);
+    });
+
+    test('الطلبات المفهومة ما تتأثر', () {
+      expect(IntentService.parseMulti('أقرب صيدلية').first.slug, 'pharmacy');
+      expect(IntentService.parseMulti('جوعان').first.slug, 'restaurant');
+      expect(IntentService.parseMulti('أبعد شوي', lastCategorySlug: 'cafe').first.slug, 'cafe');
+    });
+
+    test('جزء غامض يُسقط ولا يضيف نية مطعم وهمية', () {
+      // "أقرب صيدلية و<غامض>" كانت ترجع صيدلية + مطعم.
+      final intents = IntentService.parseMulti('أقرب صيدلية واسدجفه');
+      expect(intents.map((i) => i.slug).toList(), ['pharmacy']);
+    });
+
+    test('رد التوضيح ثابت لنفس النص ويطلب توضيحاً فعلاً', () {
+      final reply = IntentService.clarifyReply('اسدجفه');
+      expect(IntentService.clarifyReply('اسدجفه'), reply);
+      expect(reply, isNotEmpty);
+    });
+
+    test('المسار الفعلي في chat_screen: غير مفهوم ≠ بحث', () {
+      expect(route('اسدجفه'), 'fallback');
+      expect(route('أقرب صيدلية'), 'search');
+      expect(route('هلا'), 'chat');
+    });
+  });
+
 }

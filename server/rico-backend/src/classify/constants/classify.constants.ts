@@ -3,8 +3,8 @@
 // picks the prompt for the asking brand's dialect.
 
 import { Brand } from '../../common/constants/brands';
-import { buildJordanianSystemPrompt } from './prompts/jordanian.prompt';
-import { buildSaudiSystemPrompt } from './prompts/saudi.prompt';
+import { buildJordanianSystemPrompt, JORDANIAN_CLARIFY_REPLY } from './prompts/jordanian.prompt';
+import { buildSaudiSystemPrompt, SAUDI_CLARIFY_REPLY } from './prompts/saudi.prompt';
 
 export { CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './categories';
 
@@ -15,4 +15,10 @@ export function buildSystemPrompt(brand: Brand): string {
   return brand.dialect === 'jordanian'
     ? buildJordanianSystemPrompt(brand.name)
     : buildSaudiSystemPrompt(brand.name);
+}
+
+/** نص «ما فهمتك، وضّح لي» بلهجة العلامة. يُستخدم حين يرد النموذج بنوايا كلها
+ * غير صالحة: انظر ClassifyService.classify. */
+export function clarifyReplyFor(brand: Brand): string {
+  return brand.dialect === 'jordanian' ? JORDANIAN_CLARIFY_REPLY : SAUDI_CLARIFY_REPLY;
 }

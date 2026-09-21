@@ -497,8 +497,18 @@ class IntentService {
       _boundedPattern(['محل', 'محلات', 'متجر', 'معرض', 'سوق', 'ورشة', 'مركز', 'شركة', 'مصنع', 'مكتب']);
 
   // فاصل بين نوايا متعددة في رسالة واحدة: "و"/"أو" كمحرف مستقل (بمسافة على
-  // الجانبين لتفادي قطع كلمات تبدأ بـ"و" مثل "وايش")، أو فاصلة عربية/إنجليزية
-  static final RegExp _intentSeparator = RegExp(r'\s+(?:و|أو)\s+|،|,');
+  // الجانبين لتفادي قطع كلمات تبدأ بـ"و" مثل "وايش")، أو فاصلة عربية/إنجليزية.
+  //
+  // والواو تلتصق بالكلمة التالية أكثر مما تنفصل عنها في الكتابة الفعلية
+  // ("أقرب مطعم وأرخص كافيه")، فبالمسافتين وحدهما كانت الرسالة تبقى جزءاً
+  // واحداً وتُبتلع نيّة كاملة: تلك الجملة كانت ترجع "كافيه" وحدها والمطعم
+  // يسقط بلا أثر. فنفصلها كذلك حين تليها مباشرةً كلمة تبدأ طلباً جديداً
+  // (معيار ترتيب أو صيغة طلب) — وهذي قائمة مغلقة عمداً: "و" بادئة شائعة في
+  // كلمات قائمة بذاتها (وين، وش، ورد، وصل) وقطعها عندها يخرّب المطابقة.
+  static const String _newRequestAfterWaw =
+      r'(?:أرخص|ارخص|أقرب|اقرب|أفضل|افضل|أعلى|اعلى|أغلى|اغلى|وش|ايش|أيش|أبي|ابي|أبغى|ابغى|بدي|عايز)';
+  static final RegExp _intentSeparator =
+      RegExp('\\s+(?:و|أو)\\s+|\\s+و(?=$_newRequestAfterWaw)|،|,');
 
   // أقصى عدد نوايا نستخرجها من رسالة واحدة، يطابق الحد نفسه في مصنّف الـLLM
   static const int _maxIntents = 3;
@@ -797,6 +807,19 @@ class IntentService {
     'اطلب مني أي مكان أو عرض قريب منك وأنا أخدمك 📍',
   ];
 
+  /// ردود «ما فهمتك، وضّح لي» — المسار المحلي الأخير حين يفشل مصنّف الـLLM
+  /// *و* لا تُطابق الرسالة أي فئة ولا نمط دردشة معروف. بدون هذا كانت الرسالة
+  /// تسقط على افتراضي "مطعم" في [parse]، فيُجاب سؤال غير مفهوم ببحث عن
+  /// مطاعم قريبة.
+  static const List<String> _clarifyReplies = [
+    'ما ضبطت معي هذي 😅 وضّح لي أكثر وش تبي، مثلاً:\n📍 «أقرب صيدلية»\n🔥 «وش العروض القريبة؟»\n🔧 «أبغى كهربائي»',
+    'ما فهمت عليك بالضبط 🤔 قل لي بطريقة ثانية، مثلاً:\n📍 «أقرب كافيه»\n🔥 «وش العروض حولي؟»\n🔧 «أبغى سباك»',
+  ];
+
+  /// نص توضيح ثابت لنفس الرسالة (نفس منطق التنويع في [detectOffTopicReply]).
+  static String clarifyReply(String text) =>
+      _clarifyReplies[text.trim().hashCode.abs() % _clarifyReplies.length];
+
   static String? detectOffTopicReply(String text) {
     final trimmed = text.trim();
     final seed = trimmed.hashCode.abs();
@@ -864,7 +887,12 @@ class IntentService {
     return RankMode.nearest;
   }
 
-  static QueryIntent parse(String rawText, {String? lastCategorySlug}) {
+  /// يرجع `null` إذا لم تُطابق الرسالة أي فئة ولا مهنة ولا استكمال لطلب
+  /// سابق. كان هنا افتراضي صامت بـ"مطعم"، وهو ما جعل أي سؤال غير مفهوم
+  /// يُجاب ببحث عن مطاعم قريبة حين يفشل مصنّف الـLLM — سؤال بلا جواب أفضل
+  /// من جواب عن سؤال ثانٍ. المستدعي مسؤول عن طلب التوضيح
+  /// ([clarifyReply]).
+  static QueryIntent? parse(String rawText, {String? lastCategorySlug}) {
     final text = rawText.trim();
 
     // اسم مهنة يُفحص قبل فئات الأماكن: "أبغى كهربائي" لازم تطلع طلب شخص، لا
@@ -902,8 +930,8 @@ class IntentService {
       );
     }
 
-    // افتراضي منطقي لأغلب الاستخدام إذا لم تُطابق أي فئة ولا استكمال: مطعم
-    chosen ??= _categories.first;
+    // لا فئة ولا مهنة ولا استكمال: ما فهمنا الرسالة. لا نخمّن.
+    if (chosen == null) return null;
 
     return QueryIntent(
       label: chosen['label'] as String,
@@ -928,15 +956,20 @@ class IntentService {
         .toList();
 
     if (fragments.isEmpty) {
-      return [parse(text, lastCategorySlug: lastCategorySlug)];
+      final single = parse(text, lastCategorySlug: lastCategorySlug);
+      return single == null ? [] : [single];
     }
 
+    // جزء غير مفهوم يُسقط ولا يُخمَّن: "أقرب مطعم و<كلام غامض>" تُجاب بالمطعم
+    // وحده، لا بمطعمين. والقائمة الفارغة تعني أننا لم نفهم الرسالة إطلاقاً،
+    // وهي إشارة للمستدعي أن يطلب توضيحاً بدل أن يبحث.
     final intents = <QueryIntent>[];
     for (final fragment in fragments) {
       if (_dealsWords.hasMatch(fragment)) {
         intents.add(QueryIntent(kind: IntentKind.deals, label: 'العروض'));
       } else {
-        intents.add(parse(fragment, lastCategorySlug: lastCategorySlug));
+        final intent = parse(fragment, lastCategorySlug: lastCategorySlug);
+        if (intent != null) intents.add(intent);
       }
     }
 

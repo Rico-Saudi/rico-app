@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import '../services/intent_service.dart';
 import 'deal.dart';
 import 'place_result.dart';
+import 'business_catalog.dart';
+import 'place_section.dart';
 import 'professional.dart';
 import 'professional_flow.dart';
 import 'request_flow.dart';
@@ -12,6 +14,12 @@ class ChatMessage {
   final String text;
   final MessageSender sender;
   final List<PlaceResult>? places;
+
+  /// مقاطع نتائج مسمّاة حين تجمع الفقاعة أكثر من طلب مكان من نفس
+  /// الرسالة ("أقرب مطعم وأرخص مطعم"). [places] يبقى مملوءاً بكل
+  /// النتائج مسطّحة بلا تكرار — عليه تعتمد الإشارة لنتيجة سابقة
+  /// ("الثاني") — و[placeSections] هو اللي يحدد شكل العرض.
+  final List<PlaceSection>? placeSections;
   final List<Deal>? deals;
   final bool isLoading;
   final DateTime timestamp;
@@ -33,6 +41,12 @@ class ChatMessage {
   /// البحث — يعيد تشغيل خط أنابيب التصنيف الفعلي بنص مكافئ، وليس فلترة
   /// وهمية على النتائج المعروضة.
   final void Function(String suggestion)? onQuickReply;
+
+  /// اقتراحات «تقصد كذا؟» لأصناف طلبها المستخدم وما هي بقائمة المحل —
+  /// تُعرض حبّات فوق بطاقة المحل، وضغط الحبّة يضيف الصنف المقترح للسلّة.
+  final List<OrderSuggestion>? orderSuggestions;
+
+  final void Function(OrderSuggestion suggestion)? onAddSuggestion;
 
   /// تدفّق تصفّح منتجات/عروض نشاط حقيقي واحد ثم تأكيد طلب تواصل حقيقي
   /// (اهتمام بمنتج/عرض، يظهر لصاحب النشاط في لوحته) — بديل حقيقي لتدفّق
@@ -66,6 +80,7 @@ class ChatMessage {
     required this.text,
     required this.sender,
     this.places,
+    this.placeSections,
     this.deals,
     this.isLoading = false,
     this.actionLabel,
@@ -73,6 +88,8 @@ class ChatMessage {
     this.understandingIntent,
     this.onOrder,
     this.onQuickReply,
+    this.orderSuggestions,
+    this.onAddSuggestion,
     this.requestFlow,
     this.catalogActions,
     this.professionalFlow,
@@ -88,11 +105,13 @@ class ChatMessage {
     bool? isLoading,
     RequestFlow? requestFlow,
     ProfessionalFlow? professionalFlow,
+    List<OrderSuggestion>? orderSuggestions,
   }) {
     return ChatMessage(
       text: text ?? this.text,
       sender: sender,
       places: places,
+      placeSections: placeSections,
       deals: deals,
       isLoading: isLoading ?? this.isLoading,
       actionLabel: actionLabel,
@@ -100,6 +119,8 @@ class ChatMessage {
       understandingIntent: understandingIntent,
       onOrder: onOrder,
       onQuickReply: onQuickReply,
+      orderSuggestions: orderSuggestions ?? this.orderSuggestions,
+      onAddSuggestion: onAddSuggestion,
       requestFlow: requestFlow ?? this.requestFlow,
       catalogActions: catalogActions,
       professionalFlow: professionalFlow ?? this.professionalFlow,

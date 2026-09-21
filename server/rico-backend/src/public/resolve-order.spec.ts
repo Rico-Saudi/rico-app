@@ -5,6 +5,7 @@ import { Business, BusinessDocument, BusinessSchema } from '../businesses/schema
 import { Product, ProductDocument, ProductSchema } from '../products/schemas/product.schema';
 import { VendorImpression, VendorImpressionDocument, VendorImpressionSchema } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapDocument, SearchGapSchema } from './schemas/search-gap.schema';
+import { CatalogGap, CatalogGapDocument, CatalogGapSchema } from './schemas/catalog-gap.schema';
 
 // End of the chain the chat actually walks: a shop name and some dish names in,
 // a basket plus an honest list of misses out.
@@ -13,6 +14,7 @@ describe('PublicService.resolveOrder', () => {
   let service: PublicService;
   let businessModel: Model<BusinessDocument>;
   let productModel: Model<ProductDocument>;
+  let catalogGapModel: Model<CatalogGapDocument>;
 
   const deals = { findActiveForBusiness: jest.fn().mockResolvedValue([]) };
 
@@ -23,8 +25,9 @@ describe('PublicService.resolveOrder', () => {
     productModel = mongoose.model(Product.name, ProductSchema) as unknown as Model<ProductDocument>;
     const impressionModel = mongoose.model(VendorImpression.name, VendorImpressionSchema) as unknown as Model<VendorImpressionDocument>;
     const gapModel = mongoose.model(SearchGap.name, SearchGapSchema) as unknown as Model<SearchGapDocument>;
+    catalogGapModel = mongoose.model(CatalogGap.name, CatalogGapSchema) as unknown as Model<CatalogGapDocument>;
 
-    service = new PublicService(businessModel, productModel, impressionModel, gapModel, deals as any);
+    service = new PublicService(businessModel, productModel, impressionModel, gapModel, catalogGapModel, deals as any);
   }, 60_000);
 
   afterAll(async () => {
@@ -33,7 +36,7 @@ describe('PublicService.resolveOrder', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all([businessModel.deleteMany({}), productModel.deleteMany({})]);
+    await Promise.all([businessModel.deleteMany({}), productModel.deleteMany({}), catalogGapModel.deleteMany({})]);
     deals.findActiveForBusiness.mockResolvedValue([]);
 
     const shop = await businessModel.create({
@@ -99,6 +102,49 @@ describe('PublicService.resolveOrder', () => {
     expect(res.unmatched).toEqual(['بيتزا', 'سوشي']);
     // The found item is still basketed — a miss doesn't discard the rest.
     expect(res.matched[0].label).toBe('كنافة نابلسية');
+  });
+
+  it('offers the closest dish instead of a bare "not found"', async () => {
+    const res = await order('مطعم الماهر', [{ name: 'كنافة نابلسية' }, { name: 'بودنغ أرز' }]);
+
+    // Still an honest miss: it is NOT silently basketed as أرز بحليب.
+    expect(res.unmatched).toEqual(['بودنغ أرز']);
+    expect(res.matched.map((m: any) => m.label)).toEqual(['كنافة نابلسية']);
+    // ...but the row the customer almost named comes back as a question.
+    expect(res.suggestions).toEqual([
+      { requested: 'بودنغ أرز', itemType: 'product', itemId: expect.any(String), label: 'أرز بحليب' },
+    ]);
+  });
+
+  it('stays quiet when nothing on the menu is close', async () => {
+    const res = await order('مطعم الماهر', [{ name: 'سوشي' }]);
+
+    expect(res.unmatched).toEqual(['سوشي']);
+    // A 0.1-scoring "closest" row is noise, not a suggestion.
+    expect(res.suggestions).toEqual([]);
+  });
+
+  it('records every miss against the shop as a demand signal', async () => {
+    await order('مطعم الماهر', [{ name: 'بودنغ أرز' }, { name: 'سوشي' }]);
+    // insertMany is fire-and-forget inside resolveOrder.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const gaps = await catalogGapModel.find().sort({ requestedItem: 1 }).lean();
+    expect(gaps.map((g: any) => g.requestedItem).sort()).toEqual(['بودنغ أرز', 'سوشي']);
+
+    const near = gaps.find((g: any) => g.requestedItem === 'بودنغ أرز') as any;
+    expect(near.nearestLabel).toBe('أرز بحليب');
+    expect(near.nearestScore).toBeGreaterThan(0.35);
+
+    // The shop has nothing like sushi, so the owner sees that plainly.
+    const far = gaps.find((g: any) => g.requestedItem === 'سوشي') as any;
+    expect(far.nearestScore).toBeLessThan(0.35);
+  });
+
+  it('records nothing when every item matched', async () => {
+    await order('مطعم الماهر', [{ name: 'كنافة نابلسية' }]);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await catalogGapModel.countDocuments()).toBe(0);
   });
 
   it('picks the shop the customer named, not its namesake', async () => {

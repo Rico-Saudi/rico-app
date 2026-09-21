@@ -201,6 +201,11 @@ export class OwnerController {
     return this.ownerService.getSearchGaps(query.days ?? 30);
   }
 
+  @Get('analytics/catalog-gaps')
+  getCatalogGaps(@Query() query: AnalyticsQueryDto) {
+    return this.ownerService.getCatalogGaps(query.days ?? 30);
+  }
+
   @Get('analytics/expiring-deals')
   getExpiringDeals(@Query() query: ExpiringDealsQueryDto) {
     return this.ownerService.getExpiringDeals(query.days ?? 7);

@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { LlmService } from '../llm/llm.service';
 import { brandFor } from '../common/constants/brands';
-import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
+import { buildSystemPrompt, CATEGORIES, clarifyReplyFor, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { isKnownProfession, professionLabel } from '../professionals/constants/professions.registry';
 
@@ -210,8 +210,22 @@ export class ClassifyService {
     const rawIntents = Array.isArray(parsed.intents) ? parsed.intents.slice(0, MAX_INTENTS) : [];
     const intents = rawIntents.map(validateIntent).filter(Boolean);
 
+    // النموذج ردّ بنوايا لكن ما نجت منها ولا وحدة (فئة مخترعة، مهنة خارج
+    // القائمة، طلب بلا محل...). كان هذا يرمي 502، والعميل يفسّر أي خطأ كفشل
+    // خادم فيسقط للمطابقة المحلية بالكلمات المفتاحية — وهي بدورها ترجع
+    // "مطعم" كافتراضي لأي رسالة بلا كلمة فئة. فالنتيجة إن سؤالاً غير مفهوم
+    // يُجاب ببحث عن مطاعم قريبة، وهو أسوأ رد ممكن.
+    //
+    // الخادم هنا يعرف أكثر من العميل: النداء نجح والنموذج ردّ، بس ما طلع
+    // منه طلب نفهمه. فيُعامل كطلب توضيح صريح بدل خطأ — نستخدم reply النموذج
+    // إذا كتب واحداً، وإلا نص ثابت بلهجة العلامة.
     if (intents.length === 0) {
-      throw new HttpException({ error: 'invalid_intents' }, HttpStatus.BAD_GATEWAY);
+      const modelReply = typeof parsed.reply === 'string' ? parsed.reply.trim() : '';
+      return {
+        offTopic: true,
+        reply: modelReply || clarifyReplyFor(brandFor(dto.brand)),
+        intents: [],
+      };
     }
 
     return { offTopic: false, reply: null, intents };

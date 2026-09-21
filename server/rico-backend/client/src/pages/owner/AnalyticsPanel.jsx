@@ -37,6 +37,7 @@ export default function AnalyticsPanel({ authedFetch }) {
   const [expiringDeals, setExpiringDeals] = useState(null);
   const [dealTypePerf, setDealTypePerf] = useState(null);
   const [searchGaps, setSearchGaps] = useState(null);
+  const [catalogGaps, setCatalogGaps] = useState(null);
   const [claimFunnel, setClaimFunnel] = useState(null);
   const [vendorActivity, setVendorActivity] = useState(null);
 
@@ -50,6 +51,7 @@ export default function AnalyticsPanel({ authedFetch }) {
       expiringRes,
       dealTypeRes,
       gapsRes,
+      catalogGapsRes,
       funnelRes,
       activityRes,
     ] = await Promise.all([
@@ -61,6 +63,7 @@ export default function AnalyticsPanel({ authedFetch }) {
       authedFetch('/owner/analytics/expiring-deals?days=7'),
       authedFetch(`/owner/analytics/deal-type-performance?days=${days}`),
       authedFetch(`/owner/analytics/search-gaps?days=${days}`),
+      authedFetch(`/owner/analytics/catalog-gaps?days=${days}`),
       authedFetch('/owner/analytics/claim-funnel'),
       authedFetch('/owner/analytics/vendor-activity'),
     ]);
@@ -73,6 +76,7 @@ export default function AnalyticsPanel({ authedFetch }) {
     if (expiringRes) setExpiringDeals((await expiringRes.json()).items);
     if (dealTypeRes) setDealTypePerf((await dealTypeRes.json()).items);
     if (gapsRes) setSearchGaps((await gapsRes.json()).items);
+    if (catalogGapsRes) setCatalogGaps((await catalogGapsRes.json()).items);
     if (funnelRes) setClaimFunnel(await funnelRes.json());
     if (activityRes) setVendorActivity((await activityRes.json()).items);
   }, [authedFetch, days]);
@@ -256,6 +260,41 @@ export default function AnalyticsPanel({ authedFetch }) {
                 <tr key={g.categorySlug}>
                   <td>{CATEGORY_LABELS[g.categorySlug] || g.categorySlug}</td>
                   <td>{g.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="owner-wide-card">
+        <h1 style={{ fontSize: 17 }}>أصناف مطلوبة وغير موجودة بالقوائم (آخر {days} يوم)</h1>
+        <p className="subtitle">
+          أصناف طلبها العملاء من محل بعينه وما هي بقائمته. «أقرب صنف عنده» يفرّق بين صنف ناقص فعلاً
+          وبين صنف موجود باسم ثاني يحتاج تعديل تسمية.
+        </p>
+        {catalogGaps === null && <p className="note">جاري التحميل...</p>}
+        {catalogGaps && catalogGaps.length === 0 && <p className="note">ما فيه أصناف مطلوبة غير موجودة بعد.</p>}
+        {catalogGaps && catalogGaps.length > 0 && (
+          <table>
+            <thead>
+              <tr><th>المحل</th><th>الصنف المطلوب</th><th>عدد الطلبات</th><th>أقرب صنف عنده</th></tr>
+            </thead>
+            <tbody>
+              {catalogGaps.map((g) => (
+                <tr key={`${g.businessId}-${g.requestedItem}`}>
+                  <td>{g.businessName || g.businessId}</td>
+                  <td>{g.requestedItem}</td>
+                  <td>{g.count}</td>
+                  <td>
+                    {g.nearestLabel ? (
+                      <>
+                        {g.nearestLabel} <small className="note">({Math.round((g.nearestScore || 0) * 100)}%)</small>
+                      </>
+                    ) : (
+                      <span className="note">ولا شي قريب</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

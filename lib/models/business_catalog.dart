@@ -138,12 +138,18 @@ class ResolvedOrder {
   final List<ResolvedOrderLine> matched;
   final List<String> unmatched;
 
+  /// أصناف من [unmatched] لقى لها الخادم شيئاً قريباً بقائمة المحل. تُعرض
+  /// **سؤالاً** لا جواباً: إضافتها للسلّة بضغطة من المستخدم، لا تلقائياً —
+  /// «بودنغ أرز» تشبه «أرز بحليب» ما يعني إنها هي.
+  final List<OrderSuggestion> suggestions;
+
   const ResolvedOrder({
     this.businessId,
     this.businessName,
     this.catalog,
     this.matched = const [],
     this.unmatched = const [],
+    this.suggestions = const [],
   });
 
   bool get foundBusiness => catalog != null;
@@ -160,8 +166,34 @@ class ResolvedOrder {
           .map((m) => ResolvedOrderLine.fromJson(m as Map<String, dynamic>, baseUrl: baseUrl))
           .toList(),
       unmatched: ((json['unmatched'] as List?) ?? []).map((u) => u as String).toList(),
+      suggestions: ((json['suggestions'] as List?) ?? [])
+          .map((s) => OrderSuggestion.fromJson(s as Map<String, dynamic>))
+          .toList(),
     );
   }
+}
+
+/// «تقصد كذا؟» — أقرب صنف بقائمة المحل لصنف ما انطابق.
+class OrderSuggestion {
+  /// اسم الصنف كما نطقه المستخدم — يُعرض بالسؤال ليعرف أي طلب نقصد.
+  final String requested;
+  final String itemType;
+  final String itemId;
+  final String label;
+
+  const OrderSuggestion({
+    required this.requested,
+    required this.itemType,
+    required this.itemId,
+    required this.label,
+  });
+
+  factory OrderSuggestion.fromJson(Map<String, dynamic> json) => OrderSuggestion(
+        requested: json['requested'] as String? ?? '',
+        itemType: json['itemType'] as String? ?? 'product',
+        itemId: json['itemId'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+      );
 }
 
 /// سطر طُوبق فعلاً بصنف في قائمة المحل.

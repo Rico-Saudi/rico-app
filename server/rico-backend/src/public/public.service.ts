@@ -5,12 +5,19 @@ import { Business, BusinessDocument } from '../businesses/schemas/business.schem
 import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { VendorImpression, VendorImpressionDocument } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapDocument } from './schemas/search-gap.schema';
+import { CatalogGap, CatalogGapDocument } from './schemas/catalog-gap.schema';
 import { DealsService } from '../deals/deals.service';
 import { SubmitDealDto } from './dto/submit-deal.dto';
 import { ImpressionItemDto } from './dto/track-impressions.dto';
 import { TrackSearchGapDto } from './dto/track-search-gap.dto';
 import { ResolveOrderDto } from './dto/resolve-order.dto';
-import { bestMatch, normalizeArabic, similarity } from './order-matching.util';
+import {
+  closestMatch,
+  MATCH_THRESHOLD,
+  normalizeArabic,
+  similarity,
+  SUGGESTION_THRESHOLD,
+} from './order-matching.util';
 
 // Deliberately stricter than the per-dish threshold. Nearly every shop name
 // carries a category word — مطعم, كافيه, صيدلية — so sharing one is worth
@@ -27,6 +34,7 @@ export class PublicService {
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     @InjectModel(VendorImpression.name) private readonly impressionModel: Model<VendorImpressionDocument>,
     @InjectModel(SearchGap.name) private readonly searchGapModel: Model<SearchGapDocument>,
+    @InjectModel(CatalogGap.name) private readonly catalogGapModel: Model<CatalogGapDocument>,
     private readonly dealsService: DealsService,
   ) {}
 
@@ -93,11 +101,30 @@ export class PublicService {
 
     const matched: any[] = [];
     const unmatched: string[] = [];
+    const suggestions: any[] = [];
+    const gaps: { requestedItem: string; nearestLabel: string | null; nearestScore: number | null }[] = [];
 
     for (const requested of dto.items) {
-      const hit = bestMatch(requested.name, candidates);
+      const closest = closestMatch(requested.name, candidates);
+      const hit = closest && closest.score >= MATCH_THRESHOLD ? closest : null;
       if (!hit) {
         unmatched.push(requested.name);
+        // الصنف ما هو بالقائمة — وهذي إشارة طلب لصاحب المحل، مو مجرد خطأ
+        // نعرضه ونرميه.
+        gaps.push({
+          requestedItem: requested.name,
+          nearestLabel: closest?.item.name ?? null,
+          nearestScore: closest ? Number(closest.score.toFixed(2)) : null,
+        });
+        // قريب بما يكفي ليُعرض كسؤال ("تقصد ...؟") لا ليُفترض جواباً.
+        if (closest && closest.score >= SUGGESTION_THRESHOLD) {
+          suggestions.push({
+            requested: requested.name,
+            itemType: closest.item.kind,
+            itemId: closest.item.id,
+            label: closest.item.kind === 'product' ? closest.item.row.name : closest.item.row.titleAr,
+          });
+        }
         continue;
       }
 
@@ -135,11 +162,20 @@ export class PublicService {
       );
     }
 
+    // أفضل جهد بحت: تسجيل الطلب الفائت تحليلات لصاحب المحل، وفشلها ما
+    // يصح يضيّع على العميل سلّته الجاهزة.
+    if (gaps.length > 0) {
+      this.catalogGapModel
+        .insertMany(gaps.map((g) => ({ businessId, ...g })))
+        .catch((e) => console.error('[public] catalog gap tracking failed:', e?.message || e));
+    }
+
     return {
       business: { id: businessId, name: catalog.businessName },
       catalog,
       matched,
       unmatched,
+      suggestions,
     };
   }
 

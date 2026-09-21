@@ -10,6 +10,7 @@ import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { Discount, DiscountDocument } from '../discounts/schemas/discount.schema';
 import { VendorImpression, VendorImpressionDocument } from '../public/schemas/vendor-impression.schema';
 import { SearchGap, SearchGapDocument } from '../public/schemas/search-gap.schema';
+import { CatalogGap, CatalogGapDocument } from '../public/schemas/catalog-gap.schema';
 import { toCsv } from '../common/utils/csv.util';
 import { BusinessesService } from '../businesses/businesses.service';
 import { DealsService } from '../deals/deals.service';
@@ -75,6 +76,7 @@ export class OwnerService {
     @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
     @InjectModel(VendorImpression.name) private readonly impressionModel: Model<VendorImpressionDocument>,
     @InjectModel(SearchGap.name) private readonly searchGapModel: Model<SearchGapDocument>,
+    @InjectModel(CatalogGap.name) private readonly catalogGapModel: Model<CatalogGapDocument>,
     private readonly businessesService: BusinessesService,
     private readonly dealsService: DealsService,
     private readonly accountsService: AccountsService,
@@ -597,6 +599,51 @@ export class OwnerService {
     return {
       days,
       items: rows.map((r: any) => ({ categorySlug: r._id, count: r.count, avgLat: r.avgLat, avgLng: r.avgLng })),
+    };
+  }
+
+  // Items customers asked a specific shop for that the shop doesn't list —
+  // the menu-level twin of getSearchGaps. Grouped by shop AND item, because
+  // "nine people wanted أرز بحليب from you" is the sentence a vendor acts on,
+  // while a global item ranking is just a food trend.
+  async getCatalogGaps(days: number) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await this.catalogGapModel.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: { businessId: '$businessId', requestedItem: '$requestedItem' },
+          count: { $sum: 1 },
+          // أعلى تقارب شفناه لهالصنف: يفرّق بين "عندك شي شبهه بس باسم ثاني"
+          // وبين "ما عندك ولا قريب منه".
+          nearestLabel: { $last: '$nearestLabel' },
+          nearestScore: { $max: '$nearestScore' },
+          lastAskedAt: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { count: -1, lastAskedAt: -1 } },
+      { $limit: 100 },
+      {
+        $lookup: {
+          from: 'businesses',
+          let: { bid: { $toObjectId: '$_id.businessId' } },
+          pipeline: [{ $match: { $expr: { $eq: ['$_id', '$$bid'] } } }, { $project: { nameAr: 1, name: 1 } }],
+          as: 'business',
+        },
+      },
+      { $unwind: { path: '$business', preserveNullAndEmptyArrays: true } },
+    ]);
+    return {
+      days,
+      items: rows.map((r: any) => ({
+        businessId: r._id.businessId,
+        businessName: r.business?.nameAr || r.business?.name || null,
+        requestedItem: r._id.requestedItem,
+        count: r.count,
+        nearestLabel: r.nearestLabel ?? null,
+        nearestScore: r.nearestScore ?? null,
+        lastAskedAt: r.lastAskedAt,
+      })),
     };
   }
 
