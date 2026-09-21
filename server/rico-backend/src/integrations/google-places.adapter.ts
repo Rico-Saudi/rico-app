@@ -61,6 +61,45 @@ export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
   real_estate: ['real_estate_agency'],
   travel_agency: ['travel_agency', 'tour_agency'],
   insurance: ['insurance_agency'],
+
+  // Education / public services.
+  school: ['school', 'primary_school', 'secondary_school'],
+  university: ['university'],
+  kindergarten: ['preschool', 'child_care_agency'],
+  library: ['library'],
+  post_office: ['post_office'],
+  police: ['police'],
+  government_office: ['local_government_office', 'city_hall', 'government_office'],
+
+  // Shops.
+  butcher: ['butcher_shop'],
+  cosmetics: ['cosmetics_store'],
+  hardware_store: ['hardware_store', 'home_improvement_store', 'building_materials_store'],
+  auto_parts: ['auto_parts_store'],
+  sporting_goods: ['sporting_goods_store', 'sportswear_store'],
+  tailor: ['tailor'],
+
+  // Leisure.
+  cinema: ['movie_theater'],
+  amusement: ['amusement_park', 'amusement_center', 'video_arcade', 'indoor_playground'],
+};
+
+/// Arabic Text Search query for categories Google's Table A simply has no
+/// type for — there is no repair/maintenance type, no currency_exchange and
+/// no optician in the table, so a Nearby Search can't express them at all.
+///
+/// Without this, search.service falls back to the *slug* as the query text
+/// and asks Google for "maintenance_centre" in Arabic-speaking cities, which
+/// returns nothing useful. A category listed here is deliberately absent
+/// from GOOGLE_TYPE_BY_CATEGORY above: that absence is what routes it to
+/// Text Search in the first place, so never add it to both.
+export const GOOGLE_TEXT_QUERY_BY_CATEGORY: Record<string, string> = {
+  phone_repair: 'صيانة وتصليح جوالات',
+  appliance_repair: 'صيانة أجهزة منزلية ومكيفات',
+  maintenance_centre: 'مركز صيانة',
+  oil_change: 'محل تغيير زيت سيارات',
+  money_exchange: 'صرافة وتحويل عملات',
+  optician: 'محل نظارات وبصريات',
 };
 
 // rating/userRatingCount/priceLevel are Enterprise-SKU fields, so every call

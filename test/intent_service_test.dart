@@ -199,4 +199,68 @@ void main() {
       expect(IntentService.parseMulti('أبي فني تكييف مركزي').first.profession, 'central_ac');
     });
   });
+
+  group('الفئات المضافة حديثاً', () {
+    void expectSlug(String text, String slug) =>
+        expect(IntentService.parseMulti(text).first.slug, slug, reason: text);
+
+    test('تُطابق كلماتها', () {
+      const cases = {
+        'أقرب مدرسة': 'school',
+        'أقرب جامعة': 'university',
+        'وين أقرب جامعات': 'university',
+        'أبي حضانة': 'kindergarten',
+        'أقرب مكتبة عامة': 'library',
+        'وين محل صرافة': 'money_exchange',
+        'أقرب محل تغيير': 'tailor',
+        'أقرب مركز صيانة': 'maintenance_centre',
+        'محل صيانة جوالات': 'phone_repair',
+        'مركز صيانة مكيفات': 'appliance_repair',
+        'أبي تغيير زيت': 'oil_change',
+        'وين محل قطع غيار': 'auto_parts',
+        'أقرب ملحمة': 'butcher',
+        'أبي محل عطور': 'cosmetics',
+        'أقرب محل خردوات': 'hardware_store',
+        'أبي محل أدوات رياضية': 'sporting_goods',
+        'وين محل نظارات': 'optician',
+        'أقرب سينما': 'cinema',
+        'أبي ملاهي': 'amusement',
+        'أقرب مكتب بريد': 'post_office',
+        'وين أقرب مركز شرطة': 'police',
+        'أبي أروح البلدية': 'government_office',
+        'محل البسة': 'clothes',
+        'أقرب جوامع': 'mosque',
+      };
+      cases.forEach(expectSlug);
+    });
+
+    test('الأخص يفوز على الأعم اللي يشبهه', () {
+      // كل سطر هنا تصادم فعلي: الكلمة الأعم تطابق داخل الأخص، والفيصل الطول.
+      expectSlug('أقرب جامع', 'mosque'); // مش 'جامعة'
+      expectSlug('أقرب صراف آلي', 'atm'); // مش 'صرافة'
+      expectSlug('أقرب مكتبة', 'bookstore'); // مش 'مكتبة عامة'
+      expectSlug('أبي محل ملابس', 'clothes'); // مش 'ملابس رياضية'
+      expectSlug('أبي ملابس رياضية', 'sporting_goods');
+      expectSlug('أبي العاب اطفال', 'toy_store'); // مش 'ألعاب' (ملاهي)
+      expectSlug('أبي محل جوالات', 'mobile_phone'); // مش 'صيانة جوالات'
+      expectSlug('مركز صيانة سيارات', 'car_repair'); // مش 'مركز صيانة'
+      expectSlug('أبي تصليح سيارات', 'car_repair'); // مش 'تصليح'
+      expectSlug('أبي صالون تجميل', 'beauty'); // مش 'مستحضرات تجميل'
+    });
+
+    test('مركز الصيانة ما يسرق طلب الفني اللي يجي للبيت', () {
+      // أسماء المهن المجرّدة تبقى للمهنة؛ المحل يُطلب بصيغة مقيّدة أو بالجمع.
+      const cases = {
+        'أبي خياط': 'tailor',
+        'أبي صيانة جوال': 'phone_repair',
+        'أبي صيانة مكيفات': 'ac_technician',
+        'أبي صيانة أجهزة': 'appliance_repair',
+        'أبي فني صيانة': 'handyman',
+        'أبي مدرس خصوصي': 'tutor',
+      };
+      cases.forEach((text, slug) {
+        expect(IntentService.parseMulti(text).first.profession, slug, reason: text);
+      });
+    });
+  });
 }

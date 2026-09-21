@@ -39,6 +39,9 @@ export async function errorMessage(res, fallback) {
   return `${label}${detail}${ref}`;
 }
 
+// Kept in sync with CATEGORIES in src/classify/constants/categories.ts —
+// this map is what fills the sourcing and directory dropdowns, so a
+// category missing here is a category no admin can source from Google.
 export const CATEGORY_LABELS = {
   restaurant: 'مطاعم',
   cafe: 'كافيهات',
@@ -61,6 +64,47 @@ export const CATEGORY_LABELS = {
   dentist: 'عيادات أسنان',
   mosque: 'مساجد',
   park: 'حدائق',
+  bakery: 'مخابز',
+  sweets: 'محلات حلويات',
+  bookstore: 'مكتبات وقرطاسية',
+  toy_store: 'محلات ألعاب أطفال',
+  pet_store: 'محلات حيوانات أليفة',
+  jewelry_store: 'محلات مجوهرات',
+  furniture_store: 'محلات أثاث',
+  shoe_store: 'محلات أحذية',
+  gift_shop: 'محلات هدايا',
+  florist: 'محلات ورد',
+  laundry: 'مغاسل ملابس',
+  veterinary: 'عيادات بيطرية',
+  car_repair: 'كراجات تصليح سيارات',
+  car_dealer: 'معارض سيارات',
+  car_rental: 'تأجير سيارات',
+  parking: 'مواقف سيارات',
+  lawyer: 'مكاتب محاماة',
+  real_estate: 'مكاتب عقارات',
+  travel_agency: 'مكاتب سفريات',
+  insurance: 'شركات تأمين',
+  school: 'مدارس',
+  university: 'جامعات',
+  kindergarten: 'حضانات ورياض أطفال',
+  library: 'مكتبات عامة',
+  phone_repair: 'صيانة جوالات',
+  appliance_repair: 'صيانة أجهزة منزلية',
+  maintenance_centre: 'مراكز صيانة',
+  oil_change: 'محلات تغيير زيت',
+  money_exchange: 'صرافة وتحويل عملات',
+  tailor: 'خياطون وتفصيل',
+  butcher: 'ملاحم',
+  cosmetics: 'عطور ومستحضرات تجميل',
+  hardware_store: 'خردوات ومواد بناء',
+  auto_parts: 'قطع غيار',
+  sporting_goods: 'محلات أدوات رياضية',
+  optician: 'محلات نظارات',
+  cinema: 'سينمات',
+  amusement: 'مدن ألعاب وملاهي',
+  post_office: 'مكاتب بريد',
+  police: 'مراكز شرطة',
+  government_office: 'دوائر حكومية',
 };
 
 export const CLAIM_STATUS_LABELS = {

@@ -13,6 +13,7 @@ import {
   GOOGLE_PLACES_PROVIDER,
   DEFAULT_GOOGLE_PLACES_MONTHLY_CAP,
   GOOGLE_TYPE_BY_CATEGORY,
+  GOOGLE_TEXT_QUERY_BY_CATEGORY,
   GooglePlaceResult,
   searchNearby,
   searchText,
@@ -272,7 +273,14 @@ export class SearchService {
     // which returns tighter category matches.
     const knownType = categorySlug ? GOOGLE_TYPE_BY_CATEGORY[categorySlug] : undefined;
     const needsText = Boolean(brandHint) || rank === 'open_now' || !knownType;
-    const textQuery = brandHint || label || categorySlug;
+    // The slug is the last resort, not the second: asking Google for
+    // "maintenance_centre" in Riyadh returns nothing, while the Arabic
+    // phrase for the same category returns the real shops.
+    const textQuery =
+      brandHint ||
+      label ||
+      (categorySlug ? GOOGLE_TEXT_QUERY_BY_CATEGORY[categorySlug] : undefined) ||
+      categorySlug;
     if (needsText && !textQuery) return [];
 
     let results: GooglePlaceResult[];
