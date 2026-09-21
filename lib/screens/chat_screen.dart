@@ -26,6 +26,7 @@ import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../models/customer_mood.dart';
+import '../models/order_reply.dart';
 import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
@@ -428,7 +429,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     if (intent.kind == IntentKind.order) {
-      return _resolveOrderMessage(intent, index);
+      return _resolveOrderMessage(intent, origin, index);
     }
 
     if (intent.kind == IntentKind.deals) {
@@ -1237,31 +1238,76 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// الأصناف غير الموجودة تُقال صراحةً في نص الرسالة. السكوت عنها أسوأ عطل
   /// ممكن هنا: المستخدم يضغط "أكّد" وهو يظن أن الأربعة كلها بالسلّة، وما يكتشف
   /// نقص اثنين إلا حين يتصل المحل.
-  Future<ChatMessage> _resolveOrderMessage(QueryIntent intent, int index) async {
+  Future<ChatMessage> _resolveOrderMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    int index,
+  ) async {
     final placeName = intent.placeName;
-    if (placeName == null) {
+    final categorySlug = intent.slug;
+
+    // بلا اسم محل ولا فئة ما نعرف من وين نطلب أصلاً.
+    if (placeName == null && categorySlug == null) {
       return ChatMessage(text: 'ما فهمت من وين تبي تطلب، قل لي اسم المحل 👌', sender: MessageSender.bot);
     }
 
     ResolvedOrder resolved;
     try {
-      resolved = await _catalogService.resolveOrder(placeName: placeName, items: intent.orderItems);
+      resolved = await _catalogService.resolveOrder(
+        placeName: placeName,
+        // الموقع يُبعث للطلب اللي بلا اسم محل بس — هناك الخادم يحتاجه
+        // ليرتّب المحلات القريبة بمن عنده طلبه.
+        categorySlug: placeName == null ? categorySlug : null,
+        lat: placeName == null ? origin.lat : null,
+        lng: placeName == null ? origin.lng : null,
+        items: intent.orderItems,
+      );
     } on CatalogException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
     } catch (_) {
       return ChatMessage(text: 'ما قدرت أجهّز طلبك الحين 😕', sender: MessageSender.bot);
     }
 
+    // ما سمّى محلاً: نعرض عليه المحلات القريبة مرتّبة بمن عنده طلبه، ويقرر
+    // هو. الاختيار نيابةً عنه يخفي عنه إن فيه أقرب أو عنده طلبه كاملاً.
+    if (resolved.needsShopChoice) {
+      return _shopChoiceMessage(resolved, intent, index);
+    }
+
+    return _orderMessageFor(resolved, intent, index, shopLabel: placeName);
+  }
+
+  /// يبني رسالة الطلب من نتيجة مطابقة — يشترك فيها مساران: محل سمّاه العميل،
+  /// ومحل ضغطه من المحلات المعروضة عليه. النتيجة واحدة بالحالتين، فالفرق
+  /// الوحيد هو الاسم اللي نذكره حين ما يرجّع الخادم محلاً أصلاً.
+  ChatMessage _orderMessageFor(
+    ResolvedOrder resolved,
+    QueryIntent intent,
+    int index, {
+    String? shopLabel,
+  }) {
     final catalog = resolved.catalog;
     if (catalog == null) {
       return ChatMessage(
-        text: 'ما لقيت محل باسم "$placeName" 😕 جرّب تكتب اسمه كامل، أو قل لي وش تبي وأنا أدوّر لك على أقرب محل.',
+        text: shopLabel != null
+            ? 'ما لقيت محل باسم "$shopLabel" 😕 جرّب تكتب اسمه كامل، أو قل لي وش تبي وأنا أدوّر لك على أقرب محل.'
+            // ما سمّى محلاً، فما ينفع نقول "ما لقيت محل باسم كذا" — المشكلة
+            // إن ما فيه ${intent.label} مسجّل قريب منه، وهذا كلام ثاني.
+            : 'ما لقيت ${intent.label} قريب منك عنده طلبك 😕 جرّب توسّع نطاقك أو سمّي لي المحل.',
         sender: MessageSender.bot,
       );
     }
 
-    final shop = resolved.businessName ?? placeName;
-    final missing = resolved.unmatched;
+    final shop = resolved.businessName ?? shopLabel ?? intent.label;
+
+    // محل مسجّل بلا قائمة بعد — "هذي قائمتهم" وما فيها ولا صنف رد أسوأ من
+    // الصمت. نقولها صراحة بدل ما نعرض بطاقة فاضية يتصفّحها بلا فايدة.
+    if (catalog.products.isEmpty && catalog.deals.isEmpty) {
+      return ChatMessage(
+        text: 'لقيت $shop بس قائمتهم ما هي مضافة عندنا للحين 😕 جرّب محل ثاني أو قل لي وش تبي.',
+        sender: MessageSender.bot,
+      );
+    }
 
     // سمّى المحل بلا أصناف — يبي يشوف قائمتهم، فنفتحها على التصفّح.
     if (intent.orderItems.isEmpty) {
@@ -1278,10 +1324,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (resolved.foundNothing) {
       final suggestions = resolved.suggestions;
       return ChatMessage(
-        text: suggestions.isEmpty
-            ? 'ما لقيت ${_itemsPhrase(missing)} في $shop 😕 هذي قائمتهم إذا تبي تختار منها:'
-            : 'ما لقيت ${_itemsPhrase(missing)} في $shop، بس أقرب شي عندهم '
-                '${_itemsPhrase(suggestions.map((s) => s.label).toList())} — تبيه؟',
+        text: buildOrderReplyText(shop: shop, resolved: resolved),
         sender: MessageSender.bot,
         orderSuggestions: suggestions.isEmpty ? null : suggestions,
         onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
@@ -1308,12 +1351,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // الناقص صار سؤالاً له جواب بضغطة، لا طريقاً مسدوداً يرجّع المستخدم
     // يتصفّح القائمة كلها بنفسه.
     final suggestions = resolved.suggestions;
-    final text = missing.isEmpty
-        ? 'جهّزت لك طلبك من $shop — راجعه وأكّده 👇'
-        : suggestions.isEmpty
-            ? 'جهّزت اللي لقيته من $shop. بس ما لقيت ${_itemsPhrase(missing)} عندهم — راجع الطلب وأكّده 👇'
-            : 'جهّزت اللي لقيته من $shop. ما لقيت ${_itemsPhrase(missing)} عندهم — '
-                'أقرب شي عندهم ${_itemsPhrase(suggestions.map((s) => s.label).toList())}، تبيه؟';
+
+    final text = buildOrderReplyText(shop: shop, resolved: resolved);
 
     return ChatMessage(
       text: text,
@@ -1324,6 +1363,57 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
       catalogActions: _catalogActionsFor(index),
     );
+  }
+
+  /// رسالة «اختر من وين تطلب» — المحلات مرتّبة بمن عنده طلبك أولاً.
+  ChatMessage _shopChoiceMessage(ResolvedOrder resolved, QueryIntent intent, int index) {
+    final options = resolved.shopOptions;
+    final wanted = intent.orderItems.map((i) => i.name).toList();
+    final withAll = options.where((o) => o.hasAll).length;
+
+    // الصدق هنا يوفّر على العميل فتح المحلات وحدة وحدة: إذا ما فيه أحد عنده
+    // طلبه نقولها قبل القائمة، لا نتركه يكتشفها بعد ثلاث ضغطات.
+    final lead = options.every((o) => o.hasNone)
+        ? wanted.isEmpty
+            ? 'هذي أقرب ${intent.label} لك — اختر من وين تطلب 👇'
+            : 'ما لقيت ${_itemsPhrase(wanted)} في ${intent.label} قريبة منك 😕 بس هذي الأقرب، شوف قوائمهم:'
+        : withAll == 0
+            ? 'لقيت لك ${intent.label} عندها جزء من طلبك — اختر من وين تطلب 👇'
+            : 'لقيت لك ${intent.label} عندها طلبك — اختر من وين تطلب 👇';
+
+    return ChatMessage(
+      text: lead,
+      sender: MessageSender.bot,
+      understandingIntent: intent,
+      shopOptions: options,
+      onPickShop: (option) => _pickOrderShop(index, option, intent),
+    );
+  }
+
+  /// ضغط محلاً من القائمة المعروضة: نجهّز طلبه منه ونستبدل رسالة الاختيار
+  /// بالسلّة نفسها — بنفس الموضع، فما تتراكم فقاعتان لطلب واحد.
+  Future<void> _pickOrderShop(int index, OrderShopOption option, QueryIntent intent) async {
+    if (index >= _messages.length) return;
+    setState(() => _messages[index] = _messages[index].copyWith(busyShopId: option.id));
+    _scrollToBottom();
+
+    ChatMessage message;
+    try {
+      final resolved = await _catalogService.resolveOrder(
+        businessId: option.id,
+        items: intent.orderItems,
+      );
+      message = _orderMessageFor(resolved, intent, index, shopLabel: option.name);
+    } on CatalogException catch (e) {
+      message = ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      message = ChatMessage(text: 'ما قدرت أجهّز طلبك من ${option.name} الحين 😕', sender: MessageSender.bot);
+    }
+
+    if (!mounted) return;
+    setState(() => _messages[index] = message);
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 
   /// "كنافة" / "كنافة وأرز بحليب" / "كنافة وأرز بحليب و٢ غيرها" — عربية تُقرأ،

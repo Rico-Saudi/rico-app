@@ -48,6 +48,15 @@ class ChatMessage {
 
   final void Function(OrderSuggestion suggestion)? onAddSuggestion;
 
+  /// محلات معروضة ليختار منها العميل — حين ذكر أصنافاً بلا اسم محل. تُعرض
+  /// بدل السلّة، لأنه لسه ما قرّر من وين يطلب.
+  final List<OrderShopOption>? shopOptions;
+
+  final void Function(OrderShopOption option)? onPickShop;
+
+  /// المحل الجاري تجهيز الطلب منه بعد ضغطه.
+  final String? busyShopId;
+
   /// تدفّق تصفّح منتجات/عروض نشاط حقيقي واحد ثم تأكيد طلب تواصل حقيقي
   /// (اهتمام بمنتج/عرض، يظهر لصاحب النشاط في لوحته) — بديل حقيقي لتدفّق
   /// الطلب التجريبي القديم الذي كان لا يتصل بأي خادم.
@@ -90,6 +99,9 @@ class ChatMessage {
     this.onQuickReply,
     this.orderSuggestions,
     this.onAddSuggestion,
+    this.shopOptions,
+    this.onPickShop,
+    this.busyShopId,
     this.requestFlow,
     this.catalogActions,
     this.professionalFlow,
@@ -106,6 +118,8 @@ class ChatMessage {
     RequestFlow? requestFlow,
     ProfessionalFlow? professionalFlow,
     List<OrderSuggestion>? orderSuggestions,
+    String? busyShopId,
+    bool clearBusyShop = false,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -121,6 +135,9 @@ class ChatMessage {
       onQuickReply: onQuickReply,
       orderSuggestions: orderSuggestions ?? this.orderSuggestions,
       onAddSuggestion: onAddSuggestion,
+      shopOptions: shopOptions,
+      onPickShop: onPickShop,
+      busyShopId: clearBusyShop ? null : (busyShopId ?? this.busyShopId),
       requestFlow: requestFlow ?? this.requestFlow,
       catalogActions: catalogActions,
       professionalFlow: professionalFlow ?? this.professionalFlow,

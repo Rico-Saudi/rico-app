@@ -23,9 +23,37 @@ void main() {
       expect(intent.orderItems.first.quantity, 1);
     });
 
-    test('تُسقط إذا نقص اسم المحل — ما فيه شي نفتحه', () {
+    test('تُسقط إذا نقص اسم المحل والفئة معاً — ما فيه شي نفتحه', () {
       expect(orderIntent(placeName: null).toQueryIntent(), isNull);
       expect(orderIntent(placeName: '').toQueryIntent(), isNull);
+    });
+
+    // "وصّلي من مطعم وجبتين شاورما" — ما سمّى محلاً، بس ذكر نوعه والأصناف،
+    // والخادم يختار له أقرب محل عنده الطلب فعلاً.
+    test('فئة + أصناف بلا اسم محل = نية طلب صحيحة', () {
+      final intent = ResolvedIntent(
+        kind: 'order',
+        placeName: null,
+        category: 'restaurant',
+        orderItems: const [RequestedItem(name: 'شاورما', quantity: 2)],
+      ).toQueryIntent()!;
+
+      expect(intent.kind, IntentKind.order);
+      expect(intent.placeName, isNull);
+      expect(intent.slug, 'restaurant');
+      // الاسم العربي للفئة يُستخدم بنص الرد ("أقرب مطعم عنده طلبك").
+      expect(intent.label, 'مطعم');
+      expect(intent.orderItems.single.quantity, 2);
+    });
+
+    test('فئة بلا أصناف تُسقط — هذا بحث عن مكان لا طلب', () {
+      final intent = ResolvedIntent(
+        kind: 'order',
+        placeName: null,
+        category: 'restaurant',
+        orderItems: const [],
+      ).toQueryIntent();
+      expect(intent, isNull);
     });
 
     test('محل بلا أصناف يبقى نية صحيحة — طلب لرؤية القائمة', () {
@@ -44,6 +72,53 @@ void main() {
 
     test('الصنف يُرسل للخادم باسمه وكميته فقط', () {
       expect(const RequestedItem(name: 'كنافة', quantity: 2).toJson(), {'name': 'كنافة', 'quantity': 2});
+    });
+  });
+
+  // "بدي وصي من مطعم الماهر وجبة" — ريكو هو اللي اختار الصنف، فلازم السطر
+  // يحمل سبب اختياره: سطر بسلّة العميل ما يعرف من وين جا هو سطر يراجعه بنفسه.
+  group('الصنف اللي اختاره ريكو', () {
+    ResolvedOrder pickedOrder(String? pickedBy) => ResolvedOrder.fromJson({
+          'business': {'id': 'b1', 'name': 'مطعم الماهر'},
+          'catalog': {'businessId': 'b1', 'businessName': 'مطعم الماهر', 'products': [], 'deals': []},
+          'matched': [
+            {
+              'itemType': 'product',
+              'itemId': 'p1',
+              'label': 'شاورما دجاج',
+              'unitPrice': 25,
+              'quantity': 2,
+              'requestedAs': 'وجبة',
+              if (pickedBy != null) 'pickedBy': pickedBy,
+            }
+          ],
+          'unmatched': [],
+        });
+
+    test('يُقرأ كمُختار ومعه ما نطقه العميل', () {
+      final line = pickedOrder('popular').matched.single;
+      expect(line.wasPicked, isTrue);
+      expect(line.requestedAs, 'وجبة');
+      expect(line.label, 'شاورما دجاج');
+      expect(line.quantity, 2);
+    });
+
+    test('كل سبب له صياغته اللي تُقال للعميل', () {
+      expect(pickedOrder('popular').matched.single.pickReason, 'الأكثر طلباً عندهم');
+      expect(pickedOrder('deal').matched.single.pickReason, 'وعليه خصم');
+      expect(pickedOrder('cheapest').matched.single.pickReason, 'أوفر شي عندهم');
+    });
+
+    // "pick" معناها أول صنف بالقائمة بلا مرجّح — ادّعاء سبب له كذب صغير.
+    test('الاختيار بلا مرجّح ما يدّعي سبباً', () {
+      expect(pickedOrder('pick').matched.single.pickReason, isNull);
+      expect(pickedOrder('pick').matched.single.wasPicked, isTrue);
+    });
+
+    test('الصنف اللي طلبه العميل بالاسم ما هو مُختاراً', () {
+      final line = pickedOrder(null).matched.single;
+      expect(line.wasPicked, isFalse);
+      expect(line.pickReason, isNull);
     });
   });
 

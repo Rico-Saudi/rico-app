@@ -44,14 +44,28 @@ class ResolvedIntent {
     }
 
     if (kind == 'order') {
-      // قائمة أصناف فارغة مقبولة: "بدي أطلب من مطعم الماهر" طلبُ قائمةٍ
-      // يُفتح على التصفّح. أما بلا اسم محل فما فيه شي نفتحه.
+      // قائمة أصناف فارغة مقبولة مع اسم محل: "بدي أطلب من مطعم الماهر"
+      // طلبُ قائمةٍ يُفتح على التصفّح.
       final shop = placeName;
-      if (shop == null || shop.isEmpty) return null;
+      if (shop != null && shop.isNotEmpty) {
+        return QueryIntent(
+          kind: IntentKind.order,
+          label: shop,
+          placeName: shop,
+          orderItems: orderItems,
+        );
+      }
+
+      // بلا اسم محل: الفئة + الأصناف تكفي، والخادم يختار المحل ("وصّلي من
+      // مطعم وجبتين شاورما"). بلا أصناف ما فيه طلب أصلاً — هذا بحث عن مكان،
+      // والخادم يسقطه قبل ما يوصلنا.
+      final slug = category;
+      if (slug == null || slug.isEmpty || orderItems.isEmpty) return null;
+      final categoryIntent = IntentService.byCategorySlug(slug);
       return QueryIntent(
         kind: IntentKind.order,
-        label: shop,
-        placeName: shop,
+        label: categoryIntent?.label ?? slug,
+        slug: slug,
         orderItems: orderItems,
       );
     }

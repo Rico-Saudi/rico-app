@@ -9,6 +9,7 @@ import { ProductsModule } from '../products/products.module';
 import { VendorImpression, VendorImpressionSchema } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapSchema } from './schemas/search-gap.schema';
 import { CatalogGap, CatalogGapSchema } from './schemas/catalog-gap.schema';
+import { CustomerRequest, CustomerRequestSchema } from '../requests/schemas/request.schema';
 import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-limiters';
 
 @Module({
@@ -20,6 +21,9 @@ import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-
       { name: VendorImpression.name, schema: VendorImpressionSchema },
       { name: SearchGap.name, schema: SearchGapSchema },
       { name: CatalogGap.name, schema: CatalogGapSchema },
+      // Read-only here: "اختر لي وجبة" leans on what other customers actually
+      // asked this shop for. Writing requests stays with RequestsModule.
+      { name: CustomerRequest.name, schema: CustomerRequestSchema },
     ]),
   ],
   controllers: [PublicController],

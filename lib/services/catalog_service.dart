@@ -42,8 +42,17 @@ class CatalogService {
   ///
   /// المطابقة على الخادم لا هنا: القائمة عنده، وتطبيع العربية (الهمزات، التاء
   /// المربوطة، أل التعريف) مكتوب مرة واحدة هناك بدل نسخة في كل عميل.
+  /// [placeName] للمحل اللي سمّاه العميل. وإذا ما سمّى محل، تُبعث
+  /// [categorySlug] مع [lat]/[lng] والخادم يختار أقرب محل **عنده الأصناف
+  /// فعلاً** — انظر PublicService.findBusinessForItems.
   Future<ResolvedOrder> resolveOrder({
-    required String placeName,
+    /// المحل اللي ضغطه العميل من المحلات المعروضة عليه — المعرّف لا الاسم،
+    /// لأن محلين يقدرون يتشاركون اسماً والمعرّف وحده ما ينحلّ للمحل الغلط.
+    String? businessId,
+    String? placeName,
+    String? categorySlug,
+    double? lat,
+    double? lng,
     required List<RequestedItem> items,
   }) async {
     http.Response response;
@@ -53,7 +62,10 @@ class CatalogService {
             Uri.parse('$_baseUrl/orders/resolve'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
-              'placeName': placeName,
+              if (businessId != null) 'businessId': businessId,
+              if (placeName != null) 'placeName': placeName,
+              if (categorySlug != null) 'categorySlug': categorySlug,
+              if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
               'items': items.map((i) => i.toJson()).toList(),
             }),
           )

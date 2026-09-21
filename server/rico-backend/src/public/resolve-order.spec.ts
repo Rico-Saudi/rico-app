@@ -6,6 +6,7 @@ import { Product, ProductDocument, ProductSchema } from '../products/schemas/pro
 import { VendorImpression, VendorImpressionDocument, VendorImpressionSchema } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapDocument, SearchGapSchema } from './schemas/search-gap.schema';
 import { CatalogGap, CatalogGapDocument, CatalogGapSchema } from './schemas/catalog-gap.schema';
+import { CustomerRequest, CustomerRequestDocument, CustomerRequestSchema } from '../requests/schemas/request.schema';
 
 // End of the chain the chat actually walks: a shop name and some dish names in,
 // a basket plus an honest list of misses out.
@@ -26,8 +27,9 @@ describe('PublicService.resolveOrder', () => {
     const impressionModel = mongoose.model(VendorImpression.name, VendorImpressionSchema) as unknown as Model<VendorImpressionDocument>;
     const gapModel = mongoose.model(SearchGap.name, SearchGapSchema) as unknown as Model<SearchGapDocument>;
     catalogGapModel = mongoose.model(CatalogGap.name, CatalogGapSchema) as unknown as Model<CatalogGapDocument>;
+    const requestModel = mongoose.model(CustomerRequest.name, CustomerRequestSchema) as unknown as Model<CustomerRequestDocument>;
 
-    service = new PublicService(businessModel, productModel, impressionModel, gapModel, catalogGapModel, deals as any);
+    service = new PublicService(businessModel, productModel, impressionModel, gapModel, catalogGapModel, requestModel, deals as any);
   }, 60_000);
 
   afterAll(async () => {
@@ -36,6 +38,7 @@ describe('PublicService.resolveOrder', () => {
   });
 
   beforeEach(async () => {
+    await service.whenGapsWritten();
     await Promise.all([businessModel.deleteMany({}), productModel.deleteMany({}), catalogGapModel.deleteMany({})]);
     deals.findActiveForBusiness.mockResolvedValue([]);
 
@@ -127,7 +130,7 @@ describe('PublicService.resolveOrder', () => {
   it('records every miss against the shop as a demand signal', async () => {
     await order('مطعم الماهر', [{ name: 'بودنغ أرز' }, { name: 'سوشي' }]);
     // insertMany is fire-and-forget inside resolveOrder.
-    await new Promise((r) => setTimeout(r, 50));
+    await service.whenGapsWritten();
 
     const gaps = await catalogGapModel.find().sort({ requestedItem: 1 }).lean();
     expect(gaps.map((g: any) => g.requestedItem).sort()).toEqual(['بودنغ أرز', 'سوشي']);
@@ -143,7 +146,7 @@ describe('PublicService.resolveOrder', () => {
 
   it('records nothing when every item matched', async () => {
     await order('مطعم الماهر', [{ name: 'كنافة نابلسية' }]);
-    await new Promise((r) => setTimeout(r, 50));
+    await service.whenGapsWritten();
     expect(await catalogGapModel.countDocuments()).toBe(0);
   });
 

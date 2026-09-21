@@ -74,15 +74,47 @@ describe('classify: a message with no usable intent', () => {
     expect(recorded[0].ricoReply).toBeTruthy();
   });
 
-  it('records nothing when the model itself called the message off-topic', async () => {
-    // Greetings, thanks and "how do you work?" are off-topic and answered
-    // well. Logging them would bury the real gaps under small talk.
+  it('records nothing for a greeting, which is off-topic but understood', async () => {
+    // offTopic covers three different things (see the prompt's offTopic
+    // section): small talk, a vague mood, and "I didn't understand". Only
+    // the last is a gap; logging the first two would bury the real ones
+    // under greetings.
     const recorded: any[] = [];
-    const service = serviceReplying(JSON.stringify({ offTopic: true, reply: 'هلا والله', intents: [] }), {
+    const service = serviceReplying(
+      JSON.stringify({ offTopic: true, notUnderstood: false, reply: 'هلا والله', intents: [] }),
+      { record: async (entry: any) => void recorded.push(entry) },
+    );
+
+    await service.classify({ message: 'هلا كيفك', brand: 'tadallal' } as any);
+    expect(recorded).toEqual([]);
+  });
+
+  it('records the question when the model says it did not understand', async () => {
+    // The common path, and the one that used to be missed: the prompt asks
+    // the model to say "ما فهمتك" itself with offTopic=true, so these never
+    // reach the empty-intents fallback below.
+    const recorded: any[] = [];
+    const service = serviceReplying(
+      JSON.stringify({ offTopic: true, notUnderstood: true, reply: 'ما ضبطت معي هاي 😅', intents: [] }),
+      { record: async (entry: any) => void recorded.push(entry) },
+    );
+
+    await service.classify({ message: 'بدي إشي للزلمة اللي بيجي ع البيت', brand: 'tadallal' } as any);
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ message: 'بدي إشي للزلمة اللي بيجي ع البيت', dialect: 'jordanian' });
+    expect(recorded[0].ricoReply).toBe('ما ضبطت معي هاي 😅');
+  });
+
+  it('treats a missing notUnderstood flag as "understood"', async () => {
+    // An older model, or one that dropped the field, must not turn every
+    // greeting into a training gap.
+    const recorded: any[] = [];
+    const service = serviceReplying(JSON.stringify({ offTopic: true, reply: 'أهلين', intents: [] }), {
       record: async (entry: any) => void recorded.push(entry),
     });
 
-    await service.classify({ message: 'هلا كيفك', brand: 'tadallal' } as any);
+    await service.classify({ message: 'مرحبا', brand: 'tadallal' } as any);
     expect(recorded).toEqual([]);
   });
 

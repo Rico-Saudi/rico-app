@@ -143,6 +143,14 @@ class ResolvedOrder {
   /// «بودنغ أرز» تشبه «أرز بحليب» ما يعني إنها هي.
   final List<OrderSuggestion> suggestions;
 
+  /// العميل اختار هذا المحل من قائمة اقترحناها عليه، ما سمّاه ابتداءً.
+  final bool pickedFromOptions;
+
+  /// المحلات المعروضة عليه حين ذكر أصنافاً بلا اسم محل — مرتّبة بمن عنده
+  /// طلبه أولاً ثم بالأقرب. حين تكون غير فارغة، ما فيه سلّة ولا قائمة بعد:
+  /// العميل لسه ما اختار من وين.
+  final List<OrderShopOption> shopOptions;
+
   const ResolvedOrder({
     this.businessId,
     this.businessName,
@@ -150,7 +158,12 @@ class ResolvedOrder {
     this.matched = const [],
     this.unmatched = const [],
     this.suggestions = const [],
+    this.pickedFromOptions = false,
+    this.shopOptions = const [],
   });
+
+  /// ما اختار محلاً بعد — الرد عرضٌ لمحلات لا سلّة.
+  bool get needsShopChoice => shopOptions.isNotEmpty;
 
   bool get foundBusiness => catalog != null;
   bool get foundNothing => matched.isEmpty;
@@ -169,7 +182,52 @@ class ResolvedOrder {
       suggestions: ((json['suggestions'] as List?) ?? [])
           .map((s) => OrderSuggestion.fromJson(s as Map<String, dynamic>))
           .toList(),
+      pickedFromOptions: json['pickedFromOptions'] == true,
+      shopOptions: ((json['shopOptions'] as List?) ?? [])
+          .map((o) => OrderShopOption.fromJson(o as Map<String, dynamic>))
+          .toList(),
     );
+  }
+}
+
+/// محل معروض على العميل ليطلب منه، حين ذكر أصنافاً بلا اسم محل.
+///
+/// يحمل معه **وش عنده من طلبك ووش ناقص**، لأن قائمة أسماء ومسافات وحدها
+/// تخلّي العميل يفتح المحلات وحدة وحدة ليكتشف اللي نعرفه أصلاً.
+class OrderShopOption {
+  final String id;
+  final String name;
+  final int? distanceMeters;
+
+  /// أصناف طلبها العميل وهذا المحل عنده منها.
+  final List<String> has;
+
+  /// أصناف طلبها وما هي عنده.
+  final List<String> missing;
+
+  const OrderShopOption({
+    required this.id,
+    required this.name,
+    this.distanceMeters,
+    this.has = const [],
+    this.missing = const [],
+  });
+
+  factory OrderShopOption.fromJson(Map<String, dynamic> json) => OrderShopOption(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        distanceMeters: (json['distanceMeters'] as num?)?.toInt(),
+        has: ((json['has'] as List?) ?? []).map((e) => e as String).toList(),
+        missing: ((json['missing'] as List?) ?? []).map((e) => e as String).toList(),
+      );
+
+  bool get hasAll => missing.isEmpty && has.isNotEmpty;
+  bool get hasNone => has.isEmpty;
+
+  String? get distanceLabel {
+    final meters = distanceMeters;
+    if (meters == null) return null;
+    return meters < 1000 ? '$meters م' : '${(meters / 1000).toStringAsFixed(1)} كم';
   }
 }
 
@@ -206,6 +264,13 @@ class ResolvedOrderLine {
   final String? imageUrl;
   final int quantity;
 
+  /// سبب اختيار ريكو لهذا الصنف حين ما سمّاه العميل ("وجبة") — واحد من
+  /// popular/deal/cheapest/pick، وnull للأصناف اللي طلبها بالاسم.
+  ///
+  /// الصنف اللي ما ذكره العميل لازم يجي معه سبب: سطر بسلّته ما يعرف من وين
+  /// جا هو سطر لازم يراجعه بنفسه، والسبب هو اللي يخلّي الاختيار موثوقاً.
+  final String? pickedBy;
+
   /// ما نطقه المستخدم قبل المطابقة — يُعرض حين يختلف عن [label]، فيعرف أن
   /// "كنافة" صارت "كنافة نابلسية" ولا يفاجأ.
   final String requestedAs;
@@ -219,7 +284,20 @@ class ResolvedOrderLine {
     this.imageUrl,
     this.quantity = 1,
     this.requestedAs = '',
+    this.pickedBy,
   });
+
+  /// اختاره ريكو، ما طلبه العميل بالاسم.
+  bool get wasPicked => pickedBy != null;
+
+  /// سبب الاختيار كما يُقال للعميل — null حين ما فيه سبب يستاهل القول
+  /// ("pick": أول صنف بالقائمة، وادّعاء سبب له كذب صغير بلا فايدة).
+  String? get pickReason => switch (pickedBy) {
+        'popular' => 'الأكثر طلباً عندهم',
+        'deal' => 'وعليه خصم',
+        'cheapest' => 'أوفر شي عندهم',
+        _ => null,
+      };
 
   factory ResolvedOrderLine.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
     final imagePath = json['imageUrl'] as String?;
@@ -232,6 +310,7 @@ class ResolvedOrderLine {
       imageUrl: imagePath == null ? null : '$baseUrl$imagePath',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       requestedAs: json['requestedAs'] as String? ?? '',
+      pickedBy: json['pickedBy'] as String?,
     );
   }
 }

@@ -67,12 +67,19 @@ export class ClassifyService {
     const mood = validateMood(parsed.mood);
 
     if (parsed.offTopic === true) {
-      return {
-        offTopic: true,
-        reply: typeof parsed.reply === 'string' ? parsed.reply : null,
-        intents: [],
-        mood,
-      };
+      const reply = typeof parsed.reply === 'string' ? parsed.reply : null;
+
+      // offTopic يغطي تلات حالات مختلفة تماماً (انظر قسم offTopic بالبرومبت):
+      // تحية ودردشة، ومزاج غامض، و«رسالة ما فهمتها». أول ثنتين ريكو فاهمهن
+      // وبيجاوبهن صح — تسجيلهن بيغرق طابور التعلّم بتحيات. الثالثة هي
+      // بالضبط اللي بدنا نتعلّم منها، وهي كمان الأشيع: البرومبت بيطلب من
+      // النموذج يقول «ما فهمتك» بنفسه، فما بتوصل أبداً للمسار الاحتياطي
+      // تحت (intents فاضية). فبدون notUnderstood كان أغلب «ما فهمتك» يضيع.
+      if (parsed.notUnderstood === true) {
+        this.recordGap(dto, reply);
+      }
+
+      return { offTopic: true, reply, intents: [], mood };
     }
 
     const rawIntents = Array.isArray(parsed.intents) ? parsed.intents.slice(0, MAX_INTENTS) : [];
@@ -98,22 +105,27 @@ export class ClassifyService {
       // فمعناه إن النموذج ردّ وما طلع منه ولا نية نقدر ننفذها — وهاي فجوة
       // حقيقية بالفهم، بتستاهل درس.
       //
-      // بلا await: المستخدم مستني رده، وكتابة سطر تعلّم ما بتستاهل تأخيره
-      // ولا تحويل رد ناجح لخطأ. و.catch() موجود رغم إن record بيبلع أخطاءه
-      // أصلاً — وعد غير منتظَر برفض بيوقّف Node كلها، وهاد ثمن ما بنقبله
-      // مقابل سطر إحصائي.
-      this.learning
-        .record({
-          message: dto.message,
-          brand: dto.brand || DEFAULT_BRAND,
-          dialect: brand.dialect,
-          ricoReply: reply,
-        })
-        .catch(() => undefined);
+      this.recordGap(dto, reply);
 
       return { offTopic: true, reply, intents: [], mood };
     }
 
     return { offTopic: false, reply: null, intents, mood };
+  }
+
+  /** يسجّل سؤالاً ما فهمه ريكو، بلا انتظار.
+   *
+   * المستخدم مستني رده، وكتابة سطر تعلّم ما بتستاهل تأخيره ولا تحويل رد
+   * ناجح لخطأ. و.catch() موجود رغم إن record بيبلع أخطاءه أصلاً — وعد غير
+   * منتظَر برفض بيوقّف Node كلها، وهاد ثمن ما بنقبله مقابل سطر إحصائي. */
+  private recordGap(dto: ClassifyRequestDto, reply: string | null): void {
+    this.learning
+      .record({
+        message: dto.message,
+        brand: dto.brand || DEFAULT_BRAND,
+        dialect: brandFor(dto.brand).dialect,
+        ricoReply: reply ?? '',
+      })
+      .catch(() => undefined);
   }
 }

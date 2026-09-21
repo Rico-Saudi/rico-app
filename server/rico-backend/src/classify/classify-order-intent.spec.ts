@@ -56,3 +56,46 @@ describe('order intent validation', () => {
     expect(order({ orderItems: many })!.orderItems!.length).toBe(20);
   });
 });
+
+// "وصّلي من مطعم وجبتين شاورما" — a kind of shop and the dishes, no name.
+// The dishes are what make it an order; without them it is a plain search.
+describe('validateIntent — order with no shop named', () => {
+  const order = (raw: any) => validateIntentForTest({ kind: 'order', ...raw });
+
+  it('keeps a category order that names dishes', () => {
+    const intent = order({
+      placeName: null,
+      category: 'restaurant',
+      orderItems: [{ name: 'شاورما', quantity: 2 }],
+    });
+
+    expect(intent).toMatchObject({
+      kind: 'order',
+      placeName: null,
+      category: 'restaurant',
+      orderItems: [{ name: 'شاورما', quantity: 2 }],
+    });
+  });
+
+  // "وصّلي من مطعم" with nothing to order is a restaurant search, and the
+  // place path answers it far better than an empty basket would.
+  it('drops a category with no dishes', () => {
+    expect(order({ placeName: null, category: 'restaurant', orderItems: [] })).toBeNull();
+    expect(order({ placeName: null, category: 'restaurant' })).toBeNull();
+  });
+
+  it('drops an order with neither a name nor a category', () => {
+    expect(order({ placeName: null, category: null, orderItems: [{ name: 'شاورما' }] })).toBeNull();
+  });
+
+  it('drops an invented category', () => {
+    expect(order({ placeName: null, category: 'spaceport', orderItems: [{ name: 'شاورما' }] })).toBeNull();
+  });
+
+  // A named shop is still the stronger signal: the category is dropped so
+  // nothing downstream tries to re-pick a shop the customer already chose.
+  it('ignores the category when the shop was named', () => {
+    expect(order({ placeName: 'مطعم الماهر', category: 'restaurant', orderItems: [{ name: 'شاورما' }] }))
+      .toMatchObject({ placeName: 'مطعم الماهر', category: null });
+  });
+});

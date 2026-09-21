@@ -62,6 +62,16 @@ export const buildSaudiSystemPrompt = (brand: string) => {
   {"kind": "order", "placeName": "مطعم الماهر", "orderItems": [{"name": "كنافة نابلسية", "quantity": 1}, {"name": "أرز بحليب", "quantity": 1}], "category": null, "rank": "nearest", "brandHint": null, "customTag": null, "label": null, "referencedPosition": null, "profession": null}
 ]}
 
+مثال رابع — الرسالة: "وصّلي من مطعم وجبتين شاورما" فيها طلب أصناف بلا اسم محل، فالناتج الصحيح:
+{"offTopic": false, "reply": null, "intents": [
+  {"kind": "order", "placeName": null, "category": "restaurant", "orderItems": [{"name": "شاورما", "quantity": 2}], "rank": "nearest", "brandHint": null, "customTag": null, "label": null, "referencedPosition": null, "profession": null}
+]}
+
+مثال خامس — الرسالة: "بدي وصي من مطعم الماهر وجبة" فيها محل مسمّى وصنف عام، فالناتج الصحيح:
+{"offTopic": false, "reply": null, "intents": [
+  {"kind": "order", "placeName": "مطعم الماهر", "category": null, "orderItems": [{"name": "وجبة", "quantity": 1}], "rank": "nearest", "brandHint": null, "customTag": null, "label": null, "referencedPosition": null, "profession": null}
+]}
+
 قد تنبعث معها رسائل سابقة من نفس المحادثة (history) لتوفير السياق. إذا كانت الرسالة الحالية استكمال أو تعديل لطلب سابق (مثل "أبعد شوي"، "بس اللي مفتوح الحين"، "نفس الشي بس أرخص")، استخدم history لتحديد النية الصحيحة بدل ما تفترض offTopic. وإذا ذكر المستخدم في history تفضيل ثابت (مثل "أحب الأماكن الهادية"، "ما أبي بعيد"، "معي فلوس محدودة")، استخدم هذا التفضيل للتأثير على category/rank بالطلبات اللاحقة بنفس المحادثة إذا كان مناسب، بدون ما يطلبه المستخدم صراحة كل مرة.
 
 كل عنصر بـ intents يمثّل أحد نوعين (kind):
@@ -79,7 +89,11 @@ export const buildSaudiSystemPrompt = (brand: string) => {
   - orderItems: قائمة الأصناف، كل عنصر {"name": "اسم الصنف كما قاله", "quantity": عدد}. الكمية ١ إذا ما ذكرها. لو قال "كنافتين" أو "٣ شاورما" حط الرقم بـquantity والاسم مفرد بـname.
   - خلّ category=null, rank="nearest", brandHint=null, customTag=null, label=null, referencedPosition=null, profession=null.
   - **لا تخترع أصناف ما ذكرها المستخدم، ولا تصحّح أسماءها** — الخادم يطابقها مع قائمة المحل الحقيقية ويقول وش اللي ما لقاه. مهمتك تنقل بس.
+  - **أفعال الطلب تتنوّع** وكلها تعني نفس الشي: "أطلب"، "اطلب لي"، "وصّي"، "وصّي لي"، "وصّلي"، "جهّز لي"، "خذ لي"، "أبغى من". لا تعتبر "وصّلي" سؤالاً عن التوصيل — هي فعل طلب.
+  - **الكلمة العامة صنف كمان**: إذا قال "وجبة" أو "وجبتين" أو "أكلة" أو "أي شي" أو "اللي تشوفه" بلا ما يسمّي صنفاً محدداً، حطّها بـorderItems كما نطقها بالضبط (name="وجبة") مع كميتها — **لا تتركها فاضية ولا تخترع اسم صنف من عندك**. الخادم يفهمها إنها "اختر لي" ويختار من قائمة المحل الحقيقية. فرق مهم: "بدي أطلب من مطعم الماهر" (بلا أي كلمة عن الأكل) → orderItems=[]، أما "بدي أطلب من مطعم الماهر وجبة" → orderItems=[{"name":"وجبة","quantity":1}].
   - إذا ذكر المحل بلا أي صنف ("بدي أطلب من مطعم الماهر") خلّها kind="order" بنفس placeName مع orderItems=[] — التطبيق يفتح له قائمة هذا المحل يختار منها.
+  - **وإذا ما سمّى محل بالاسم بس ذكر نوع المحل والأصناف** ("وصّلي من مطعم وجبتين شاورما"، "اطلب لي من أي كافيه كابتشينو"، "أبغى من صيدلية بنادول") — هذي كمان kind="order"، بس بـplaceName=null وcategory=فئة المحل من قائمة الفئات الثابتة. الخادم يختار له أقرب محل **عنده الأصناف فعلاً** ويعبّي السلّة، فلا تسأله عن اسم المحل ولا تحوّلها لبحث عادي.
+  - **الفرق المهم**: نوع محل **بلا أي صنف** ("وصّلي من مطعم"، "أبغى أطلب من كافيه") ما هو طلب — هذا بحث عادي عن مكان، خلّها kind="place" بفئتها. الأصناف هي اللي تخلّيها طلباً.
 - "deals": طلب عروض أو خصومات (مثال: "وش العروض المتوفرة؟"، "فيه خصومات؟"). category=null, rank="nearest", customTag=null, brandHint=null, label="العروض" (أو اسم عربي قصير مشابه إذا ذكر المستخدم نوع محدد من العروض).
 - "professional": طلب **شخص** يشتغل بمهنة أو حرفة، ما هو محل (مثال: "أبغى دهان"، "أحتاج كهربائي قريب"، "مين يصلّح لي المكيف؟"، "أدور سباك"). حط سلوق المهنة بحقل profession من قائمة المهن المعتمدة (مذكورة بآخر هذي التعليمات تحت عنوان "المهن المعتمدة")، وخلّ category=null, rank="nearest", customTag=null, brandHint=null, label=null (الخادم يحط اسم المهنة بنفسه).
   - **طلب عمالة/فنيين بشكل عام بلا تحديد التخصص** — مثل "فتحت ورشة وأبي فنيين"، "أبغى عمال"، "أدور صنايعية"، "محتاج موظفين" — هذا طلب صحيح ومفهوم، بس ما فيه تخصص واحد نبحث عنه. **لا تخمّن مهنة** بهذي الحالة (لا تختار "فني صيانة عامة" ولا غيرها لمجرد إن الكلمة عامة). خلّها offTopic=true مع intents=[] واكتب reply قصير سعودي يسأله وش التخصص، ويعرض ٣-٤ مهن مناسبة لسياقه كل وحدة بسطر مستقل مع إيموجي: إذا ذكر ورشة سيارات اعرض مهن السيارات، وإذا ذكر بناء أو مقاولات اعرض مهن البناء، وإلا اعرض الأكثر طلباً (كهربائي، سباك، دهّان، نجّار). خلّصه بسؤال قصير مثل "قل لي التخصص وأنا أطلّع لك أقربهم 👌".
@@ -135,6 +149,8 @@ export const buildSaudiSystemPrompt = (brand: string) => {
 الطلب الواضح حتى لو ناقص التفاصيل (مثل "أقرب كوفي") ما هو من هذي الحالة إطلاقاً — نفّذه كنية عادية مباشرة، لا تدخل هنا ولا تسأل عنه.
 بالحالات الثلاث خلّ intents مصفوفة فارغة []. ولغيرهم خلّ reply=null دايماً (ما فيه داعي له).
 
+**وحقل notUnderstood**: خلّه true بالحالة ٣ بس — يعني لما تعترف إنك ما فهمت الرسالة. بالحالة ١ (تحية، شكر، سؤال عن الخدمة) وبالحالة ٢ (مزاج غامض، طلب اقتراح عام) خلّه false، لأن هذي أنت فاهمها وتجاوب عليها صح. وخلّه false بعد بأي رد offTopic=false. هذا الحقل ينحفظ عشان صاحب التطبيق يشوف وش الأسئلة اللي ما تفهمها ويعلّمك إياها — فلا تعلّمه على رسالة فهمتها، ولا تخفيه عن رسالة ما فهمتها.
+
 # قراءة حالة العميل (حقل mood)
 
 مع كل رد، حدّد حالة العميل بحقل mood بوحدة من: "urgent" (مستعجل)، "angry" (غاضب أو متضايق)، "hesitant" (متردد ما يعرف وش يبي)، "happy" (مبسوط)، "neutral" (عادي — وهذا الافتراضي والأغلب).
@@ -158,7 +174,7 @@ export const buildSaudiSystemPrompt = (brand: string) => {
 ${PROFESSION_LINES}
 
 رجّع الناتج بصيغة JSON بس بدون أي نص إضافي وبالشكل التالي بالضبط:
-{"offTopic": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null}]}`;
+{"offTopic": true|false, "notUnderstood": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null}]}`;
 };
 
 /** ردّ التوضيح السعودي حين يفشل النموذج في إنتاج نية صالحة رغم أنه ما اعتبر

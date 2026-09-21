@@ -90,24 +90,33 @@ export function validateIntent(raw: any): Intent | null {
     };
   }
 
-  // An order needs a shop; the dishes are optional. "بدي أطلب من مطعم الماهر"
-  // names somewhere without saying what, and opening that shop's menu answers
-  // it far better than dropping the intent and falling back to a generic
-  // "nearest restaurant" search.
+  // An order needs somewhere to order *from*, in one of two ways.
+  //
+  // Either the customer named the shop ("بدي أطلب من مطعم الماهر") — then the
+  // dishes are optional, since naming a shop alone is a request to see its
+  // menu. Or they named only a kind of shop and the dishes ("وصّلي من مطعم
+  // وجبتين شاورما") — then the dishes are what makes it an order at all, and
+  // the server picks the shop by which nearby one actually sells them.
+  //
+  // A kind of shop with no dishes ("وصّلي من مطعم") is neither: it is a plain
+  // search for restaurants, and the place path answers it better. The prompt
+  // says so; this drops it if the model forgets.
   if (raw.kind === 'order') {
     const placeName = typeof raw.placeName === 'string' ? raw.placeName.trim() : '';
     const orderItems = parseOrderItems(raw.orderItems);
-    if (!placeName || placeName.length > 120) return null;
+    const category = (CATEGORIES as readonly string[]).includes(raw.category) ? raw.category : null;
+    if (placeName.length > 120) return null;
+    if (!placeName && !(category && orderItems.length > 0)) return null;
     return {
       kind: 'order',
-      category: null,
+      category: placeName ? null : category,
       rank: 'nearest',
       brandHint: null,
       customTag: null,
       label: null,
       referencedPosition: null,
       profession: null,
-      placeName,
+      placeName: placeName || null,
       orderItems,
     };
   }
