@@ -11,6 +11,9 @@ export type GapStatus = (typeof GAP_STATUSES)[number];
  * popular gap grows an unbounded array. */
 export const MAX_VARIANTS = 5;
 
+export const GAP_SOURCES = ['user', 'simulated'] as const;
+export type GapSource = (typeof GAP_SOURCES)[number];
+
 /**
  * سؤال وصل ريكو وما طلعت منه نية مفهومة.
  *
@@ -39,6 +42,13 @@ export class KnowledgeGap {
    * the Jordanian prompt. */
   @Prop({ type: [String], default: [] })
   brands: string[];
+
+  /** Who asked it: 'user' for a real customer, 'simulated' for the
+   * persona agents in scripts/simulate-users.ts. Kept apart so the owner can
+   * tell a question somebody actually typed from one an agent invented to
+   * probe Rico — both deserve a lesson, but only one is evidence of demand. */
+  @Prop({ type: [String], default: [] })
+  sources: string[];
 
   /** Dialect of the most recent asker, for the same reason. */
   @Prop({ type: String, default: 'saudi' })

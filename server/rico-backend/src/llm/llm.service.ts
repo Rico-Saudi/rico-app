@@ -43,26 +43,39 @@ export class LlmService {
       throw new HttpException({ error: 'server_misconfigured' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    let response: Response;
-    try {
-      response = await fetch(provider.url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${provider.apiKey}`,
-          'Content-Type': 'application/json',
-          ...provider.headers,
-        },
-        body: JSON.stringify(this.buildBody(provider, request)),
-      });
-    } catch {
-      throw new HttpException({ error: 'upstream_unreachable' }, HttpStatus.BAD_GATEWAY);
+    // Groq has no server-side failover, so the chain is walked here: a 429
+    // on one model moves to the next, which has its own per-minute token
+    // bucket. Any other error, or the last model's 429, surfaces as before.
+    // OpenRouter gets the whole chain in one request and never loops.
+    const attempts = provider.name === 'groq' ? provider.models : [provider.models[0]];
+    let response: Response | undefined;
+    for (const [index, model] of attempts.entries()) {
+      try {
+        response = await fetch(provider.url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${provider.apiKey}`,
+            'Content-Type': 'application/json',
+            ...provider.headers,
+          },
+          body: JSON.stringify(this.buildBody(provider, request, model)),
+        });
+      } catch {
+        throw new HttpException({ error: 'upstream_unreachable' }, HttpStatus.BAD_GATEWAY);
+      }
+
+      if (response.status === 429 && index < attempts.length - 1) {
+        console.warn(`[llm] ${request.purpose}: ${model} rate limited, trying ${attempts[index + 1]}`);
+        continue;
+      }
+      break;
     }
 
-    if (!response.ok) {
-      throw new HttpException({ error: 'upstream_error', status: response.status }, HttpStatus.BAD_GATEWAY);
+    if (!response!.ok) {
+      throw new HttpException({ error: 'upstream_error', status: response!.status }, HttpStatus.BAD_GATEWAY);
     }
 
-    const data = await response.json();
+    const data = await response!.json();
     const content = data?.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
       throw new HttpException({ error: 'parse_error' }, HttpStatus.BAD_GATEWAY);
@@ -79,7 +92,7 @@ export class LlmService {
     return { content, model: served };
   }
 
-  private buildBody(provider: ProviderConfig, request: LlmRequest): Record<string, unknown> {
+  private buildBody(provider: ProviderConfig, request: LlmRequest, model: string): Record<string, unknown> {
     const body: Record<string, unknown> = {
       messages: request.messages,
       response_format: { type: 'json_object' },
@@ -94,14 +107,15 @@ export class LlmService {
       // sends only the array.
       body.models = provider.models;
     } else {
-      body.model = provider.models[0];
+      body.model = model;
     }
 
-    if (provider.name === 'groq') {
+    if (provider.name === 'groq' && model.includes('gpt-oss')) {
       // gpt-oss models spend tokens on hidden reasoning before the JSON
       // output; 'low' keeps that overhead inside the free tier's TPM cap.
       // OpenRouter spells this differently per model and silently drops
-      // parameters it doesn't recognise, so it isn't sent there.
+      // parameters it doesn't recognise, so it isn't sent there — and Groq
+      // rejects it outright on models without a reasoning mode.
       body.reasoning_effort = 'low';
     }
 

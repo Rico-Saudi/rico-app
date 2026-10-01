@@ -27,6 +27,7 @@ import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../models/customer_mood.dart';
 import '../models/order_reply.dart';
+import '../models/shown_shop.dart';
 import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
@@ -337,8 +338,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     bool usedFallback,
     int index,
   ) async {
+    // الطلب يستخدم الرقم ليعرف من وين يطلب، لا ليعرض المحل من جديد — يحلّه
+    // [_resolveOrderMessage] بنفسه.
     final referencedPosition = intent.referencedPosition;
-    if (referencedPosition != null) {
+    if (referencedPosition != null && intent.kind != IntentKind.order) {
       final message = await _resolveReferencedMessage(text, intent, referencedPosition, origin);
       if (message != null) return message;
     }
@@ -825,6 +828,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // كلام عن أذية النفس يُجاب محلياً قبل أي نداء للخادم. كان هذا الفحص
+    // يعمل فقط لما يفشل المصنّف، فإذا تجاوز الخادم حدّ الاستخدام وكانت
+    // الصيغة ما تطابق النمط المحلي القديم ("بدي موت؟")، وصل لإنسان بهذي
+    // الحالة رد «ما فهمتك». رد الأمان ما يستاهل يعتمد على شبكة ولا حدّ.
+    final distress = IntentService.distressReply(text, lastCategorySlug: await _sessionMemory.getLastCategorySlug());
+    if (distress != null) {
+      _answerLocally(text, distress);
+      return;
+    }
+
     // القياسات تُستهلك هنا لا في [_handleRecorded]: بين التحويل والإرسال
     // يقدر المستخدم يعدّل النص أو يكتب غيره، فالنبرة تتبع الرسالة اللي
     // انبعثت فعلاً، ورسالة مكتوبة بعدها تنطلق بلا نبرة.
@@ -1031,6 +1044,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// يرد على سؤال الجو من القراءة المحفوظة، ويضيف سطر الاقتراح إن وُجد —
   /// فيصير الرد جواباً ودعوة لخطوة تالية بدل معلومة معلّقة.
+  /// يضيف رسالة المستخدم ورد ريكو معاً بلا تصنيف ولا بحث — للردود اللي
+  /// يعرفها التطبيق بنفسه ولا يحتاج فيها الخادم.
+  void _answerLocally(String text, String reply) {
+    setState(() {
+      _messages.add(ChatMessage(text: text, sender: MessageSender.user));
+      _messages.add(ChatMessage(text: reply, sender: MessageSender.bot));
+      _sending = false;
+    });
+    _controller.clear();
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+  }
+
   Future<void> _answerWeatherQuestion(String text) async {
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
@@ -1246,6 +1272,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final placeName = intent.placeName;
     final categorySlug = intent.slug;
 
+    // "شو المطاعم القريبة؟" ثم "بدي أطلب من الثاني": المحل واحد من اللي
+    // عرضناها للتو، فنطلب منه بمعرّفه. البحث بالاسم بدل هذا قد يرجّع محلاً
+    // آخر بنفس الاسم بعيداً عنه — غير اللي شافه بالقائمة وقرر يطلب منه.
+    final shown = _findLastShown()?.places;
+    final shownShop = shown == null
+        ? null
+        : findShownShop(shown, position: intent.referencedPosition, name: placeName);
+    if (shownShop != null) return _orderFromShownShop(shownShop, intent, index);
+
+    // أشار لرقم بلا اسم، والرقم ما عاد يطابق شي بالقائمة — نسأل بدل ما
+    // نطلب من محل ما اختاره.
+    if (placeName == null && intent.referencedPosition != null) {
+      return ChatMessage(
+        text: 'ما عرفت أي محل تقصد من القائمة 🤔 قل لي اسمه أو رقمه.',
+        sender: MessageSender.bot,
+      );
+    }
+
     // بلا اسم محل ولا فئة ما نعرف من وين نطلب أصلاً.
     if (placeName == null && categorySlug == null) {
       return ChatMessage(text: 'ما فهمت من وين تبي تطلب، قل لي اسم المحل 👌', sender: MessageSender.bot);
@@ -1275,6 +1319,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     return _orderMessageFor(resolved, intent, index, shopLabel: placeName);
+  }
+
+  /// طلب من محل ظاهر بآخر نتائج — نفس مسار المحل المضغوط من قائمة الاختيار
+  /// ([_pickOrderShop]): بالمعرّف، وبنفس رسالة السلّة.
+  Future<ChatMessage> _orderFromShownShop(PlaceResult place, QueryIntent intent, int index) async {
+    // نتائج Google/OSM الاحتياطية ما لها قائمة عندنا ولا أحد يستقبل الطلب —
+    // نقولها صراحة بدل ما نتظاهر بطلب ما راح يوصل.
+    if (place.source != 'rico') {
+      return ChatMessage(
+        text: '${place.name} مو مسجّل عندنا للحين، فما أقدر أطلب منه 😕 '
+            'اختر محل ثاني من القائمة، أو قل لي وش تبي وأدوّر لك على محل عنده.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    try {
+      final resolved = await _catalogService.resolveOrder(businessId: place.osmId, items: intent.orderItems);
+      return _orderMessageFor(resolved, intent, index, shopLabel: place.name);
+    } on CatalogException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أجهّز طلبك من ${place.name} الحين 😕', sender: MessageSender.bot);
+    }
   }
 
   /// يبني رسالة الطلب من نتيجة مطابقة — يشترك فيها مساران: محل سمّاه العميل،

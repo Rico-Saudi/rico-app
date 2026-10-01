@@ -344,6 +344,15 @@ export default function LearningPanel({ authedFetch }) {
                 <tr key={gap._id}>
                   <td>
                     {gap.message}
+                    {gap.sources?.includes('simulated') && (
+                      <span
+                        className="badge pending_review"
+                        style={{ marginInlineStart: 6 }}
+                        title={gap.sources.includes('user') ? 'سأله وكيل محاكاة وزبون حقيقي' : 'سأله وكيل محاكاة، مش زبون حقيقي'}
+                      >
+                        {gap.sources.includes('user') ? 'محاكاة + زبون' : 'محاكاة'}
+                      </span>
+                    )}
                     {gap.variants?.length > 1 && (
                       <small style={{ display: 'block', color: '#888' }}>
                         وصيغ ثانية: {gap.variants.filter((v) => v !== gap.message).join(' · ')}
