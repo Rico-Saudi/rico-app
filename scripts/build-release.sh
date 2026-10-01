@@ -1,19 +1,6 @@
 #!/usr/bin/env bash
 #
-# بناء نسخة إصدار (Android) بلا فشل GeneratedPluginRegistrant المتكرر.
-#
-# المشكلة: flutter_native_splash إضافة تطوير (dev_dependency)، وFlutter
-# يُدخل إضافات التطوير في بناء debug ويستثنيها من بناء release. الملف
-# المولّد android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
-# يُكتب حسب آخر عملية جرت: فإذا كان آخر شي سوّيته بناء debug أو
-# `flutter pub get`، يبقى الملف مسجّلاً FlutterNativeSplashPlugin — وهي فئة
-# ما هي على مسار الترجمة في release، فينكسر البناء بـ:
-#
-#   error: package net.jonhanson.flutter_native_splash does not exist
-#
-# و`flutter clean` ما يحذف الملف، و`flutter pub get` يعيد كتابته بإضافات
-# التطوير داخلة. الحل الوحيد الموثوق: احذفه قبل البناء، وبناء release
-# يولّده صحيحاً.
+# بناء نسخة إصدار (Android) موقّعة.
 #
 # الاستخدام:
 #   scripts/build-release.sh          # APK
@@ -35,7 +22,13 @@ if [ ! -f android/key.properties ]; then
   exit 1
 fi
 
-REGISTRANT=android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
-rm -f "$REGISTRANT"
-
 flutter build "$TARGET" --release "${@:2}"
+
+# بلا GeneratedPluginRegistrant لا تُسجَّل أي إضافة، والتطبيق يعلق على شاشة
+# البداية (SharedPreferences ترمي MissingPluginException) — حصل في نسخة
+# 1.0.1+2 المرفوعة. نرفض الناتج قبل أن يصل المتجر.
+REGISTRANT=android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+if ! grep -q 'SharedPreferencesPlugin' "$REGISTRANT" 2>/dev/null; then
+  echo "الناتج بلا إضافات مسجّلة ($REGISTRANT) — لا ترفعه." >&2
+  exit 1
+fi

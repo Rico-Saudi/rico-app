@@ -1,4 +1,5 @@
 import { PROFESSIONS, PROFESSION_GROUPS, Profession } from './professions';
+import { normalizeArabic, similarity } from '../../public/order-matching.util';
 
 /**
  * The live profession list.
@@ -7,7 +8,7 @@ import { PROFESSIONS, PROFESSION_GROUPS, Profession } from './professions';
  * platform owner edits from the dashboard, so every part of the server that
  * used to `import { PROFESSION_SLUGS }` reads them from here instead — a
  * trade added in the dashboard has to be valid in the search DTO, nameable
- * by `professionLabel`, and present in the classifier prompt *within the
+ * by `professionLabel`, and resolvable by `resolveProfession` *within the
  * same process*, without a redeploy.
  *
  * `constants/professions.ts` stays as the seed the collection is created
@@ -128,16 +129,90 @@ export function professionsByGroup(): ProfessionGroupView[] {
   return professionRegistry.byGroup();
 }
 
+/**
+ * كلمات تعني مهنة مختلفة باختلاف السوق.
+ *
+ * "سمكري" بالأردن والشام = سبّاك، وبالسعودية = سمكري سيارات. والقائمة
+ * مكتوبة بالسعودي، فبلا هذا الجدول يوصل طلب «عندي تسريب مي» لمصلّح
+ * هياكل سيارات — وهذا مو تقريب غلط، هو مهنة ثانية تماماً.
+ *
+ * تُفحص قبل أي مطابقة: الكلمة صريحة عند صاحبها، والتشابه ما له رأي هنا.
+ */
+const DIALECT_OVERRIDES: Record<string, Record<string, string>> = {
+  jordanian: {
+    سمكري: 'plumber',
+    سمكرجي: 'plumber',
+    مواسرجي: 'plumber',
+  },
+};
+
+/** أقل تشابه نقبله بين ما نطقه العميل واسم مهنة معتمدة.
+ *
+ * أعلى من عتبة مطابقة الأصناف: أسماء المهن قصيرة ومتقاربة ("دهّان" و"نجّار"
+ * و"حدّاد")، وإرسال طلب لصاحب مهنة غلط أسوأ بكثير من الاعتراف إن المهنة ما
+ * هي متوفرة. الصيغ الحقيقية تعدّيها بسهولة: "دهان"→"دهّان" تطلع ١٫٠ بعد
+ * التطبيع، و"كهربجي"→"كهربائي" تطلع ٠٫٧٣.
+ */
+const PROFESSION_MATCH_THRESHOLD = 0.7;
+
+/**
+ * يحوّل اسم مهنة عربي كما نطقه العميل إلى سلوق معتمد، أو null.
+ *
+ * وُجدت لتخرج قائمة المهن الـ١٠٦ من برومبت المصنّف: كانت تُحقن كاملة بكل
+ * رسالة (٣ آلاف حرف) عشان النموذج يختار السلوق بنفسه، فدفعت البرومبت فوق
+ * سقف الحساب على Groq وصار **كل** نداء تصنيف يفشل. الحين النموذج يرجّع
+ * الاسم العربي زي ما سمعه، والخادم — اللي يملك القائمة أصلاً ويعرف متى
+ * تتغيّر — يحلّه هنا.
+ *
+ * يقبل السلوق الإنجليزي كما هو أيضاً، عشان نموذج يرجّع "painter" ما ينكسر.
+ */
+export function resolveProfession(spoken: unknown, dialect?: string): string | null {
+  if (typeof spoken !== 'string') return null;
+  const raw = spoken.trim();
+  if (!raw || raw.length > 60) return null;
+
+  // سلوق معتمد وصل كما هو — ما يحتاج تخميناً.
+  if (professionRegistry.has(raw)) return raw;
+
+  const normalized = normalizeArabic(raw);
+  if (!normalized) return null;
+
+  // كلمة تعني مهنة ثانية بهذا السوق — تحسمها اللهجة لا التشابه.
+  const override = dialect ? DIALECT_OVERRIDES[dialect]?.[normalized] : undefined;
+  if (override && professionRegistry.has(override)) return override;
+
+  let best: { slug: string; score: number } | null = null;
+  for (const entry of professionRegistry.active()) {
+    // aliases هي «كيف يكتبها الناس فعلاً» — كانت للمطابقة دون اتصال وحدها،
+    // وصارت هنا المصدر الأهم: النموذج يرجّع كلام العميل لا اسم القائمة،
+    // فـ«كهربجي» توصل كما هي و«كهربائي» ما تشبهها إلا ٠٫٧٣.
+    const score = Math.max(
+      similarity(raw, entry.label),
+      similarity(raw, entry.slug),
+      ...entry.aliases.map((a) => similarity(raw, a)),
+    );
+    if (score > (best?.score ?? 0)) best = { slug: entry.slug, score };
+  }
+
+  return best && best.score >= PROFESSION_MATCH_THRESHOLD ? best.slug : null;
+}
+
 let promptLinesCache = { version: -1, lines: '' };
 
-/** One line per group, for the classifier prompt: the model reads Arabic
- * names and answers with slugs, so it needs both, and the grouping helps it
- * pick the right neighbour among 100+ similar trades.
+/** One line per group, for the **training** prompt: it reads Arabic names
+ * and answers with slugs, so it needs both, and the grouping helps it pick
+ * the right neighbour among 100+ similar trades.
+ *
+ * No longer used by the classifier. Injecting all 106 trades into every
+ * classify call is what pushed that prompt past the account's Groq limit and
+ * made every call fail; the classifier now sends back the Arabic name and
+ * [resolveProfession] maps it here. Training is a batch job with no such
+ * budget, so it still gets the full list.
  *
  * Built on demand rather than at import time — the list can change while the
- * process is running, and a prompt frozen at boot would keep the classifier
- * blind to a trade the owner added an hour ago. Memoized on the registry
- * version so the string is still built once per edit, not once per message.
+ * process is running, and a prompt frozen at boot would be blind to a trade
+ * the owner added an hour ago. Memoized on the registry version so the
+ * string is still built once per edit, not once per message.
  */
 export function professionPromptLines(): string {
   if (promptLinesCache.version !== professionRegistry.version) {

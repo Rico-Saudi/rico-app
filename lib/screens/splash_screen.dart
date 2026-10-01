@@ -61,7 +61,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // ثمن انتظارين متتاليين.
     BackendWarmup.ping();
     await Future.wait([
-      AuthStore.instance.restore(),
+      // فشل الاسترجاع (تخزين تالف، إضافة غير مسجّلة) يعني الدخول كزائر، لا
+      // شاشة بداية عالقة للأبد.
+      AuthStore.instance.restore().catchError((Object _) {}),
       Future<void>.delayed(_minimumShow),
     ]);
 

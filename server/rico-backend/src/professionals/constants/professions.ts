@@ -14,9 +14,11 @@
 // wire — so the Dart copy is the floor, not the ceiling: the trades the app
 // can still recognize with no network.
 //
-// `aliases` are what people actually type. They exist for that keyword
-// fallback and for nothing else — the LLM classifier doesn't need them, it
-// reads the Arabic label.
+// `aliases` are what people actually type. They serve the offline keyword
+// fallback AND `resolveProfession`: the classifier no longer picks a slug
+// from a list injected into its prompt, it echoes the customer's own Arabic
+// and the server resolves it — so an alias is now how "كهربجي" reaches
+// `electrician` at all.
 //
 // An alias must never be a word that already means a PLACE (see Flutter's
 // IntentService._categories): "عفش" is a furniture shop and "ميكانيكي" is a

@@ -83,7 +83,7 @@ export class ClassifyService {
     }
 
     const rawIntents = Array.isArray(parsed.intents) ? parsed.intents.slice(0, MAX_INTENTS) : [];
-    const intents = rawIntents.map(validateIntent).filter(Boolean);
+    const intents = rawIntents.map((raw: any) => validateIntent(raw, brandFor(dto.brand).dialect)).filter(Boolean);
 
     // النموذج ردّ بنوايا لكن ما نجت منها ولا وحدة (فئة مخترعة، مهنة خارج
     // القائمة، طلب بلا محل...). كان هذا يرمي 502، والعميل يفسّر أي خطأ كفشل

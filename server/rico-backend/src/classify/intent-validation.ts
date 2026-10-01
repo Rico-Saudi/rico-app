@@ -6,7 +6,7 @@
 // module).
 
 import { CATEGORIES, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
-import { isKnownProfession, professionLabel } from '../professionals/constants/professions.registry';
+import { professionLabel, resolveProfession } from '../professionals/constants/professions.registry';
 
 export interface OrderItem {
   name: string;
@@ -55,7 +55,11 @@ function parseReferencedPosition(raw: any): number | null {
 
 // Validates one intent element, or returns null if it's unsalvageable — an
 // invalid element is dropped rather than rejecting the whole message.
-export function validateIntent(raw: any): Intent | null {
+/**
+ * [dialect] هي لهجة العلامة السائلة. تلزم المهن وحدها: كلمة زي "سمكري"
+ * تعني سبّاكاً بالأردن وسمكري سيارات بالسعودية، والقائمة مكتوبة بالسعودي.
+ */
+export function validateIntent(raw: any, dialect?: string): Intent | null {
   if (!raw || typeof raw !== 'object') return null;
 
   if (raw.kind === 'deals') {
@@ -77,16 +81,19 @@ export function validateIntent(raw: any): Intent | null {
   // trade would search for nobody, and falling back to a place search would
   // answer "أبغى دهان" with a paint shop — a different thing than a painter.
   if (raw.kind === 'professional') {
-    if (!isKnownProfession(raw.profession)) return null;
+    // النموذج يرجّع اسم المهنة عربياً كما نطقه العميل، والخادم يحلّه لسلوق —
+    // القائمة ما عادت تُحقن بالبرومبت. انظر resolveProfession.
+    const profession = resolveProfession(raw.profession, dialect);
+    if (!profession) return null;
     return {
       kind: 'professional',
       category: null,
       rank: 'nearest',
       brandHint: null,
       customTag: null,
-      label: professionLabel(raw.profession),
+      label: professionLabel(profession),
       referencedPosition: parseReferencedPosition(raw),
-      profession: raw.profession,
+      profession,
     };
   }
 
