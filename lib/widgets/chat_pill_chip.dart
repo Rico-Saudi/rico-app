@@ -1,37 +1,50 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// حبة اقتراح/إجراء سريع قابلة للنقر داخل فقاعات الدردشة — مطابقة لتصميم
-/// الحبوب الشفافة في RICO GO (مثل "أبغى أرخص"، "اتصل بالسائق").
+/// حبة رد سريع أسفل النتائج (مثل «أبغى أرخص») — بيضاء بحافة شعرية على
+/// الأرضية العاجية، وتصير خضراء خفيفة عند التمييز ([emphasized]).
 class ChatPillChip extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  final Color? textColor;
-  final Color? borderColor;
-  final Color? backgroundColor;
+  final IconData? icon;
+  final bool emphasized;
 
   const ChatPillChip({
     super.key,
     required this.label,
     required this.onTap,
-    this.textColor,
-    this.borderColor,
-    this.backgroundColor,
+    this.icon,
+    this.emphasized = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: backgroundColor ?? const Color(0x0DFFFFFF),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: borderColor ?? ChatColors.borderMedium),
+    final foreground = emphasized ? RicoColors.primaryDeep : RicoColors.inkBody;
+    return Material(
+      color: emphasized ? RicoColors.primaryTint : RicoColors.surface,
+      borderRadius: RicoRadii.pillR,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: RicoRadii.pillR,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: RicoRadii.pillR,
+            border: Border.all(
+              color: emphasized ? RicoColors.primaryTintStrong : RicoColors.hairlineStrong,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: emphasized ? RicoColors.primary : RicoColors.inkMuted),
+                const SizedBox(width: 6),
+              ],
+              Text(label, style: RicoText.label.copyWith(color: foreground)),
+            ],
+          ),
         ),
-        child: Text(label, style: TextStyle(color: textColor ?? ChatColors.textPrimary, fontSize: 13)),
       ),
     );
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/place_result.dart';
 import '../services/favorites_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/place_card.dart';
+import '../widgets/place_result_card.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -28,43 +28,75 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(title: const Text('المفضّلة')),
-        body: _favorites == null
-            ? const Center(child: CircularProgressIndicator())
-            : _favorites!.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bookmark_border,
-                              size: 48, color: Colors.grey[400]),
-                          const SizedBox(height: 12),
-                          Text(
-                            'لا توجد أماكن محفوظة بعد.\nاضغط على أيقونة الحفظ 🔖 عند أي نتيجة لإضافتها هنا.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _favorites!.length,
-                      itemBuilder: (context, index) => PlaceCard(
-                        place: _favorites![index],
-                        rank: index + 1,
-                      ),
+    final favorites = _favorites;
+
+    return Scaffold(
+      backgroundColor: RicoColors.canvas,
+      appBar: AppBar(
+        title: const Text('المفضّلة'),
+        shape: const Border(bottom: BorderSide(color: RicoColors.hairline)),
+      ),
+      body: favorites == null
+          ? const Center(child: CircularProgressIndicator())
+          : favorites.isEmpty
+              ? const _EmptyFavorites()
+              : RefreshIndicator(
+                  color: RicoColors.primary,
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(14),
+                    itemCount: favorites.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) => PlaceResultCard(
+                      key: ValueKey(favorites[index].osmId),
+                      place: favorites[index],
+                      rank: index + 1,
+                      // إزالة مكان من داخل بطاقته تُعيد تحميل القائمة، وإلا
+                      // بقيت البطاقة معروضة وهي مشطوبة من المفضّلة أصلاً.
+                      onFavoriteChanged: _load,
                     ),
                   ),
+                ),
+    );
+  }
+}
+
+class _EmptyFavorites extends StatelessWidget {
+  const _EmptyFavorites();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 66,
+              height: 66,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: RicoColors.primaryTint, shape: BoxShape.circle),
+              child: const Icon(Icons.bookmark_border_rounded, size: 30, color: RicoColors.primary),
+            ),
+            const SizedBox(height: 16),
+            const Text('ما فيه أماكن محفوظة', style: RicoText.title),
+            const SizedBox(height: 6),
+            Text(
+              'اضغط أيقونة الحفظ على أي نتيجة في المحادثة\nوتلقاها هنا في أي وقت.',
+              textAlign: TextAlign.center,
+              style: RicoText.body.copyWith(color: RicoColors.inkMuted),
+            ),
+            const SizedBox(height: 20),
+            const SizedBox(width: 150, child: Divider(color: RicoColors.hairline)),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 17),
+              label: const Text('رجوع للمحادثة'),
+            ),
+          ],
+        ),
       ),
     );
   }

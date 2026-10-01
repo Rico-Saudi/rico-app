@@ -3,6 +3,11 @@
 // future adapters (e.g. google_places.js for price/rating enrichment) plug
 // into the same repository functions without touching routes.
 
+// Mirrors CATEGORIES in rico-backend/src/classify/constants/categories.ts.
+// A slug missing here is rejected as invalid_category_slug, so an admin
+// cannot curate that category by hand at all. All 62 belong here — even
+// the ones Google Nearby cannot express (see google_places.js), because
+// manual curation is exactly how those get filled.
 const CATEGORY_SLUGS = new Set([
   'restaurant',
   'cafe',
@@ -15,6 +20,57 @@ const CATEGORY_SLUGS = new Set([
   'hospital',
   'clinic',
   'fitness_centre',
+  'hotel',
+  'clothes',
+  'mobile_phone',
+  'electronics',
+  'hairdresser',
+  'beauty',
+  'car_wash',
+  'dentist',
+  'mosque',
+  'park',
+  'bakery',
+  'sweets',
+  'bookstore',
+  'toy_store',
+  'pet_store',
+  'jewelry_store',
+  'furniture_store',
+  'shoe_store',
+  'gift_shop',
+  'florist',
+  'laundry',
+  'veterinary',
+  'car_repair',
+  'car_dealer',
+  'car_rental',
+  'parking',
+  'lawyer',
+  'real_estate',
+  'travel_agency',
+  'insurance',
+  'school',
+  'university',
+  'kindergarten',
+  'library',
+  'phone_repair',
+  'appliance_repair',
+  'maintenance_centre',
+  'oil_change',
+  'money_exchange',
+  'tailor',
+  'butcher',
+  'cosmetics',
+  'hardware_store',
+  'auto_parts',
+  'sporting_goods',
+  'optician',
+  'cinema',
+  'amusement',
+  'post_office',
+  'police',
+  'government_office',
 ]);
 
 const DEAL_TYPES = new Set(['percent', 'fixed', 'bogo', 'free_item', 'bundle']);

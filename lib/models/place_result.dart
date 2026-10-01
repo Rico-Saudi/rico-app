@@ -13,6 +13,27 @@ class PlaceResult {
   final double? rating; // 0-5، من rico-api فقط
   final int? ratingCount;
 
+  /// حالة الفتح كما جاءت من الخادم (مصدرها Google) — أدق من تحليل نص
+  /// المواعيد، وnull لما ما يعرفها أحد. انظر [isOpenNow].
+  final bool? serverOpenNow;
+
+  /// 'rico' إذا وصل نشاطاً حقيقياً من قاعدتنا (قابل لعرض كتالوج/طلب فعلي)،
+  /// أو 'google' إذا وصل من Google Places كنتيجة تكميلية بلا سجل نشاط تجاري
+  /// عندنا. يُستخدم لتفادي إرسال أحداث تتبّع أو تفعيل كتالوج/طلب بمعرّفات
+  /// لا تقابل نشاطاً تجارياً حقيقياً.
+  final String source;
+
+  /// رابط صورة المكان عبر خادمنا (لا رابط Google مباشر — مفتاح الصور يبقى
+  /// على الخادم)، أو null إذا ما فيه صورة لهذا المكان. البطاقة ترسم رمز
+  /// الفئة بدلها حينها، فغياب الصورة يظهر مقصوداً لا معطوباً.
+  final String? photoUrl;
+
+  /// صاحب الصورة — شروط Google تلزم بذكره أينما عُرضت صورته.
+  final String? photoAttribution;
+
+  /// فئة المكان كما صنّفها الخادم — تُشتق منها أيقونة البديل حين لا توجد صورة.
+  final String? categorySlug;
+
   PlaceResult({
     required this.osmId,
     required this.name,
@@ -25,45 +46,20 @@ class PlaceResult {
     this.priceLevel,
     this.rating,
     this.ratingCount,
+    this.serverOpenNow,
+    this.source = 'google',
+    this.photoUrl,
+    this.photoAttribution,
+    this.categorySlug,
   });
 
-  /// يبني عنصر مكان من استجابة Overpass API (OpenStreetMap)
-  /// عنصر node يحتوي lat/lon مباشرة، وعنصر way/relation يحتوي center: {lat, lon}
-  factory PlaceResult.fromOsmElement(Map<String, dynamic> json) {
-    final tags = (json['tags'] ?? {}) as Map<String, dynamic>;
-
-    double lat;
-    double lng;
-    if (json['type'] == 'node') {
-      lat = (json['lat'] ?? 0).toDouble();
-      lng = (json['lon'] ?? 0).toDouble();
-    } else {
-      final center = json['center'] ?? {};
-      lat = (center['lat'] ?? 0).toDouble();
-      lng = (center['lon'] ?? 0).toDouble();
-    }
-
-    // نبني عنوان مبسّط من حقول addr:* إن وجدت
-    final addrParts = [
-      tags['addr:street'],
-      tags['addr:district'],
-      tags['addr:city'],
-    ].where((p) => p != null && p.toString().trim().isNotEmpty).toList();
-
-    return PlaceResult(
-      osmId: '${json['type']}/${json['id']}',
-      name: (tags['name'] ?? tags['name:ar'] ?? 'مكان بدون اسم').toString(),
-      address: addrParts.join('، '),
-      lat: lat,
-      lng: lng,
-      phone: (tags['phone'] ?? tags['contact:phone'])?.toString(),
-      openingHours: tags['opening_hours']?.toString(),
-    );
-  }
-
   /// يبني عنصر مكان من استجابة rico-api (GET /search) — قد تحتوي بيانات سعر
-  /// وتقييم حقيقية غير متوفرة في Overpass.
-  factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json) {
+  /// وتقييم حقيقية من قاعدتنا أو من Google Places حسب source.
+  /// [baseUrl] أصل خادم ريكو — الخادم يرسل مسار الصورة نسبياً (`/places/…`)
+  /// لا رابطاً كاملاً، عشان يشتغل نفس الرد محلياً وفي الإنتاج بلا ما يعرف
+  /// الخادم عنوانه العام. الضم يصير هنا عند القراءة.
+  factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final photoPath = json['photoUrl'] as String?;
     return PlaceResult(
       osmId: json['id'] as String,
       name: (json['nameAr'] ?? json['name']) as String,
@@ -76,6 +72,11 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
+      serverOpenNow: json['openNow'] as bool?,
+      source: (json['source'] as String?) ?? 'rico',
+      photoUrl: photoPath == null ? null : '$baseUrl$photoPath',
+      photoAttribution: json['photoAttribution'] as String?,
+      categorySlug: json['categorySlug'] as String?,
     );
   }
 
@@ -92,11 +93,20 @@ class PlaceResult {
       priceLevel: priceLevel,
       rating: rating,
       ratingCount: ratingCount,
+      serverOpenNow: serverOpenNow,
+      source: source,
+      photoUrl: photoUrl,
+      photoAttribution: photoAttribution,
+      categorySlug: categorySlug,
     );
   }
 
-  /// null = لا يمكن التأكد من حالة الفتح حالياً (صياغة opening_hours غير مدعومة)
-  bool? get isOpenNow => OpeningHours.isOpenNow(openingHours, DateTime.now());
+  /// null = ما نقدر نتأكد من حالة الفتح الحين.
+  ///
+  /// حكم Google (يوصل من الخادم في [serverOpenNow]) مقدَّم على تحليل نص
+  /// المواعيد عندنا: هو مبني على بيانات المكان نفسها، أما النص فقد يكون بصيغة
+  /// ما يفهمها المحلل أصلاً.
+  bool? get isOpenNow => serverOpenNow ?? OpeningHours.isOpenNow(openingHours, DateTime.now());
 
   String get distanceLabel {
     if (distanceMeters == null) return '';
@@ -106,20 +116,22 @@ class PlaceResult {
     return '${(distanceMeters! / 1000).toStringAsFixed(1)} كم';
   }
 
-  /// رمز السعر بتكرار رمز الريال حسب المستوى (1-4)، أو null إن لم تتوفر بيانات سعر.
-  String? get priceLevelLabel =>
-      priceLevel == null ? null : List.filled(priceLevel!, '﷼').join();
+  static const List<String> _priceLevelLabels = ['اقتصادي', 'متوسط', 'مرتفع', 'راقي'];
+
+  /// وصف مستوى السعر بكلمة واحدة حسب المستوى (1-4)، أو null إن لم تتوفر
+  /// بيانات سعر. الكلمة أوضح للمستخدم من تكرار رمز الريال، الذي يُصيّره خط
+  /// النص كرباط "ريال" فيصير "ريال ريال" بلا معنى. القيمة مقصورة على المدى
+  /// المتوقع تحصيناً من أي مستوى خارجه يصل من الخادم.
+  String? get priceLevelLabel => priceLevel == null ? null : _priceLevelLabels[priceLevel!.clamp(1, 4) - 1];
 
   String? get ratingLabel => rating == null ? null : '★ ${rating!.toStringAsFixed(1)}';
 
   /// رابط خرائط جوجل بالاعتماد على الإحداثيات فقط (بدون الحاجة لـ place_id مدفوع)
-  String get googleMapsUrl =>
-      'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+  String get googleMapsUrl => 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
 
   /// رابط اتجاهات فعلية من موقع المستخدم الحالي إلى المكان (لا يحتاج نقطة بداية،
   /// تطبيق خرائط جوجل يستخدم الموقع الحالي تلقائياً)
-  String get directionsUrl =>
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
+  String get directionsUrl => 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
 
   Map<String, dynamic> toJson() => {
         'osmId': osmId,
@@ -132,6 +144,11 @@ class PlaceResult {
         'priceLevel': priceLevel,
         'rating': rating,
         'ratingCount': ratingCount,
+        'openNow': serverOpenNow,
+        'source': source,
+        'photoUrl': photoUrl,
+        'photoAttribution': photoAttribution,
+        'categorySlug': categorySlug,
       };
 
   factory PlaceResult.fromJson(Map<String, dynamic> json) {
@@ -146,6 +163,13 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
+      serverOpenNow: json['openNow'] as bool?,
+      source: json['source'] as String? ?? 'google',
+      // مخزّن كاملاً (لا كمسار) — المفضّلة قد تُقرأ بعد تغيّر عنوان الخادم،
+      // والرابط المحفوظ يبقى صالحاً لأن مسار الصورة نفسه ما يتغيّر.
+      photoUrl: json['photoUrl'] as String?,
+      photoAttribution: json['photoAttribution'] as String?,
+      categorySlug: json['categorySlug'] as String?,
     );
   }
 }

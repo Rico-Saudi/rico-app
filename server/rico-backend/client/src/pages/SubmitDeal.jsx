@@ -63,7 +63,7 @@ export default function SubmitDeal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          placeId: selectedPlace.id,
+          businessId: selectedPlace.id,
           titleAr: titleAr.trim(),
           descriptionAr: descriptionAr.trim() || null,
           dealType,

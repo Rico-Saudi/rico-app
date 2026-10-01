@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'rico_surfaces.dart';
+import 'typing_dots.dart';
 
-/// بطاقة "ريكو يشتغل الآن…" — محاكاة بصرية لتقدّم البحث أثناء انتظار
+/// بطاقة "ريكو يشتغل الحين…" — محاكاة بصرية لتقدّم البحث أثناء انتظار
 /// النتيجة الفعلية. الرسالة كاملة تُستبدل بالنتائج الحقيقية فور وصولها، لذا
 /// هذه البطاقة مؤقتة بحتة ولا تدّعي أرقاماً غير معروفة فعلياً (مثل عدد
 /// الأماكن المفحوصة) — الخطوات نصوص عامة صحيحة دائماً.
@@ -22,9 +24,9 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
 
   late final List<String> _steps = [
     'حدّدت موقعك',
-    'يفحص ${widget.searchLabel} القريبة',
-    'يقارن الأسعار والتقييمات',
-    'يجهّز أفضل الخيارات',
+    'أفحص ${widget.searchLabel} القريبة',
+    'أقارن الأسعار والتقييمات',
+    'أجهّز لك أفضل الخيارات',
   ];
 
   @override
@@ -48,24 +50,17 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ChatColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ChatColors.borderSubtle),
-      ),
+    return RicoCard(
+      padding: const EdgeInsets.all(13),
+      shadow: RicoShadows.subtle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text('ريكو يشتغل الآن…',
-                  style: TextStyle(color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('ريكو يشتغل الحين', style: RicoText.labelStrong),
               SizedBox(width: 8),
-              _PulseDots(),
+              TypingDots(dotSize: 5),
             ],
           ),
           const SizedBox(height: 12),
@@ -78,26 +73,40 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
   Widget _stepRow(int i) {
     final done = i < _step;
     final active = i == _step;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Expanded(
+    final isLast = i == _steps.length - 1;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // عمود المؤشرات موصول بخط رأسي — يقرأ كخط زمني لا كقائمة نقاط.
+        Column(
+          children: [
+            _stepIcon(done: done, active: active),
+            if (!isLast)
+              Container(
+                width: 1.5,
+                height: 16,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                color: done ? RicoColors.primaryTintStrong : RicoColors.hairline,
+              ),
+          ],
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
             child: Text(
               _steps[i],
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 13,
-                color: done ? ChatColors.textPrimary : (active ? Colors.white : ChatColors.textFaint),
-                fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              style: RicoText.label.copyWith(
+                color: done
+                    ? RicoColors.inkBody
+                    : (active ? RicoColors.ink : RicoColors.inkFaint),
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          _stepIcon(done: done, active: active),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -106,15 +115,19 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
       return Container(
         width: 18,
         height: 18,
-        decoration: BoxDecoration(color: ChatColors.accent.withValues(alpha: 0.16), shape: BoxShape.circle),
-        child: const Icon(Icons.check, size: 11, color: ChatColors.accentBright),
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(color: RicoColors.primaryTint, shape: BoxShape.circle),
+        child: const Icon(Icons.check_rounded, size: 12, color: RicoColors.primary),
       );
     }
     if (active) {
       return const SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2, color: ChatColors.accentBright),
+        width: 18,
+        height: 18,
+        child: Padding(
+          padding: EdgeInsets.all(1),
+          child: CircularProgressIndicator(strokeWidth: 2, color: RicoColors.primary),
+        ),
       );
     }
     return Container(
@@ -122,61 +135,8 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
       height: 18,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2A3444), width: 1.5),
+        border: Border.all(color: RicoColors.hairlineStrong, width: 1.5),
       ),
-    );
-  }
-}
-
-/// نقاط نابضة (مطابقة لـ keyframes dotBlink في التصميم الأصلي: 0%/80%/100%
-/// بشفافية 0.25 و40% بشفافية 1)، بفارق توقيت بين النقاط.
-class _PulseDots extends StatefulWidget {
-  const _PulseDots();
-
-  @override
-  State<_PulseDots> createState() => _PulseDotsState();
-}
-
-class _PulseDotsState extends State<_PulseDots> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  double _opacityFor(double t, double phase) {
-    final x = (t + phase) % 1.0;
-    if (x < 0.4) return 0.25 + (x / 0.4) * 0.75;
-    if (x < 0.8) return 1 - ((x - 0.4) / 0.4) * 0.75;
-    return 0.25;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final phase in [0.0, 1 / 6, 1 / 3])
-              Padding(
-                padding: const EdgeInsets.only(left: 3),
-                child: Opacity(
-                  opacity: _opacityFor(_controller.value, phase),
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(color: ChatColors.accentBright, shape: BoxShape.circle),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

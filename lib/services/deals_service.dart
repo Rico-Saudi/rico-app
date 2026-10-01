@@ -9,12 +9,13 @@ class DealsException implements Exception {
   String toString() => message;
 }
 
-/// يجلب العروض/الخصومات القريبة من rico-api (خادم Cloudflare Worker مخصص،
-/// انظر server/rico-api).
+/// يجلب العروض/الخصومات القريبة من rico-backend (خادم NestJS، انظر
+/// server/rico-backend — يستبدل rico-api/groq-proxy القديمة).
 class DealsService {
-  // TODO: حدّث هذا الرابط بعد نشر rico-api عبر `wrangler deploy`
-  // (server/rico-api) — راجع server/rico-api/wrangler.toml لاسم الـ Worker.
-  static const String _baseUrl = 'https://rico-api.rico-app-maher.workers.dev';
+  // للتجربة المحلية استخدم http://localhost:3000 على iOS Simulator/سطح
+  // المكتب، أو http://10.0.2.2:3000 على Android Emulator (localhost يشير
+  // لجهاز المحاكي نفسه لا لجهازك).
+  static const String _baseUrl = 'https://app.rico-go.com';
 
   Future<List<Deal>> fetchNearby({
     required double lat,
@@ -31,11 +32,11 @@ class DealsService {
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 6));
     } catch (_) {
-      throw DealsException('تعذر الاتصال بخدمة العروض حالياً، حاول مرة أخرى.');
+      throw DealsException('ما قدرت أتصل بخدمة العروض حالياً، حاول مرة ثانية.');
     }
 
     if (response.statusCode != 200) {
-      throw DealsException('تعذر جلب العروض حالياً (رمز ${response.statusCode}).');
+      throw DealsException('ما قدرت أجيب العروض حالياً (رمز ${response.statusCode}).');
     }
 
     try {
@@ -45,7 +46,7 @@ class DealsService {
           .map((d) => Deal.fromJson(d as Map<String, dynamic>))
           .toList();
     } catch (_) {
-      throw DealsException('تعذر قراءة بيانات العروض حالياً.');
+      throw DealsException('ما قدرت أقرأ بيانات العروض حالياً.');
     }
   }
 }

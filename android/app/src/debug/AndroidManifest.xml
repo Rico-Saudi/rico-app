@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug builds only: rico-backend runs on plain http:// for local
+         dev (localhost/LAN IP, no TLS) — Android blocks cleartext traffic
+         by default since API 28, so without this every request from the
+         app (classify/compose/places/deals) fails silently. Production
+         hits the deployed HTTPS backend, so this is scoped to debug only. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

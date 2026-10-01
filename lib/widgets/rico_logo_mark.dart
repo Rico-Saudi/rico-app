@@ -7,18 +7,23 @@ class RicoLogoMark extends StatelessWidget {
   final Color color;
   final Color dotColor;
 
+  /// عرض الحرف بمقياس viewBox الأصلي (0-200×240). القيمة الأصلية 30 ثقيلة
+  /// بصرياً بالمقاسات الصغيرة، لذا صارت قابلة للضبط لكل موضع استخدام.
+  final double strokeWidth;
+
   const RicoLogoMark({
     super.key,
     this.height = 20,
     this.color = Colors.white,
-    this.dotColor = const Color(0xFFC9A24A),
+    this.dotColor = const Color(0xFFB08A2E),
+    this.strokeWidth = 28,
   });
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: Size(height * (200 / 240), height),
-      painter: _RicoLogoPainter(color: color, dotColor: dotColor),
+      painter: _RicoLogoPainter(color: color, dotColor: dotColor, strokeWidth: strokeWidth),
     );
   }
 }
@@ -26,8 +31,9 @@ class RicoLogoMark extends StatelessWidget {
 class _RicoLogoPainter extends CustomPainter {
   final Color color;
   final Color dotColor;
+  final double strokeWidth;
 
-  _RicoLogoPainter({required this.color, required this.dotColor});
+  _RicoLogoPainter({required this.color, required this.dotColor, required this.strokeWidth});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -40,7 +46,7 @@ class _RicoLogoPainter extends CustomPainter {
     final strokePaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 30
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -73,5 +79,7 @@ class _RicoLogoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RicoLogoPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.dotColor != dotColor;
+      oldDelegate.color != color ||
+      oldDelegate.dotColor != dotColor ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

@@ -1,11 +1,11 @@
 {
-    "name": "rico_app",
-    "short_name": "rico_app",
+    "name": "Rico Go",
+    "short_name": "Rico Go",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FAF8F5",
+    "theme_color": "#006C35",
+    "description": "ريكو — مساعدك الذكي يدلّك على أقرب مكان وأفضل عرض حسب موقعك",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
