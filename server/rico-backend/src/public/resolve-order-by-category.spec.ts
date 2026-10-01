@@ -188,6 +188,21 @@ describe('PublicService.resolveOrder — no shop named', () => {
       expect(res.matched.map((m: any) => m.label)).toEqual(['شاورما دجاج']);
     });
 
+    // "شو المطاعم القريبة؟" then "بدي أطلب من التاني": the app sends the id of
+    // the shop it listed and no dishes — a request to see that shop's menu.
+    it('opens the menu of a shop chosen by id with no dishes named', async () => {
+      await shop('مطعم الشام', 0.5, ['فلافل']);
+      const second = await shop('مطعم الشام', 2, ['شاورما دجاج', 'كنافة']);
+
+      const res = await service.resolveOrder({ businessId: String(second._id), items: [] });
+
+      expect(res.business?.id).toBe(String(second._id));
+      expect(res.catalog?.products.map((p: any) => p.name).sort()).toEqual(['شاورما دجاج', 'كنافة']);
+      expect(res.matched).toEqual([]);
+      expect(res.unmatched).toEqual([]);
+      expect(res.shopOptions).toEqual([]);
+    });
+
     it('a shop the customer named itself is not "picked from options"', async () => {
       await shop('مطعم الشام', 0.5, ['شاورما دجاج']);
       const res = await service.resolveOrder({ placeName: 'مطعم الشام', items: [{ name: 'شاورما' }] });

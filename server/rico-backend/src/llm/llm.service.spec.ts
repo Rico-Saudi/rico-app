@@ -30,6 +30,8 @@ describe('LLM gateway', () => {
     delete process.env.OPENROUTER_MODEL;
     delete process.env.OPENROUTER_CLASSIFY_MODELS;
     delete process.env.OPENROUTER_COMPOSE_MODELS;
+    delete process.env.GROQ_MODEL;
+    delete process.env.GROQ_MODELS;
   });
 
   afterAll(() => {
@@ -45,7 +47,16 @@ describe('LLM gateway', () => {
 
       expect(provider.name).toBe('groq');
       expect(provider.url).toBe('https://api.groq.com/openai/v1/chat/completions');
-      expect(provider.models).toEqual(['openai/gpt-oss-120b']);
+      expect(provider.models).toEqual(['openai/gpt-oss-120b', 'openai/gpt-oss-20b']);
+    });
+
+    it('honours a single GROQ_MODEL from an existing deployment, and lets GROQ_MODELS name a chain', () => {
+      process.env.GROQ_API_KEY = 'k';
+      process.env.GROQ_MODEL = 'openai/gpt-oss-120b';
+      expect(providerFor('classify').models).toEqual(['openai/gpt-oss-120b']);
+
+      process.env.GROQ_MODELS = 'openai/gpt-oss-120b, qwen/qwen3.8-27b';
+      expect(providerFor('classify').models).toEqual(['openai/gpt-oss-120b', 'qwen/qwen3.8-27b']);
     });
 
     it('sends reasoning_effort to Groq but not to OpenRouter', async () => {
@@ -137,9 +148,59 @@ describe('LLM gateway', () => {
     });
   });
 
+  describe('Groq rate limits', () => {
+    beforeEach(() => {
+      process.env.GROQ_API_KEY = 'k';
+      process.env.GROQ_MODELS = 'openai/gpt-oss-120b,openai/gpt-oss-20b';
+    });
+
+    it('moves to the next model when the first answers 429', async () => {
+      // Groq meters tokens per minute per model, so the sibling has its own
+      // bucket — that is the whole point of the chain.
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce(okResponse('{"ok":true}', 'openai/gpt-oss-20b'));
+      global.fetch = fetchMock as any;
+
+      const result = await new LlmService().complete(request());
+
+      expect(result.content).toBe('{"ok":true}');
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('openai/gpt-oss-120b');
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe('openai/gpt-oss-20b');
+    });
+
+    it('still reports a 429 when the whole chain is rate limited', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 429 });
+      global.fetch = fetchMock as any;
+      await expect(new LlmService().complete(request())).rejects.toMatchObject({
+        response: { error: 'upstream_error', status: 429 },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry other errors on the next model', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 500 });
+      global.fetch = fetchMock as any;
+      await expect(new LlmService().complete(request())).rejects.toMatchObject({
+        response: { error: 'upstream_error', status: 500 },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('only sends reasoning_effort to models that have a reasoning mode', async () => {
+      process.env.GROQ_MODELS = 'qwen/qwen3.8-27b';
+      const fetchMock = jest.fn().mockResolvedValue(okResponse('{}', 'qwen/qwen3.8-27b'));
+      global.fetch = fetchMock as any;
+      await new LlmService().complete(request());
+      expect(lastBody(fetchMock).reasoning_effort).toBeUndefined();
+    });
+  });
+
   describe('failures', () => {
     beforeEach(() => {
       process.env.GROQ_API_KEY = 'k';
+      process.env.GROQ_MODELS = 'openai/gpt-oss-120b';
     });
 
     it('reports a missing key as our misconfiguration, not an upstream fault', async () => {

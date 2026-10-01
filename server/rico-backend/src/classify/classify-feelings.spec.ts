@@ -35,6 +35,18 @@ describe('classify prompt: feelings and bodily states', () => {
         expect(prompt).toContain('دكتور');
       });
 
+      it('reads distress by meaning, not spelling, and keeps hyperbole out of it', () => {
+        // "بدي موت؟" without the alif is how it is actually said, and it was
+        // the spelling that fell through; "أموت من الجوع" is hunger.
+        expect(prompt).toContain('بإملائها');
+        expect(prompt).toContain('أموت من الجوع');
+      });
+
+      it('tells the model that misspelled dialect is still a known word', () => {
+        expect(prompt).toContain('# الإملاء واللهجة');
+        expect(prompt).toContain('اقرب صيدليه');
+      });
+
       it('treats a feeling plus a real request as the request', () => {
         // "زعلان وبدي كافيه" names a category, so it is a search — the
         // empathy path is for a feeling with nothing to search for.

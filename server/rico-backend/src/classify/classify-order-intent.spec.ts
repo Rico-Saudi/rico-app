@@ -99,3 +99,37 @@ describe('validateIntent — order with no shop named', () => {
       .toMatchObject({ placeName: 'مطعم الماهر', category: null });
   });
 });
+
+// "شو المطاعم القريبة؟" then "بدي أطلب من التاني" — the shop is one Rico just
+// listed, so its position is the whole answer to "from where".
+describe('validateIntent — order from a shop in the last list', () => {
+  const order = (raw: any) => validateIntentForTest({ kind: 'order', ...raw });
+
+  it('keeps a position with no name and no dishes, as a request to see its menu', () => {
+    expect(order({ placeName: null, referencedPosition: 2, orderItems: [] })).toMatchObject({
+      kind: 'order',
+      placeName: null,
+      referencedPosition: 2,
+      orderItems: [],
+    });
+  });
+
+  it('keeps the position alongside the name and dishes', () => {
+    expect(
+      order({ placeName: 'مطعم الماهر', referencedPosition: 1, orderItems: [{ name: 'شاورما', quantity: 2 }] }),
+    ).toMatchObject({ placeName: 'مطعم الماهر', referencedPosition: 1, orderItems: [{ name: 'شاورما', quantity: 2 }] });
+  });
+
+  // The shop is already chosen; a category left in would invite something
+  // downstream to offer other shops instead.
+  it('drops the category once a position points at the shop', () => {
+    expect(order({ category: 'restaurant', referencedPosition: 3, orderItems: [{ name: 'شاورما' }] }))
+      .toMatchObject({ category: null, referencedPosition: 3 });
+  });
+
+  it('treats an out-of-range position as no position at all', () => {
+    expect(order({ placeName: null, referencedPosition: 0, orderItems: [] })).toBeNull();
+    expect(order({ placeName: null, referencedPosition: 11, orderItems: [] })).toBeNull();
+    expect(order({ placeName: null, referencedPosition: '2', orderItems: [] })).toBeNull();
+  });
+});

@@ -108,20 +108,26 @@ export function validateIntent(raw: any, dialect?: string): Intent | null {
   // A kind of shop with no dishes ("وصّلي من مطعم") is neither: it is a plain
   // search for restaurants, and the place path answers it better. The prompt
   // says so; this drops it if the model forgets.
+  //
+  // There is a third way, and it is the one a conversation produces: the
+  // customer points at a shop Rico just listed ("بدي أطلب من التاني"). The
+  // position is enough on its own — the app holds that list and resolves it
+  // to the exact shop, by id, without guessing from a name.
   if (raw.kind === 'order') {
     const placeName = typeof raw.placeName === 'string' ? raw.placeName.trim() : '';
     const orderItems = parseOrderItems(raw.orderItems);
     const category = (CATEGORIES as readonly string[]).includes(raw.category) ? raw.category : null;
+    const referencedPosition = parseReferencedPosition(raw);
     if (placeName.length > 120) return null;
-    if (!placeName && !(category && orderItems.length > 0)) return null;
+    if (!placeName && referencedPosition === null && !(category && orderItems.length > 0)) return null;
     return {
       kind: 'order',
-      category: placeName ? null : category,
+      category: placeName || referencedPosition !== null ? null : category,
       rank: 'nearest',
       brandHint: null,
       customTag: null,
       label: null,
-      referencedPosition: null,
+      referencedPosition,
       profession: null,
       placeName: placeName || null,
       orderItems,

@@ -5,6 +5,7 @@ import { buildSystemPrompt, clarifyReplyFor, MAX_INTENTS } from './constants/cla
 import { buildVoiceBlock, validateMood } from './constants/moods';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { validateIntent } from './intent-validation';
+import { distressReplyFor, isDistress } from './constants/distress';
 import { LearningService } from '../learning/learning.service';
 
 // Strips characters that could break out of the plain-text block we
@@ -17,7 +18,10 @@ function sanitizeForPrompt(s: string): string {
 function buildLastResultsBlock(lastResults: LastResultsDto): string {
   const label = sanitizeForPrompt(lastResults.label);
   const lines = lastResults.items.map((i) => `${i.position}. ${sanitizeForPrompt(i.name)}`).join('\n');
-  return `\n\nآخر نتائج عُرضت على المستخدم (الفئة: ${label}):\n${lines}\nإذا أشار المستخدم لأحد هذه العناصر بالترتيب (الأول/الثاني/...)، ضع رقم الترتيب في referencedPosition واجعل brandHint=null. إذا طلب شيئاً "شبيه/مثله" بدون رقم محدد، استخدم فئة هذه القائمة (${label}) دون تحديد referencedPosition أو brandHint.`;
+  return `\n\nآخر نتائج عُرضت على المستخدم (الفئة: ${label}):\n${lines}\nإذا أشار المستخدم لأحد هذه العناصر بالترتيب (الأول/الثاني/...)، ضع رقم الترتيب في referencedPosition واجعل brandHint=null. إذا طلب شيئاً "شبيه/مثله" بدون رقم محدد، استخدم فئة هذه القائمة (${label}) دون تحديد referencedPosition أو brandHint.
+وإذا بدّه **يطلب من** أحد هذه العناصر — بالترتيب ("بدي أطلب من التاني"، "اطلبلي من الأول شاورما")، أو باسمه ("بدي أطلب من ${sanitizeForPrompt(lastResults.items[0]?.name ?? '')}")، أو بضمير ("اطلبلي منه"، "شو عندهم؟") والقائمة فيها عنصر واحد أو حدّد العنصر برسالته السابقة — فهي kind="order" مع referencedPosition=رقمه وplaceName=اسمه كما هو بالقائمة، وorderItems الأصناف اللي ذكرها (أو [] إذا ما ذكر أصناف).
+**بس مع فعل طلب صريح** (أطلب/اطلب لي/وصّي/جهّز لي/خذ لي/أبي من/وش عندهم/قائمتهم). الرقم أو الاسم **لحاله** ("الثاني"، "الأخير"، "مطعم الماهر") بلا فعل طلب = عرض العنصر، kind="place" مع referencedPosition — **مو** طلب.
+referencedPosition هو رقم العنصر **بهذه القائمة بالضبط** (من 1 إلى ${lastResults.items.length})، لا رقم ذكره المستخدم برسالة سابقة لقائمة أقدم — مثلاً إذا القائمة فيها عنصر واحد فرقمه 1 حتى لو اختاره المستخدم قبل بكلمة "الثاني".`;
 }
 
 // Exposed for tests only: validateIntent is where a malformed model response
@@ -33,6 +37,12 @@ export class ClassifyService {
   ) {}
 
   async classify(dto: ClassifyRequestDto) {
+    // قبل النموذج لا بعده — انظر constants/distress.ts: هاد الرد ما بيستاهل
+    // يعتمد على نداء ممكن يرجع 429. ولا يُسجَّل كفجوة: ريكو فاهمه تماماً.
+    if (isDistress(dto.message)) {
+      return { offTopic: true, reply: distressReplyFor(brandFor(dto.brand)), intents: [], mood: 'neutral' as const };
+    }
+
     // A second mid-conversation system-role message isn't something
     // Llama-family chat templates are trained on (system is reserved for
     // position 0), so "last shown results" context is appended to the one

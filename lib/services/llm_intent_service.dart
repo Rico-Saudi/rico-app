@@ -45,14 +45,17 @@ class ResolvedIntent {
 
     if (kind == 'order') {
       // قائمة أصناف فارغة مقبولة مع اسم محل: "بدي أطلب من مطعم الماهر"
-      // طلبُ قائمةٍ يُفتح على التصفّح.
+      // طلبُ قائمةٍ يُفتح على التصفّح. ومع رقم ترتيب ("بدي أطلب من الثاني")
+      // المحل واحد من آخر نتائج عرضناها، والشاشة تحلّه من ذاكرتها — فالرقم
+      // يكفي حتى لو ما نقل المصنّف اسمه.
       final shop = placeName;
-      if (shop != null && shop.isNotEmpty) {
+      if ((shop != null && shop.isNotEmpty) || referencedPosition != null) {
         return QueryIntent(
           kind: IntentKind.order,
-          label: shop,
-          placeName: shop,
+          label: (shop != null && shop.isNotEmpty) ? shop : 'المحل',
+          placeName: (shop != null && shop.isNotEmpty) ? shop : null,
           orderItems: orderItems,
+          referencedPosition: referencedPosition,
         );
       }
 

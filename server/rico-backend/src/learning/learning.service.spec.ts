@@ -71,6 +71,15 @@ describe('LearningService', () => {
       expect(row!.brands.sort()).toEqual(['rico', 'tadallal']);
     });
 
+    it('tells a simulated question from one a customer typed', async () => {
+      await ask('بدي بويلرجي');
+      await service.record({ message: 'بدي بويلرجي', brand: 'rico', dialect: 'saudi', ricoReply: '', source: 'simulated' });
+
+      const row = await gapModel.findOne().lean();
+      expect(row!.sources.sort()).toEqual(['simulated', 'user']);
+      expect(row!.count).toBe(2);
+    });
+
     it('drops a message with nothing to learn from', async () => {
       await ask('😅😅');
       await ask('!!!');

@@ -1,4 +1,5 @@
 import '../models/profession.dart';
+import 'arabic_normalizer.dart';
 import 'profession_catalog.dart';
 
 /// نمط رسالة دردشة (غير بحث) + الردود الممكنة عليه — انظر
@@ -81,7 +82,7 @@ class IntentService {
     {
       'slug': 'restaurant',
       'label': 'مطعم',
-      'words': 'مطعم|مطاعم|اكل|أكل|طعام|غداء|عشاء|فطور|جوعان|جوعانة|جعان|جعانة|بموت من الجوع|أموت من الجوع|آكل|وجبة',
+      'words': 'مطعم|مطاعم|اكل|أكل|طعام|غداء|عشاء|فطور|جوعان|جوعانة|جعان|جعانة|بموت من الجوع|أموت من الجوع|موت من الجوع|آكل|وجبة',
     },
     {
       'slug': 'cafe',
@@ -444,7 +445,23 @@ class IntentService {
     );
   }
 
-  static bool _containsWord(String text, String word) => _anyWordPattern([word]).hasMatch(text);
+  /// مطابقة نمط على النص كما كُتب *أو* على صيغته المطبَّعة (بلا همزات ولا
+  /// تاء مربوطة ولا تطويل — انظر [normalizeArabic]). الأنماط في هذا الملف
+  /// مكتوبة بالإملاء الشائع، فالمحاولة الأولى تلتقط ما كانت تلتقطه دائماً،
+  /// والثانية تلتقط "بدي اموت" و"صيدليه" و"حياتى" بلا تعداد كل صيغة يدوياً.
+  /// مطابقة إضافية فقط: لا يمكن أن تُسقط رسالة كانت تُفهم قبلها.
+  static bool _matches(RegExp pattern, String text) =>
+      pattern.hasMatch(text) || _folded(pattern).hasMatch(normalizeArabic(text));
+
+  // النمط نفسه يُطوى بنفس قاعدة الحروف (انظر [foldArabicLetters])، وإلا ما
+  // طابق "كهربائي" في الجدول نصاً صار "كهربايي" بعد التطبيع.
+  static final Map<String, RegExp> _foldedPatternCache = {};
+  static RegExp _folded(RegExp pattern) => _foldedPatternCache.putIfAbsent(
+        pattern.pattern,
+        () => RegExp(foldArabicLetters(pattern.pattern), unicode: pattern.isUnicode, caseSensitive: pattern.isCaseSensitive),
+      );
+
+  static bool _containsWord(String text, String word) => _matches(_anyWordPattern([word]), text);
 
   // نهاية كلمة: مسافة، ترقيم، أو نهاية النص — مع السماح بجمع المذكر
   // (دهان/دهانين). بلا تثبيت النهاية كانت "رش" (مكافحة حشرات) تطابق داخل
@@ -467,7 +484,7 @@ class IntentService {
 
   static bool _containsProfessionWord(String text, String word) {
     final pattern = _professionPatternCache.putIfAbsent(word, () => _boundedPattern([word]));
-    return pattern.hasMatch(text);
+    return _matches(pattern, text);
   }
 
   /// طول أطول كلمة فئة مكان تطابق النص، أو 0. يُستخدم للترجيح بين جدولي
@@ -524,23 +541,38 @@ class IntentService {
   // الترتيب مهم: الأنماط الأخص أولاً والأعم آخراً — "يعطيك العافية" شكر مش
   // تحية، و"شو بتعمل؟" سؤال عن ريكو مش تحية، و"بدي شي حلو" طلب اقتراح غامض
   // مش مدح. أول نمط يطابق هو اللي بيرد.
+  /// نمط الضيق الشديد وأذية النفس. يُفحص في مكانين: قبل نداء المصنّف عبر
+  /// [distressReply] (رد الأمان ما يعتمد على شبكة ولا حدّ استخدام)، وأول
+  /// [_chatReplies] للمسار الاحتياطي.
+  ///
+  /// "موت" بلا ألف مقبولة ("بدي موت؟" هي الصيغة المنطوقة فعلاً في الشام)
+  /// بشرط نهاية كلمة بعدها — بدونها كانت "بدي موتور" و"موتر" تُلتقط. وتُستثنى
+  /// المبالغات ("أموت من الجوع/الضحك")، فهذي جوع لا ضيق. الصيغ بلا همزة
+  /// وبالألف المقصورة ("حياتى") تلتقطها المطابقة المطبَّعة في [_matches].
+  static final RegExp _distressPattern = RegExp(
+      '(?:أبي|ابي|بدي|أبغى|ابغى|ودي|نفسي|عايز|عاوز)\\s*(?:أموت|اموت|موت|انتحر|أنتحر)(?=\$|[\\s،,.؟!])'
+      '(?!\\s*من\\s*(?:الجوع|الضحك|الحر|البرد|العطش|النعاس|الفرح|الشبع|الملل|الزحمة|الطفش))|'
+      'تعبت من حياتي|مليت من حياتي|زهقت من حياتي|كرهت حياتي|طفشت من حياتي|'
+      'تعبت من الحياة|مليت من الحياة|زهقت من الحياة|كرهت الحياة|'
+      'ما أبي أعيش|ما ابي اعيش|ما بدي أعيش|ما بدي اعيش|ما أبغى أعيش|ما ابغى اعيش|'
+      'أذي نفسي|اذي نفسي|أأذي حالي|أذي حالي|اذي حالي|أؤذي نفسي|'
+      'أنهي حياتي|انهي حياتي|أنتحر|انتحر|انتحار');
+
+  static final _ChatReply _distressReply = _ChatReply(
+    _distressPattern,
+    [
+      'والله آسف إنك حاسّ كذا 🤍 تكلّم مع شخص تثق فيه أو مع دكتور، ولا تظل لحالك بهالإحساس. وإذا تبي أدلّك على أقرب عيادة أو مستشفى، قل لي وأنا أطلّع لك إياها.',
+    ],
+    appendCta: false,
+  );
+
   static final List<_ChatReply> _chatReplies = [
     // ضيق شديد أو كلام عن أذية النفس. أول القائمة لأن الخطأ هنا أغلى خطأ
     // في الملف: "مليت من حياتي" تطابق "مليت" في نمط المزاج الغامض تحت،
     // فترد على إنسان بهذي الحالة بقائمة كافيهات. ريكو ما يعالج ولا ينصح
     // طبياً — يقول كلمة طيبة، ويحث على شخص قريب أو دكتور، ويعرض يلقى له
     // أقرب عيادة أو مستشفى إذا يبي. بلا قائمة خيارات وبلا سطر تشجيع.
-    _ChatReply(
-      RegExp('(?:أبي|ابي|بدي|أبغى|ابغى)\\s*(?:أموت|اموت)(?!\\s*من\\s*(?:الجوع|الضحك|الحر|البرد|العطش|النعاس|الفرح|الشبع))|'
-          'تعبت من حياتي|مليت من حياتي|زهقت من حياتي|كرهت حياتي|'
-          'ما أبي أعيش|ما ابي اعيش|ما بدي أعيش|ما بدي اعيش|'
-          'أذي نفسي|اذي نفسي|أأذي حالي|أذي حالي|اذي حالي|'
-          'أنهي حياتي|انهي حياتي|أؤذي نفسي'),
-      [
-        'والله آسف إنك حاسّ كذا 🤍 تكلّم مع شخص تثق فيه أو مع دكتور، ولا تظل لحالك بهالإحساس. وإذا تبي أدلّك على أقرب عيادة أو مستشفى، قل لي وأنا أطلّع لك إياها.',
-      ],
-      appendCta: false,
-    ),
+    _distressReply,
     // طلب عمالة/فنيين بشكل عام بلا تخصص ("فتحت ورشة وأبي فنيين"، "أدور
     // عمال"). موضوع في أول القائمة لأنه أخص من كل ما بعده.
     //
@@ -853,17 +885,17 @@ class IntentService {
   /// وجود أي إشارة بحث يُسقط المطابقة عمداً: «الجو حار أبغى كافيه» طلب مكان
   /// لا سؤال عن الطقس، والرد عليه بدرجة الحرارة يترك المستخدم بلا كافيه.
   static bool isWeatherQuestion(String text, {String? lastCategorySlug}) {
-    if (!_weatherQuestion.hasMatch(text)) return false;
+    if (!_matches(_weatherQuestion, text)) return false;
     return !hasSearchSignal(text, lastCategorySlug: lastCategorySlug);
   }
 
   static bool hasSearchSignal(String text, {String? lastCategorySlug}) {
-    if (_dealsWords.hasMatch(text)) return true;
+    if (_matches(_dealsWords, text)) return true;
     if (professionFor(text) != null) return true;
     if (_categories.any((c) => (c['words'] as String).split('|').any((w) => _containsWord(text, w)))) {
       return true;
     }
-    if (lastCategorySlug != null && _continuationWords.hasMatch(text)) return true;
+    if (lastCategorySlug != null && _matches(_continuationWords, text)) return true;
     return false;
   }
 
@@ -895,11 +927,26 @@ class IntentService {
   static String clarifyReply(String text) =>
       _clarifyReplies[text.trim().hashCode.abs() % _clarifyReplies.length];
 
+  /// رد الضيق الشديد إذا كانت الرسالة كلاماً عن أذية النفس بلا طلب مكان
+  /// معه، وإلا null. يُستدعى *قبل* نداء المصنّف لا بعد فشله: أغلى خطأ في
+  /// التطبيق هو الرد على إنسان بهذي الحالة بـ«ما فهمتك» لأن الخادم تجاوز حدّ
+  /// الاستخدام. والنموذج ما يضيف شيئاً هنا — الرد ثابت عمداً بلا تنويع ولا
+  /// نصيحة طبية.
+  ///
+  /// رسالة فيها إشارة بحث ("تعبت من حياتي وبدي صيدلية") تُترك للمصنّف الذي
+  /// يرى السياق كله — نفس الحكم في [isWeatherQuestion].
+  static String? distressReply(String text, {String? lastCategorySlug}) {
+    final trimmed = text.trim();
+    if (!_matches(_distressPattern, trimmed)) return null;
+    if (hasSearchSignal(trimmed, lastCategorySlug: lastCategorySlug)) return null;
+    return _distressReply.replies.first;
+  }
+
   static String? detectOffTopicReply(String text) {
     final trimmed = text.trim();
     final seed = trimmed.hashCode.abs();
     for (final entry in _chatReplies) {
-      if (entry.pattern.hasMatch(trimmed)) {
+      if (_matches(entry.pattern, trimmed)) {
         final body = entry.replies[seed % entry.replies.length];
         if (!entry.appendCta) return body;
         return '$body\n\n${_ctaLines[(seed ~/ 7) % _ctaLines.length]}';
@@ -916,7 +963,7 @@ class IntentService {
   /// أطول صيغة مطابقة تفوز لنفس سبب فوزها في [parse]: "تنظيف خزانات" أخص من
   /// "تنظيف".
   static Profession? professionFor(String text) {
-    if (_shopWords.hasMatch(text)) return null;
+    if (_matches(_shopWords, text)) return null;
 
     Profession? chosen;
     var chosenLength = 0;
@@ -1040,7 +1087,7 @@ class IntentService {
     // وهي إشارة للمستدعي أن يطلب توضيحاً بدل أن يبحث.
     final intents = <QueryIntent>[];
     for (final fragment in fragments) {
-      if (_dealsWords.hasMatch(fragment)) {
+      if (_matches(_dealsWords, fragment)) {
         intents.add(QueryIntent(kind: IntentKind.deals, label: 'العروض'));
       } else {
         final intent = parse(fragment, lastCategorySlug: lastCategorySlug);

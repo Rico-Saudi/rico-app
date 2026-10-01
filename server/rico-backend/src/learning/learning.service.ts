@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { KnowledgeGap, KnowledgeGapDocument, MAX_VARIANTS } from './schemas/knowledge-gap.schema';
+import { GapSource, KnowledgeGap, KnowledgeGapDocument, MAX_VARIANTS } from './schemas/knowledge-gap.schema';
 import { Lesson, LessonDocument } from './schemas/lesson.schema';
 import { TrainingRun, TrainingRunDocument } from './schemas/training-run.schema';
 import { lessonRegistry, MAX_PROMPT_EXAMPLES } from './constants/lessons.registry';
@@ -17,6 +17,8 @@ export interface GapRecord {
   brand: string;
   dialect: string;
   ricoReply: string;
+  /** Defaults to 'user' — only the simulation script says otherwise. */
+  source?: GapSource;
 }
 
 /**
@@ -89,7 +91,7 @@ export class LearningService implements OnModuleInit {
         {
           $set: { message, lastSeenAt: new Date(), dialect: entry.dialect, ricoReply: entry.ricoReply.slice(0, 300) },
           $inc: { count: 1 },
-          $addToSet: { brands: entry.brand },
+          $addToSet: { brands: entry.brand, sources: entry.source ?? 'user' },
           // $position + $slice keeps the newest phrasings and drops the
           // rest, so a gap asked ten thousand times stays a fixed-size
           // document. It can hold the same phrasing twice (Mongo has no

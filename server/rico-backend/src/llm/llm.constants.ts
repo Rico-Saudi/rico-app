@@ -11,7 +11,11 @@
 /// (see learning/training.service). It reasons about the same taxonomy the
 /// classifier does, so it rides the classifier's model chain rather than
 /// naming its own — one fewer env var to keep in step.
-export type LlmPurpose = 'classify' | 'compose' | 'training';
+///
+/// 'simulate' is scripts/simulate-users.ts: the persona agents that play
+/// customers, and the judge that grades Rico's answers to them. Never on a
+/// customer's path, so it rides the same chain rather than earning its own.
+export type LlmPurpose = 'classify' | 'compose' | 'training' | 'simulate';
 
 export type ProviderName = 'groq' | 'openrouter';
 
@@ -19,8 +23,9 @@ export interface ProviderConfig {
   name: ProviderName;
   url: string;
   apiKey: string | undefined;
-  /// Models in priority order. More than one is only meaningful on
-  /// OpenRouter, which fails over between them within a single request.
+  /// Models in priority order. OpenRouter fails over between them within a
+  /// single request; on Groq the gateway itself retries the next one when
+  /// the first answers 429 (see LlmService.complete).
   models: string[];
   /// Extra headers the provider wants. OpenRouter uses these to attribute
   /// traffic in its dashboard; Groq needs none.
@@ -30,7 +35,12 @@ export interface ProviderConfig {
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+/// Groq meters tokens per minute *per model*, and the classifier's system
+/// prompt alone is most of the free tier's cap on one model — so a second
+/// message inside the same minute was a 429, and the client fell back to
+/// keyword matching. The 20b sibling has its own bucket, so it answers the
+/// messages the 120b is too busy for; a worse model beats no model.
+const DEFAULT_GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 
 /// Splits "a/b, c/d" into ['a/b', 'c/d']. Empty entries are dropped so a
 /// trailing comma in an env var can't produce a request for a model named ''.
@@ -75,7 +85,13 @@ export function providerFor(purpose: LlmPurpose): ProviderConfig {
     name: 'groq',
     url: GROQ_URL,
     apiKey: process.env.GROQ_API_KEY,
-    models: [process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL],
+    // GROQ_MODELS (a chain) wins over the older single GROQ_MODEL, which is
+    // still honoured so an existing deployment keeps its exact model.
+    models: parseModelList(process.env.GROQ_MODELS).length > 0
+      ? parseModelList(process.env.GROQ_MODELS)
+      : process.env.GROQ_MODEL
+        ? [process.env.GROQ_MODEL]
+        : DEFAULT_GROQ_MODELS,
     headers: {},
   };
 }

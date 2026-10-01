@@ -346,6 +346,7 @@ void main() {
     test('حاجة جسدية واضحة تصير بحثاً مباشراً', () {
       expect(IntentService.parseMulti('أنا جوعان').first.slug, 'restaurant');
       expect(IntentService.parseMulti('جعان موت').first.slug, 'restaurant');
+      expect(IntentService.parseMulti('بدي موت من الجوع').first.slug, 'restaurant');
       expect(IntentService.parseMulti('عطشان').first.slug, 'cafe');
       expect(route('أنا جوعان'), 'search');
       expect(route('عطشان'), 'search');
@@ -388,6 +389,54 @@ void main() {
       final reply = IntentService.detectOffTopicReply('طفشان')!;
       expect(reply.contains('مطاعم'), isTrue);
       expect(reply.contains('كافيهات'), isTrue);
+    });
+
+    test('الضيق الشديد يُفهم بكل إملاء ولهجة', () {
+      // "بدي موت؟" بلا ألف هي الصيغة المنطوقة، وكانت ترجع «ما فهمتك».
+      for (final text in [
+        'بدي موت؟',
+        'بدي موت',
+        'ابي موت',
+        'ودي أموت',
+        'بدي أمووت',
+        'بدي اموت!!',
+        'تعبت من حياتى',
+        'مليت من الحياة',
+        'ما بدي اعيش',
+        'بدي انتحر',
+      ]) {
+        final reply = IntentService.detectOffTopicReply(text);
+        expect(reply, isNotNull, reason: text);
+        expect(reply!.contains('دكتور'), isTrue, reason: text);
+        expect(IntentService.distressReply(text), isNotNull, reason: text);
+      }
+    });
+
+    test('المبالغة والكلمات المشابهة ليست ضيقاً', () {
+      // "بدي موت من الجوع" جوع، و"بدي موتور" طلب قطعة — لا رد حنية عليهما.
+      for (final text in ['بدي موت من الجوع', 'بدي أموت من الضحك', 'بدي موتور', 'أبي موتر']) {
+        expect(IntentService.distressReply(text), isNull, reason: text);
+        final reply = IntentService.detectOffTopicReply(text);
+        expect(reply == null || !reply.contains('دكتور'), isTrue, reason: text);
+      }
+    });
+
+    test('الضيق مع طلب مكان يُترك للمصنّف', () {
+      expect(IntentService.distressReply('تعبت من حياتي وبدي صيدلية'), isNull);
+      expect(IntentService.distressReply('بدي أموت'), isNotNull);
+    });
+  });
+
+  group('المطابقة بالإملاء المختلف', () {
+    test('كلمات الفئات تُفهم بلا همزة وبالهاء بدل التاء المربوطة', () {
+      expect(IntentService.parseMulti('اقرب صيدليه').first.slug, 'pharmacy');
+      expect(IntentService.parseMulti('أقرب صيدلية').first.slug, 'pharmacy');
+      expect(IntentService.hasSearchSignal('بدي مطعم؟؟'), isTrue);
+    });
+
+    test('العروض والمهن كذلك', () {
+      expect(IntentService.parseMulti('وش العروض!!').first.kind, IntentKind.deals);
+      expect(IntentService.professionFor('ابغى كهربائى'), isNotNull);
     });
   });
 
