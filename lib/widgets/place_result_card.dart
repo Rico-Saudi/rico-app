@@ -5,6 +5,7 @@ import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../services/favorites_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/dialer.dart';
 import 'place_photo.dart';
 import 'rico_surfaces.dart';
 
@@ -69,10 +70,19 @@ class _PlaceResultCardState extends State<PlaceResultCard> {
     }
   }
 
+  Future<void> _call() async {
+    final opened = await openDialer(widget.place.phone!);
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('جهازك ما يقدر يتصل، الرقم: ${widget.place.phone}')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final place = widget.place;
     final isOpen = place.isOpenNow;
+    final hasPhone = place.phone?.trim().isNotEmpty ?? false;
 
     return RicoCard(
       onTap: _openDirections,
@@ -136,21 +146,34 @@ class _PlaceResultCardState extends State<PlaceResultCard> {
                       ),
                   ],
                 ),
-                if (widget.onViewCatalog != null) ...[
+                if (widget.onViewCatalog != null || hasPhone) ...[
                   const SizedBox(height: 11),
                   const Divider(color: RicoColors.hairline, height: 1),
                   const SizedBox(height: 5),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      onPressed: widget.onViewCatalog,
-                      icon: const Icon(Icons.storefront_rounded, size: 16),
-                      label: const Text('شوف المنتجات والعروض'),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 34),
-                      ),
-                    ),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      if (widget.onViewCatalog != null)
+                        TextButton.icon(
+                          onPressed: widget.onViewCatalog,
+                          icon: const Icon(Icons.storefront_rounded, size: 16),
+                          label: const Text('شوف المنتجات والعروض'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 34),
+                          ),
+                        ),
+                      if (hasPhone)
+                        TextButton.icon(
+                          onPressed: _call,
+                          icon: const Icon(Icons.phone_rounded, size: 16),
+                          label: const Text('اتصل'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 34),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],

@@ -28,6 +28,7 @@ import '../services/session_memory_service.dart';
 import '../models/customer_mood.dart';
 import '../models/order_reply.dart';
 import '../models/shown_shop.dart';
+import '../utils/dialer.dart';
 import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
@@ -338,10 +339,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     bool usedFallback,
     int index,
   ) async {
-    // الطلب يستخدم الرقم ليعرف من وين يطلب، لا ليعرض المحل من جديد — يحلّه
-    // [_resolveOrderMessage] بنفسه.
+    // الطلب والاتصال يستخدمان الرقم ليعرفا أي محل، لا ليعرضاه من جديد —
+    // يحلّه [_resolveOrderMessage] و[_resolveCallMessage] بنفسيهما.
     final referencedPosition = intent.referencedPosition;
-    if (referencedPosition != null && intent.kind != IntentKind.order) {
+    if (referencedPosition != null && intent.kind != IntentKind.order && intent.kind != IntentKind.call) {
       final message = await _resolveReferencedMessage(text, intent, referencedPosition, origin);
       if (message != null) return message;
     }
@@ -433,6 +434,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     if (intent.kind == IntentKind.order) {
       return _resolveOrderMessage(intent, origin, index);
+    }
+
+    if (intent.kind == IntentKind.call) {
+      return _resolveCallMessage(intent, origin);
     }
 
     if (intent.kind == IntentKind.deals) {
@@ -950,6 +955,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     IntentKind.professional => 'أدوّر لك على أقرب ${slot.first.label}…',
                     IntentKind.place => 'أدوّر على ${slot.first.label}…',
                     IntentKind.order => 'أجهّز طلبك من ${slot.first.placeName ?? slot.first.label}…',
+                    IntentKind.call => 'أدوّر على رقم ${slot.first.placeName ?? slot.first.label}…',
                   },
             sender: MessageSender.bot,
             isLoading: true,
@@ -1321,6 +1327,81 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     return _orderMessageFor(resolved, intent, index, shopLabel: placeName);
+  }
+
+  /// "اتصل على مطعم الماهر" — يلقى المحل ويفتح تطبيق الهاتف برقمه.
+  ///
+  /// ريكو ما يتصل بنفسه: يجهّز الرقم، والمستخدم يضغط اتصال (iOS يطلب
+  /// موافقته أصلاً). المحل يُحل مثل الطلب بالضبط — من آخر قائمة عرضناها
+  /// أولاً ([findShownShop])، وإلا بالبحث باسمه حول موقعه.
+  Future<ChatMessage> _resolveCallMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final name = intent.placeName;
+    final shown = _findLastShown()?.places;
+    final shownShop = shown == null ? null : findShownShop(shown, position: intent.referencedPosition, name: name);
+    if (shownShop != null) return _callMessageFor(shownShop, dial: true);
+
+    if (name == null) {
+      return ChatMessage(text: 'ما عرفت أي محل تبي تتصل عليه 🤔 قل لي اسمه.', sender: MessageSender.bot);
+    }
+
+    List<PlaceResult> found;
+    try {
+      found = await _placesService.search(
+        userLat: origin.lat,
+        userLng: origin.lng,
+        // الخادم يقبل ٦٠ حرفاً لاسم المحل، وأطول من كذا ما هو اسم محل.
+        brandHint: name.length > 60 ? name.substring(0, 60) : name,
+        // اللي يتصل على محل بالاسم يعرفه، فما يلزم يكون جنبه — بس الأقرب أولاً.
+        radiusMeters: 30000,
+      );
+    } on PlacesException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    }
+
+    if (found.isEmpty) {
+      return ChatMessage(
+        text: 'ما لقيت محل باسم "$name" قريب منك 😕 تأكد من الاسم، أو قل لي وش تبي وأدوّر لك على أقرب محل.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    // الأقرب اللي عنده رقم — "صيدلية النهدي" لها فروع كثيرة، وأقربها هو اللي
+    // يقصده غالباً. ونفتح الهاتف على طول بس إذا الاسم يطابق فعلاً: نتيجة
+    // بحث تقريبية تستاهل نظرة قبل ما يرن على محل غلط.
+    final withPhone = found.where((p) => p.phone?.trim().isNotEmpty ?? false).toList();
+    final place = withPhone.isNotEmpty ? withPhone.first : found.first;
+    return _callMessageFor(place, dial: findShownShop([place], name: name) != null);
+  }
+
+  ChatMessage _callMessageFor(PlaceResult place, {required bool dial}) {
+    final phone = place.phone?.trim();
+    // محل مسجّل عندنا: الطلب منه من هنا أسهل من مكالمة، فنقولها.
+    final orderable = place.source == 'rico';
+
+    if (phone == null || phone.isEmpty) {
+      return ChatMessage(
+        text: orderable
+            ? 'لقيت ${place.name} بس رقمه مو عندي 😕 تقدر تطلب منهم من هنا مباشرة 🛒'
+            : 'لقيت ${place.name} بس رقمه مو عندي 😕 هذا موقعه، ولو تبي تطلب شي من محل قريب قل لي وأجهّزه لك 🛒',
+        sender: MessageSender.bot,
+        places: [place],
+        onOrder: orderable ? _openCatalog : null,
+      );
+    }
+
+    if (dial) unawaited(openDialer(phone));
+
+    return ChatMessage(
+      text: orderable
+          ? 'هذا رقم ${place.name}: $phone 📞\nوإذا تبي، أطلب لك منهم من هنا بدون مكالمة 🛒'
+          : 'هذا رقم ${place.name}: $phone 📞\nولو تبي تطلب شي من محل قريب، قل لي وأجهّزه لك 🛒',
+      sender: MessageSender.bot,
+      places: [place],
+      onOrder: orderable ? _openCatalog : null,
+    );
   }
 
   /// طلب من محل ظاهر بآخر نتائج — نفس مسار المحل المضغوط من قائمة الاختيار
