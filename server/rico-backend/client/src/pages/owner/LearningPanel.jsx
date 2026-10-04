@@ -53,6 +53,84 @@ function describeIntent(intent) {
   return `📍 ${category}${rank}${intent.brandHint ? ` — ${intent.brandHint}` : ''}`;
 }
 
+/**
+ * المالك يكتب جواب ريكو بنفسه: رد نصي، أو بحث عن نوع مكان.
+ *
+ * للاقتراح اللي النموذج سمّاه «خارج نطاق ريكو» بس المالك عارف شو لازم
+ * ينقال، وللسؤال اللي بالقائمة مباشرة بدون ما يستنى جولة تدريب.
+ */
+function TeachForm({ id, initialMessage, busy, onSubmit, onCancel }) {
+  const [mode, setMode] = useState('reply');
+  const [message, setMessage] = useState(initialMessage || '');
+  const [reply, setReply] = useState('');
+  const [category, setCategory] = useState('restaurant');
+  const [rank, setRank] = useState('nearest');
+
+  function submit() {
+    if (mode === 'reply') return onSubmit({ message: message.trim(), reply: reply.trim() });
+    return onSubmit({
+      message: message.trim(),
+      intents: [{ kind: 'place', category, rank, brandHint: null, customTag: null, label: null, referencedPosition: null, profession: null }],
+    });
+  }
+
+  const ready = message.trim().length >= 2 && (mode === 'search' || reply.trim().length > 0);
+
+  return (
+    <div style={{ background: '#F7F7F9', borderRadius: 8, padding: 12, marginTop: 10 }}>
+      <label htmlFor={`teach-msg-${id}`}>سؤال الزبون</label>
+      <input id={`teach-msg-${id}`} maxLength={300} value={message} onChange={(e) => setMessage(e.target.value)} />
+
+      <div className="row" style={{ gap: 16, marginTop: 10 }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', margin: 0 }}>
+          <input type="radio" name={`mode-${id}`} checked={mode === 'reply'} onChange={() => setMode('reply')} />
+          ريكو يرد بنص
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', margin: 0 }}>
+          <input type="radio" name={`mode-${id}`} checked={mode === 'search'} onChange={() => setMode('search')} />
+          ريكو يدوّر على مكان
+        </label>
+      </div>
+
+      {mode === 'reply' ? (
+        <>
+          <label htmlFor={`teach-reply-${id}`}>الرد</label>
+          <textarea
+            id={`teach-reply-${id}`}
+            rows={3}
+            maxLength={600}
+            placeholder="مثال: ما بقدر أحجزلك موعد، بس بقدر ألاقيلك أقرب عيادة 🙂 بدك أدوّرلك؟"
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+          />
+          <p className="note" style={{ marginTop: 6 }}>
+            قصير، بلهجة الزبون، وآخره دعوة يطلب من ريكو. ولا تقول إن ريكو بيوصّل أو بياخذ مصاري — المحل هو اللي بيرتّب.
+          </p>
+        </>
+      ) : (
+        <div className="row" style={{ gap: 8, marginTop: 8 }}>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="نوع المكان">
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <select value={rank} onChange={(e) => setRank(e.target.value)} aria-label="الترتيب">
+            <option value="nearest">الأقرب</option>
+            <option value="cheapest">الأرخص</option>
+            <option value="open_now">المفتوح الآن</option>
+            <option value="best_rated">الأعلى تقييماً</option>
+          </select>
+        </div>
+      )}
+
+      <div className="actions">
+        <button type="button" disabled={busy || !ready} onClick={submit}>علّمها لريكو</button>
+        <button className="secondary" type="button" disabled={busy} onClick={onCancel}>إلغاء</button>
+      </div>
+    </div>
+  );
+}
+
 function timeAgo(iso) {
   if (!iso) return '—';
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -82,6 +160,7 @@ export default function LearningPanel({ authedFetch }) {
   const [statusFilter, setStatusFilter] = useState('open');
   const [query, setQuery] = useState('');
   const [drafts, setDrafts] = useState({}); // lessonId → تعديلات المالك قبل الموافقة
+  const [teaching, setTeaching] = useState(null); // lessonId أو gapId مفتوح عليه نموذج «علّمه جواب»
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const limit = 25;
@@ -163,6 +242,24 @@ export default function LearningPanel({ authedFetch }) {
               ? 'تمام — هالأسئلة ما رح تظهر بالطابور مرة ثانية.'
               : 'اتعلّمها ريكو — صارت ببرومبته من هلأ، بلا إصدار جديد.',
       });
+    }
+  }
+
+  /** جواب كتبه المالك مكان الاقتراح — حتى لو النموذج سمّاه «خارج النطاق». */
+  async function teachInstead(lesson, body) {
+    const approved = await post(`/owner/learning/lessons/${lesson._id}/approve`, { ...body, kind: 'example' });
+    if (approved) {
+      setTeaching(null);
+      setMessage({ type: 'success', text: 'اتعلّمها ريكو بجوابك — صارت ببرومبته من هلأ، بلا إصدار جديد.' });
+    }
+  }
+
+  /** جواب سؤال من القائمة مباشرة، بدون جولة تدريب. */
+  async function teachGap(gap, body) {
+    const lesson = await post(`/owner/learning/gaps/${gap._id}/teach`, body);
+    if (lesson) {
+      setTeaching(null);
+      setMessage({ type: 'success', text: 'اتعلّمها ريكو — صارت ببرومبته من هلأ، بلا إصدار جديد.' });
     }
   }
 
@@ -284,14 +381,35 @@ export default function LearningPanel({ authedFetch }) {
 
             {lesson.kind === 'skip' && (
               <p style={{ fontSize: 14, marginTop: 10 }}>
-                «{lesson.message}» — الموافقة معناها: لا تعرض هالأسئلة عليّ مرة ثانية.
+                {lesson.gapMessages?.length > 0 && (
+                  <>
+                    الأسئلة: {lesson.gapMessages.map((m) => `«${m}»`).join(' · ')}
+                    <br />
+                  </>
+                )}
+                «تجاهلها» معناها: لا تعرض هالأسئلة عليّ مرة ثانية. إذا بتعرف شو لازم ريكو يرد، اضغط «علّمه جواب».
               </p>
+            )}
+
+            {teaching === lesson._id && (
+              <TeachForm
+                id={lesson._id}
+                initialMessage={lesson.kind === 'example' ? lesson.message : lesson.gapMessages?.[0] ?? ''}
+                busy={busy}
+                onSubmit={(body) => teachInstead(lesson, body)}
+                onCancel={() => setTeaching(null)}
+              />
             )}
 
             <div className="actions">
               <button type="button" disabled={busy} onClick={() => approve(lesson)}>
                 {lesson.kind === 'profession' ? 'أضف المهنة' : lesson.kind === 'skip' ? 'تجاهلها' : 'علّمها لريكو'}
               </button>
+              {teaching !== lesson._id && (
+                <button className="secondary" type="button" disabled={busy} onClick={() => setTeaching(lesson._id)}>
+                  {lesson.kind === 'example' ? 'علّمه جواب ثاني' : 'علّمه جواب'}
+                </button>
+              )}
               <button
                 className="secondary"
                 type="button"
@@ -366,7 +484,12 @@ export default function LearningPanel({ authedFetch }) {
                       {GAP_STATUS_LABELS[gap.status] || gap.status}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {gap.status !== 'taught' && (
+                      <button type="button" disabled={busy} style={{ marginInlineEnd: 6 }} onClick={() => setTeaching(gap._id)}>
+                        علّمه جواب
+                      </button>
+                    )}
                     {gap.status === 'ignored' ? (
                       <button className="secondary" type="button" disabled={busy} onClick={() => setGapStatus(gap, 'open')}>
                         رجّعه
@@ -378,7 +501,24 @@ export default function LearningPanel({ authedFetch }) {
                     )}
                   </td>
                 </tr>
-              ))}
+              )).flatMap((row, n) => {
+                const gap = gaps[n];
+                if (teaching !== gap._id) return [row];
+                return [
+                  row,
+                  <tr key={`${gap._id}-teach`}>
+                    <td colSpan={5}>
+                      <TeachForm
+                        id={gap._id}
+                        initialMessage={gap.message}
+                        busy={busy}
+                        onSubmit={(body) => teachGap(gap, body)}
+                        onCancel={() => setTeaching(null)}
+                      />
+                    </td>
+                  </tr>,
+                ];
+              })}
             </tbody>
           </table>
         )}

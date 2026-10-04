@@ -203,6 +203,50 @@ describe('LearningService', () => {
     });
   });
 
+  describe('the owner writing the answer', () => {
+    it('turns a skip proposal into the reply the owner wrote, about the real question', async () => {
+      await ask('بتقدر تحجزلي موعد عند الدكتور؟');
+      const gap = await gapModel.findOne().lean();
+      const skip = await lessonModel.create({ kind: 'skip', message: 'خارج نطاق ريكو', gapIds: [gap!._id] });
+
+      const listed = await service.listLessons({ status: 'pending' } as any);
+      expect(listed[0].gapMessages).toEqual(['بتقدر تحجزلي موعد عند الدكتور؟']);
+
+      const reply = 'ما بقدر أحجز مواعيد، بس بلاقيلك أقرب عيادة 🙂 بدك أدوّرلك؟';
+      const lesson = await service.approve(String(skip._id), 'owner@rico', { kind: 'example', reply });
+
+      expect(lesson.kind).toBe('example');
+      expect(lesson.message).toBe('بتقدر تحجزلي موعد عند الدكتور؟');
+      expect(lesson.source).toBe('owner');
+      expect(learnedExamplesBlock('jordanian')).toContain('بلاقيلك أقرب عيادة');
+      expect((await gapModel.findById(gap!._id).lean())!.status).toBe('taught');
+    });
+
+    it('teaches a question straight from the list, as a search', async () => {
+      await ask('وين في محل يصلح جزم');
+      const gap = await gapModel.findOne().lean();
+      const pending = await lessonModel.create({ kind: 'skip', message: 'x', gapIds: [gap!._id] });
+
+      await service.teachGap(String(gap!._id), 'owner@rico', {
+        intents: [{ kind: 'place', category: 'shoe_store', rank: 'nearest' }],
+      });
+
+      expect(learnedExamplesBlock('saudi')).toContain('وين في محل يصلح جزم');
+      expect(learnedExamplesBlock('saudi')).toContain('shoe_store');
+      expect((await gapModel.findById(gap!._id).lean())!.status).toBe('taught');
+      // The model's proposal for the same question is withdrawn.
+      expect((await lessonModel.findById(pending._id).lean())!.status).toBe('rejected');
+    });
+
+    it('refuses an answer that teaches nothing', async () => {
+      await ask('سؤال');
+      const gap = await gapModel.findOne().lean();
+      await expect(service.teachGap(String(gap!._id), 'owner@rico', { reply: '   ' })).rejects.toMatchObject({
+        response: { error: 'lesson_teaches_nothing' },
+      });
+    });
+  });
+
   it('reports what is waiting for the owner', async () => {
     await ask('سؤال أول');
     await ask('سؤال أول');
