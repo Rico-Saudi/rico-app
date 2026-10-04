@@ -223,7 +223,9 @@ export function gradeOrder(expected: ExpectedOrder, intents: Intent[]): OrderGra
  * rank or the list position the line asks for. Lines without either pass. */
 export function gradeFollowUp(line: CorpusLine, intents: Intent[]): boolean {
   const place = intents.find((i) => i.kind === 'place' || i.kind === 'professional');
-  if (line.rank && line.rank !== 'nearest' && place?.rank !== line.rank) return false;
+  // A trade search has no rank to set (validateIntent fixes it to nearest), so
+  // only a place is held to the rank asked for.
+  if (line.rank && line.rank !== 'nearest' && place?.kind === 'place' && place.rank !== line.rank) return false;
   if (line.position && !line.expect.includes('order') && place?.referencedPosition !== line.position) return false;
   return true;
 }

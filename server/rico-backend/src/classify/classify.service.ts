@@ -7,7 +7,7 @@ import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { validateIntent } from './intent-validation';
 import { distressReplyFor, isDistress } from './constants/distress';
 import { LearningService } from '../learning/learning.service';
-import { keywordClassify } from './fallback/keyword-classifier';
+import { keywordClassifyInContext } from './fallback/keyword-classifier';
 
 // Strips characters that could break out of the plain-text block we
 // interpolate into the system prompt — item names are third-party-controlled
@@ -168,7 +168,12 @@ export class ClassifyService {
    * "أرخص منه"): هذي يحلّها التطبيق من ذاكرته، والقاموس ما بيرجع لها شي
    * أصلاً. `source` للتشخيص فقط — التطبيق يتجاهل الحقول اللي ما يعرفها. */
   private keywordAnswer(dto: ClassifyRequestDto, mood: ReturnType<typeof validateMood> = 'neutral') {
-    const intents = keywordClassify(dto.message);
+    // The conversation goes along: "في ارخص؟", "التاني", "وزيد ٢ فلافل"
+    // name nothing themselves and borrow the search, list or order before them.
+    const intents = keywordClassifyInContext(dto.message, {
+      history: dto.history ?? [],
+      lastResults: dto.lastResults ?? null,
+    });
     if (!intents.length) return null;
     return { offTopic: false, reply: null, intents, mood, source: 'keywords' as const };
   }

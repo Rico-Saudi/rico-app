@@ -88,7 +88,8 @@ const STOP = set([
 
 /** Said around an order without being part of it. */
 const FILLER = set([
-  'كلهم', 'كله', 'كلها', 'الكل', 'مرحبا', 'تكرمت', 'هات', 'بس', 'وبس', 'شي',
+  'كلهم', 'كله', 'كلها', 'الكل', 'مرحبا', 'تكرمت', 'هات', 'بس', 'وبس', 'شي', 'زين', 'ممتاز', 'يسعدك', 'يسعدكم', 'نسيت',
+  'والله', 'المهم', 'تمام', 'زيد', 'زيدلي', 'ضيف', 'ضيفلي', 'زياده', 'ايه', 'اه', 'ايوه', 'اكيد', 'yes', 'yeah',
   'لي', 'لنا', 'الي', 'يعني', 'اممم', 'امم', 'ام', 'ياريت', 'يا', 'ريت', 'ريكو', 'تدلل', 'سمحت', 'بليز', 'الله', 'يخليك', 'هلا',
   'هلق', 'الحين', 'هسا', 'بسرعه', 'please', 'عشا', 'عشاء', 'غدا', 'غداء', 'فطور', 'شي', 'اغراض', 'غراض', 'مقاضي', 'pls', 'ضروري', 'ممكن', 'منه', 'منكم', 'توصيل', 'توصل', 'يوصل', 'me', 'for',
   'the', 'some', 'get', 'can', 'you', 'i', 'order', 'اوردر', 'طيب', 'اوكي', 'ok',
@@ -150,14 +151,14 @@ const BRANDS = ORDER_BRANDS.map((b) => fold(b).split(' ')).sort((a, b) => b.leng
 
 /** Things that turn a message into a complaint about an order already
  * placed — never a new one. */
-const COMPLAINT_RE = /(?:^|\s)(?:الغي|الغاء|استرجع|ارجع فلوسي|ارجعهن|ارجعه|ارجعها|ارجع|رجعلي|طلبي|طلبت|طلبيتي|وصلني بارد|وصلت بارده|تاخر|متاخر|ما وصل|الطلب اللي|اللي جاني|ناقص)(?=\s|$)/u;
+const COMPLAINT_RE = /(?:^|\s)(?:الغي|الغاء|استرجع|ارجع فلوسي|ارجعهن|ارجعه|ارجعها|ارجع|رجعلي|طلبي|طلبت|طلبيتي|وصلني بارد|وصلت بارده|تاخر|متاخر|ما وصل|الطلب اللي|اللي جاني|ناقص|اجاني الطلب|جاني الطلب|تاخر الطلب)(?=\s|$)/u;
 /** Asking about an order rather than placing it: its price, delivery time, or Rico's opinion. */
 const QUESTION_RE = /(?:^|\s)(?:كم ياخذ|كم بياخذ|كم سعر|بكم|وش رايك|شو رايك|برايك|تكفي|بتكفي|كم يكلف)(?=\s|$)/u;
 
 /** "طلبي من البيك تأخر", "الغي طلبي": about an order already placed. The
  * app answers those itself; nothing here should search for the shop. */
-export function isOrderComplaint(message: string): boolean {
-  return COMPLAINT_RE.test(fold(message)) || QUESTION_RE.test(fold(message));
+export function isOrderComplaint(message: string, includeQuestions = true): boolean {
+  return COMPLAINT_RE.test(fold(message)) || (includeQuestions && QUESTION_RE.test(fold(message)));
 }
 
 interface Tokens {
@@ -285,6 +286,12 @@ function parseItems(raw: string[], folded: string[], deps: OrderDeps): Item[] {
       continue;
     }
     const n = /^\d+$/u.test(t) ? Math.min(99, Math.max(1, Number(t))) : NUMBERS.get(t);
+    // "ثنتين منهم بدون ثوم": a note about some of the item, not a new one.
+    if ((n !== undefined || t === 'وحده' || t === 'واحد') && (next === 'منهم' || next === 'منها')) {
+      flush();
+      while (i + 1 < folded.length && folded[i + 1] !== 'و' && !folded[i + 1].startsWith('و')) i++;
+      continue;
+    }
     if (n !== undefined) {
       // "مقاس ٤", "كيس رز ٥ كيلو", "كونكور ٥ ملغ": the number describes the item.
       const prev = folded[i - 1] ?? '';
@@ -692,4 +699,29 @@ export function parseOrder(message: string, deps: OrderDeps): ParsedOrder | null
     if (category) order = validateIntent({ kind: 'order', category, orderItems: items });
   }
   return order ? { order, rest } : null;
+}
+
+/** The items in a piece of text, read the way an order's basket is — for a
+ * follow-up that adds to an order already started ("وزيد ٢ فلافل"). */
+export function parseBasket(text: string, deps: OrderDeps): { name: string; quantity: number }[] {
+  const tok = tokenize(text);
+  return parseItems(tok.raw, tok.folded, deps);
+}
+
+/** The shop a correction names: the last "من <shop>" not turned down by
+ * "مش"/"بدل" before it ("لا مش من حبيبة، من نفيسة" → نفيسة; "خلها من هرفي
+ * بدل البيك" → هرفي). */
+export function correctedShop(text: string, deps: OrderDeps): { placeName: string | null; position: number | null; category: string | null } | null {
+  const tok = tokenize(text);
+  let found: Shop | null = null;
+  for (let i = 0; i < tok.folded.length - 1; i++) {
+    if (!FROM.has(tok.folded[i])) continue;
+    const before = tok.folded[i - 1] ?? '';
+    if (before === 'مش' || before === 'مو' || before === 'بدل' || before === 'بدال') continue;
+    // "بدل ما يكون من الاول خليه من التالت": the first "من" is the old one.
+    if (tok.folded.slice(Math.max(0, i - 4), i).some((t) => t === 'بدل' || t === 'بدال')) continue;
+    const s = parseShop(tok, i + 1, deps);
+    if (s) found = s;
+  }
+  return found ? { placeName: found.placeName, position: found.position, category: found.category } : null;
 }
