@@ -7,7 +7,7 @@ import { TrainingRun, TrainingRunDocument } from './schemas/training-run.schema'
 import { lessonRegistry, MAX_PROMPT_EXAMPLES } from './constants/lessons.registry';
 import { normalizeArabic } from './constants/normalize';
 import { ListGapsDto, ListLessonsDto } from './dto/list-gaps.dto';
-import { ApproveLessonDto } from './dto/approve-lesson.dto';
+import { ApproveLessonDto, TeachGapDto } from './dto/approve-lesson.dto';
 import { validateIntent } from '../classify/intent-validation';
 import { ProfessionsService } from '../professionals/professions.service';
 import { CreateProfessionDto } from '../professionals/dto/upsert-profession.dto';
@@ -165,13 +165,21 @@ export class LearningService implements OnModuleInit {
     };
   }
 
-  listLessons(query: ListLessonsDto) {
+  async listLessons(query: ListLessonsDto) {
     const filter = query.status ? { status: query.status } : {};
-    return this.lessonModel
+    const lessons = await this.lessonModel
       .find(filter)
       .sort({ status: 1, coverage: -1, createdAt: -1 })
       .limit(query.limit ?? 50)
       .lean();
+
+    // The customers' own questions behind each lesson. A skip proposal's
+    // message is the model's label for them ("خارج نطاق ريكو"), so the
+    // dashboard needs the real text to let the owner answer them instead.
+    const gapIds = lessons.flatMap((l) => l.gapIds ?? []);
+    const gaps = gapIds.length ? await this.gapModel.find({ _id: { $in: gapIds } }, { message: 1 }).lean() : [];
+    const byId = new Map(gaps.map((g) => [String(g._id), g.message]));
+    return lessons.map((l) => ({ ...l, gapMessages: (l.gapIds ?? []).map((id) => byId.get(String(id))).filter(Boolean) }));
   }
 
   listRuns(limit = 10) {
@@ -197,6 +205,19 @@ export class LearningService implements OnModuleInit {
     const lesson = await this.lessonModel.findById(id);
     if (!lesson) throw new NotFoundException({ error: 'lesson_not_found' });
     if (lesson.status !== 'pending') throw new BadRequestException({ error: 'lesson_already_reviewed' });
+
+    // The owner wrote their own answer for a question the model proposed to
+    // skip (or to make a trade of): it becomes a plain example, about the
+    // customer's real question rather than the model's label for it.
+    if (edits.kind === 'example' && lesson.kind !== 'example') {
+      lesson.kind = 'example';
+      lesson.profession = null;
+      lesson.source = 'owner';
+      if (!edits.message) {
+        const gap = await this.gapModel.findOne({ _id: { $in: lesson.gapIds } }).lean();
+        if (gap) lesson.message = gap.message;
+      }
+    }
 
     if (edits.message) lesson.message = edits.message.trim();
     if (edits.dialect) lesson.dialect = edits.dialect;
@@ -227,6 +248,46 @@ export class LearningService implements OnModuleInit {
     await this.closeGaps(lesson.gapIds, lesson.kind === 'skip' ? 'ignored' : 'taught');
     await this.refresh();
 
+    return lesson.toObject();
+  }
+
+  /**
+   * يعلّم ريكو جواب سؤال ما فهمه، مكتوب من المالك مباشرة — بدون جولة تدريب.
+   *
+   * الدرس يُعتمد فوراً (المالك نفسه هو اللي كتبه، ما في شي يراجعه)، ويمر
+   * بنفس بوابة التحقق اللي تمر فيها الاقتراحات. وأي اقتراح معلّق على نفس
+   * السؤال ينسحب، حتى ما يتعلّم ريكو جوابين لسؤال واحد.
+   */
+  async teachGap(gapId: string, reviewer: string, dto: TeachGapDto) {
+    const gap = await this.gapModel.findById(gapId);
+    if (!gap) throw new NotFoundException({ error: 'gap_not_found' });
+
+    const intents = this.validateIntents(dto.intents ?? []);
+    const reply = dto.reply?.trim() || null;
+    if (!intents.length && !reply) throw new BadRequestException({ error: 'lesson_teaches_nothing' });
+
+    const lesson = await this.lessonModel.create({
+      kind: 'example',
+      status: 'approved',
+      message: dto.message?.trim() || gap.message,
+      // A written reply is in one dialect; a search reads the same in both.
+      dialect: dto.dialect ?? (intents.length ? 'any' : gap.dialect ?? 'any'),
+      intents,
+      reply: intents.length ? null : reply,
+      gapIds: [gap._id],
+      coverage: 1,
+      source: 'owner',
+      note: 'كتبه المالك',
+      reviewedBy: reviewer,
+      reviewedAt: new Date(),
+    });
+
+    await this.lessonModel.updateMany(
+      { status: 'pending', gapIds: gap._id },
+      { $set: { status: 'rejected', reviewedBy: reviewer, reviewedAt: new Date() } },
+    );
+    await this.closeGaps([gap._id as Types.ObjectId], 'taught');
+    await this.refresh();
     return lesson.toObject();
   }
 

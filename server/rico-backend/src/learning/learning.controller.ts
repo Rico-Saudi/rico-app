@@ -3,7 +3,7 @@ import { LearningService } from './learning.service';
 import { TrainingService } from './training.service';
 import { ListGapsDto, ListLessonsDto } from './dto/list-gaps.dto';
 import { UpdateGapDto } from './dto/update-gap.dto';
-import { ApproveLessonDto } from './dto/approve-lesson.dto';
+import { ApproveLessonDto, TeachGapDto } from './dto/approve-lesson.dto';
 import { SessionGuard } from '../common/guards/session.guard';
 import { RequireApp } from '../common/decorators/require-app.decorator';
 import { AccountId } from '../common/decorators/account-id.decorator';
@@ -41,6 +41,16 @@ export class LearningController {
     const updated = await this.learningService.setGapStatus(id, dto.status);
     await this.recordAudit(accountId, 'learning.gapStatus', 'KnowledgeGap', id, { status: dto.status });
     return updated;
+  }
+
+  /// The owner writes the answer to a question Rico didn't understand —
+  /// a reply or a search — and Rico learns it on the spot.
+  @Post('gaps/:id/teach')
+  async teachGap(@Param('id') id: string, @Body() dto: TeachGapDto, @AccountId() accountId: string) {
+    const email = await this.emailOf(accountId);
+    const lesson = await this.learningService.teachGap(id, email, dto);
+    await this.recordAudit(accountId, 'learning.teach', 'KnowledgeGap', id, { message: lesson.message });
+    return lesson;
   }
 
   @Get('lessons')

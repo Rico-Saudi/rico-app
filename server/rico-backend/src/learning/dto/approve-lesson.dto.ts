@@ -29,4 +29,34 @@ export class ApproveLessonDto {
   @IsOptional()
   @IsArray()
   intents?: unknown[];
+
+  /** "example" turns any proposal — a skip, a profession — into an answer
+   * the owner wrote themselves: the model called the question out of scope,
+   * the owner knows what Rico should say to it. */
+  @IsOptional()
+  @IsIn(['example'])
+  kind?: 'example';
+}
+
+/** What the owner teaches straight from the list of questions Rico didn't
+ * understand, without waiting for a training run to propose something. */
+export class TeachGapDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(300)
+  message?: string;
+
+  @IsOptional()
+  @IsIn(LESSON_DIALECTS)
+  dialect?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  reply?: string;
+
+  @IsOptional()
+  @IsArray()
+  intents?: unknown[];
 }
