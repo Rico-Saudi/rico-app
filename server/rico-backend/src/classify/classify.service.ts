@@ -7,7 +7,7 @@ import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { validateIntent } from './intent-validation';
 import { distressReplyFor, isDistress } from './constants/distress';
 import { LearningService } from '../learning/learning.service';
-import { keywordClassify } from './fallback/keyword-classifier';
+import { keywordClassifyInContext } from './fallback/keyword-classifier';
 
 // Strips characters that could break out of the plain-text block we
 // interpolate into the system prompt — item names are third-party-controlled
@@ -24,6 +24,10 @@ function buildLastResultsBlock(lastResults: LastResultsDto): string {
 **بس مع فعل طلب صريح** (أطلب/اطلب لي/وصّي/جهّز لي/خذ لي/أبي من/وش عندهم/قائمتهم). الرقم أو الاسم **لحاله** ("الثاني"، "الأخير"، "مطعم الماهر") بلا فعل طلب = عرض العنصر، kind="place" مع referencedPosition — **مو** طلب.
 referencedPosition هو رقم العنصر **بهذه القائمة بالضبط** (من 1 إلى ${lastResults.items.length})، لا رقم ذكره المستخدم برسالة سابقة لقائمة أقدم — مثلاً إذا القائمة فيها عنصر واحد فرقمه 1 حتى لو اختاره المستخدم قبل بكلمة "الثاني".`;
 }
+
+// A reply that turns the customer away instead of searching. Matched on the
+// model's own text, in both dialects.
+const REFUSAL_RE = /ما\s*(?:بقدر|بقدرش|اقدر|أقدر|نقدر|بنقدر|عندنا\s+خدمة|نوفر|بنوفر)|مش\s+(?:متوفر|متاح|بقدر)|لا\s+(?:أستطيع|استطيع|نستطيع|يمكنني)|غير\s+متوفر/u;
 
 // Exposed for tests only: validateIntent is where a malformed model response
 // gets turned into something safe, and that deserves direct coverage rather
@@ -109,6 +113,18 @@ export class ClassifyService {
         if (fallback) return fallback;
       }
 
+      // "آسف، ما بقدر احجز طيران، بس بقدر أساعدك تلاقي مطعم" — the model
+      // understood and still answered with a refusal, so notUnderstood was
+      // never set. When the words ask for something Rico can find (a travel
+      // agency, a driver), find it; and log the miss so the model is taught.
+      if (reply && REFUSAL_RE.test(reply)) {
+        const fallback = this.keywordAnswer(dto, mood);
+        if (fallback) {
+          this.recordGap(dto, reply);
+          return fallback;
+        }
+      }
+
       return { offTopic: true, reply, intents: [], mood };
     }
 
@@ -152,7 +168,12 @@ export class ClassifyService {
    * "أرخص منه"): هذي يحلّها التطبيق من ذاكرته، والقاموس ما بيرجع لها شي
    * أصلاً. `source` للتشخيص فقط — التطبيق يتجاهل الحقول اللي ما يعرفها. */
   private keywordAnswer(dto: ClassifyRequestDto, mood: ReturnType<typeof validateMood> = 'neutral') {
-    const intents = keywordClassify(dto.message);
+    // The conversation goes along: "في ارخص؟", "التاني", "وزيد ٢ فلافل"
+    // name nothing themselves and borrow the search, list or order before them.
+    const intents = keywordClassifyInContext(dto.message, {
+      history: dto.history ?? [],
+      lastResults: dto.lastResults ?? null,
+    });
     if (!intents.length) return null;
     return { offTopic: false, reply: null, intents, mood, source: 'keywords' as const };
   }

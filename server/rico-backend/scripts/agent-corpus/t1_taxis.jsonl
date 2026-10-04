@@ -1,0 +1,90 @@
+{"msg": "ابي تكسي للمطار الحين ضروري", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "وين اقرب موقف تكاسي", "dialect": "saudi", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "ابغى سواق خاص يوديني مشاوير طول اليوم", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "السياره خربت علي بطريق الخرج ابي سطحه ضروري", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "ابي سائقه توديني الجامعه كل يوم انا بنت وماابي سواق رجال", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "احتاج سواق يوصل الوالده للمستشفى ويرجعها", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "فيه احد يوصل عيالي المدرسه الصبح ويرجعهم الظهر؟ حي النرجس", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "كم بياخذ تكسي من العليا للمطار؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "اوبر احسن ولا كريم؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي ليموزين لحفل زواج اختي الخميس", "dialect": "saudi", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "وين مكتب ليموزين قريب مني", "dialect": "saudi", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "need a driver to take me from jeddah to makkah tomorrow morning", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ana fe al riyadh w abi taxi now plz", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "الكفر بنشر وانا على الطريق السريع ومامعي ستبنه", "dialect": "saudi", "expect": "pro:tire_service"}
+{"msg": "البطاريه فاضيه والسياره ماتشتغل عند البيت", "dialect": "saudi", "expect": "pro:auto_electrician"}
+{"msg": "سيارتي طفت فجأه بنص الطريق وش اسوي ابي ميكانيكي يجيني", "dialect": "saudi", "expect": "pro:car_mechanic"}
+{"msg": "ابي توصيله من الدمام للرياض بكره", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "سواق اوبر كنسل علي ثلاث مرات والحين متأخر على الدوام 😤 ابي احد يوديني", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "والله سواقين كريم صارو يطلبون كاش زياده هذي سالفه", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي سياره زفه مزينه بالورد ليوم الجمعه", "dialect": "saudi", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "فيه عروض على ليموزين المطار؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "ابي سواق يوديني المطار وبعد ابي فندق قريب من المطار انام فيه ليله", "dialect": "saudi", "expect": "pro:driver + place:hotel"}
+{"msg": "ابي سطحه تنقل سيارتي للورشه وكمان دلوني على ورشه زينه بالصناعيه", "dialect": "saudi", "expect": "pro:tow_truck + place:car_repair"}
+{"msg": "ابي استأجر سكوتر كهربائي اتمشى فيه بالكورنيش", "dialect": "saudi", "expect": "other:scooter_rental:تأجير سكوترات"}
+{"msg": "دبابي خربان مايشتغل ابي احد يصلحه", "dialect": "saudi", "expect": "pro:motorcycle_mechanic"}
+{"msg": "ابغى مندوب بدراجه يوصل اوراق لمكتب بالملز", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابي سواق الساعه 2 بالليل يوديني المطار رحلتي الفجر", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "هل التكاسي بالرياض تشتغل 24 ساعه؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم ساعه من الرياض للقصيم بالسياره؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "Uber or Careem cheaper in Riyadh?", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي سواق يودي الوالد للمراجعات بالمستشفى هو كبير بالسن ويبي احد يساعده ينزل", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابي سواق خاص شهري للعائله يكون سعودي او يتكلم عربي", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "التكسي الاصفر وين القاه بجده؟", "dialect": "saudi", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "ابي سياره ايجار بدال ماخذ تكاسي كل يوم", "dialect": "saudi", "expect": "place:car_rental"}
+{"msg": "ابي سواق يوديني مكه من جده للعمره وابي مكتب حج وعمره بعد", "dialect": "saudi", "expect": "pro:driver + other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg": "فيه كود خصم على كريم او اوبر؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "خلص البنزين والكفر مفشوش ابي سطحه او بنشر او اقرب محطه", "dialect": "saudi", "expect": "pro:tow_truck + other:tire_shop:بنشر + place:fuel"}
+{"msg": "امس ركبت تكسي والسواق ضيع الطريق وخذ مني 80 ريال على مشوار 20 😂", "dialect": "saudi", "expect": "chat"}
+{"msg": "السياره غرزت بالرمل بالبر ابي ونش يسحبها ضروري", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "ابي سواق ياخذ السياره من البيت ويوديها الفحص الدوري", "dialect": "saudi", "expect": "pro:driver + other:vehicle_inspection:فحص دوري"}
+{"msg": "pls i need female driver to pick me up from al nakheel mall", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابغى باص صغير مع سواق لرحله عائليه للطائف 12 شخص", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "وش افضل وقت اطلع فيه للمطار عشان الزحمه؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي احد يوصلني من الخبر للبحرين بسيارته", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابي موقف سيارات بالمطار اترك فيه سيارتي اسبوع", "dialect": "saudi", "expect": "place:parking"}
+{"msg": "بدي تكسي هسا عالمطار ضروري", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "وين موقف التكاسي بالعبدلي؟", "dialect": "jordanian", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "وين بلاقي سرفيس صويلح؟", "dialect": "jordanian", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "بدي توصيله من عمان لاربد اليوم المسا", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "السياره عطلت عالصحراوي بدي سطحه بسرعه", "dialect": "jordanian", "expect": "pro:tow_truck"}
+{"msg": "بدي سواقه بنت توصلني عالشغل كل يوم من خلدا للشميساني", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "مين بوصل الولاد عالمدرسه؟ بدي سواق مضمون", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي شركة باصات مدارس لابني بمرج الحمام", "dialect": "jordanian", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "كم بتاخد تكسي من الجاردنز لمطار الملكه علياء؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو احسن جيني ولا كريم ولا اوبر بعمان؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بدي مكتب ليموزين لعرس اخوي", "dialect": "jordanian", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "بدي سيارة زفه مرسيدس بيضا للجمعه", "dialect": "jordanian", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "bade taxi la downtown hala2", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "i need a driver from amman to the dead sea and back today", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "wein a2rab mujamma3 bas lal 3a2aba?", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "البنشر مسكر والكوشوك فاضي بدي حدا يجيني", "dialect": "jordanian", "expect": "pro:tire_service"}
+{"msg": "السياره ما بتدور البطاريه نايمه، بدي كهربجي سيارات", "dialect": "jordanian", "expect": "pro:auto_electrician"}
+{"msg": "بدي ميكانيكي يجيني عالطريق الماتور سخن وطفت", "dialect": "jordanian", "expect": "pro:car_mechanic"}
+{"msg": "بدي حدا يوصل ستي عالعياده ويستناها ويرجعها", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي سواق الساعه 3 الفجر عالمطار", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "وين مجمع الشمال عشان اركب باص اربد؟", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي توصيله من الزرقا للعقبه بكرا الصبح وكمان فندق بالعقبه", "dialect": "jordanian", "expect": "pro:driver + place:hotel"}
+{"msg": "بدي سطحه توخد السياره عالمدينه الصناعيه ومحل قطع غيار قريب", "dialect": "jordanian", "expect": "pro:tow_truck + place:car_repair + place:auto_parts"}
+{"msg": "والله التكاسي بعمان صارت غاليه، العداد بيطلع اربع ليرات لمشوار قصير", "dialect": "jordanian", "expect": "chat"}
+{"msg": "مره ركبت سرفيس والشوفير حاطط اغاني عالي وبدخن 🙄", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم ساعه من عمان للبترا بالسياره؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "في خصومات على جيني هالفتره؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "بدي استأجر موتور اسبوع", "dialect": "jordanian", "expect": "other:motorcycle_rental:تأجير دراجات نارية"}
+{"msg": "الموتور تبعي بطلع صوت غريب بدي ميكانيكي موتورات", "dialect": "jordanian", "expect": "pro:motorcycle_mechanic"}
+{"msg": "بدي سكوتر كهربائي بالاجار بالعقبه", "dialect": "jordanian", "expect": "other:scooter_rental:تأجير سكوترات"}
+{"msg": "بدي سواق خاص للضيوف الجايين من السعوديه يلففهم بعمان يومين", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي حدا يوصل غرض لامي باربد", "dialect": "jordanian", "expect": "other:courier:شركة شحن"}
+{"msg": "hey can someone drive me to the airport at 5am, I have lots of luggage", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي اجار سياره بدل التكاسي ووين اقرب محطة بنزين", "dialect": "jordanian", "expect": "place:car_rental + place:fuel"}
+{"msg": "بدي سواقه لامي كبيره بالعمر وما بترتاح مع شب", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "العداد بالتكسي الاصفر بصير ليلي من الساعه كم؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو الفرق بين كريم وجيني بالاسعار؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ليموزين مطار رخيص في عرض؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "السياره علقت بالتلج بالسلط بدي ونش", "dialect": "jordanian", "expect": "pro:tow_truck"}
+{"msg": "بدي سرفيس جبل عمان وين بوقف؟", "dialect": "jordanian", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "بدي تكسي وكمان وين اقرب صراف بدي اصرف دولار", "dialect": "jordanian", "expect": "pro:driver + place:money_exchange"}
+{"msg": "بدي سواق يودي السياره عالترخيص للفحص", "dialect": "jordanian", "expect": "pro:driver + other:vehicle_inspection:فحص دوري"}
+{"msg": "بدي توصيله من اربد لعمان لطالبه جامعه كل احد", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "شوفير كريم سب علي لاني طلبت يطفي السيجاره، شو بعمل؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بدي تكسي للجسر بكرا الصبح", "dialect": "jordanian", "expect": "pro:driver"}

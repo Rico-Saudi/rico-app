@@ -8,7 +8,7 @@ import 'intent_service.dart';
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
 /// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
 class ResolvedIntent {
-  final String kind; // 'place' | 'deals' | 'professional' | 'order'
+  final String kind; // 'place' | 'deals' | 'professional' | 'order' | 'call'
   final String? category;
   final String rank; // 'nearest' | 'cheapest' | 'open_now' | 'best_rated'
   final String? brandHint;
@@ -20,7 +20,7 @@ class ResolvedIntent {
   /// سلوق المهنة — لـkind == 'professional' فقط.
   final String? profession;
 
-  /// اسم المحل والأصناف — لـkind == 'order' فقط.
+  /// اسم المحل — لـkind == 'order' و'call'. والأصناف لـ'order' فقط.
   final String? placeName;
   final List<RequestedItem> orderItems;
 
@@ -41,6 +41,19 @@ class ResolvedIntent {
   QueryIntent? toQueryIntent() {
     if (kind == 'deals') {
       return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض', referencedPosition: referencedPosition);
+    }
+
+    // "اتصل على مطعم الماهر" أو "اتصل على الثاني": الاسم أو الرقم يكفي،
+    // والشاشة تلقى المحل ورقمه.
+    if (kind == 'call') {
+      final shop = placeName;
+      if ((shop == null || shop.isEmpty) && referencedPosition == null) return null;
+      return QueryIntent(
+        kind: IntentKind.call,
+        label: (shop != null && shop.isNotEmpty) ? shop : 'المحل',
+        placeName: (shop != null && shop.isNotEmpty) ? shop : null,
+        referencedPosition: referencedPosition,
+      );
     }
 
     if (kind == 'order') {

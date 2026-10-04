@@ -50,6 +50,7 @@ class UnderstandingCard extends StatelessWidget {
         IntentKind.deals => Icons.local_offer_rounded,
         IntentKind.professional => _professionIcons[intent.profession] ?? Icons.engineering_rounded,
         IntentKind.order => Icons.shopping_basket_rounded,
+        IntentKind.call => Icons.phone_rounded,
         IntentKind.place => CategoryVisuals.iconFor(intent.slug),
       };
 
@@ -65,6 +66,10 @@ class UnderstandingCard extends StatelessWidget {
         (icon: Icons.storefront_rounded, label: intent.placeName ?? intent.label),
         (icon: Icons.shopping_basket_rounded, label: '${intent.orderItems.length} أصناف'),
       ];
+    }
+
+    if (intent.kind == IntentKind.call) {
+      return [(icon: Icons.phone_rounded, label: intent.placeName ?? intent.label)];
     }
 
     // أصحاب المهن ما ينطبق عليهم ترتيب بسعر ولا تقييم ولا حالة فتح — الوسم

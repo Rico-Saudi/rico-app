@@ -36,6 +36,7 @@ Copy `.env.example` to `.env` and fill in:
 | `OPENROUTER_COMPOSE_MODELS` | no | as above, separately — classification wants reasoning, composition wants speed |
 | `OPENROUTER_MODEL` | no | fallback when neither per-endpoint chain is set |
 | `LEARNING_TRAIN_INTERVAL_HOURS` | no | default `24`. How often Rico reads the questions it failed to answer and proposes lessons for them (owner dashboard → «تعليم ريكو»). `0` switches the schedule off and leaves the dashboard's button as the only trigger. The run uses the classifier's model chain |
+| `SHOP_NAMES_REFRESH_MINUTES` | no | default `15`. How often the keyword fallback reloads the names of every active shop and product from the database (`ShopNamesService`), so a shop added today is understood by name — "اطلبلي من قرية نجد…" — on the next refresh. `0` reads once at boot |
 | `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` | no | Meta app for vendor-authorised Instagram import. Needs App Review for `instagram_business_basic`. Unset disables the feature |
 | `INSTAGRAM_REDIRECT_URI` | no | must match the Meta app exactly, e.g. `https://app.rico-go.com/vendor/instagram/callback` |
 | `SCRAPER_API_KEY` | no | ScraperAPI key for owner-triggered offer scraping. Unset disables it. Scraped deals are labelled «من موقع المتجر» in the app, rank below vendor deals, and expire after 3 days |
@@ -120,14 +121,16 @@ npm test   # jest
 
 `/classify` falls back to a keyword classifier (`src/classify/fallback/`) when Groq fails (a 429 on the free tier is the usual cause), returns unparseable JSON, or says it didn't understand. It knows the fixed categories, ~110 free-label places (قاعة أفراح، بنشر، مختبر، مسلخ…), every profession and its aliases, problems described instead of named («الحمام مسدود» → فني تسليك), shop orders («اطلب لي من البيك ٢ مسحب»), Franco and English. It searches only when the message asks for something, so «اخوي سباك» or «امبارح اكلت بمطعم» still fail and the app answers with its own chat replies. Responses it produced carry `source: "keywords"`.
 
-It is measured against `scripts/agent-corpus/`: ~1,000 messages written by persona agents (Saudi and Jordanian customers, Franco typists, adversarial non-requests), each with the expected answer. Free and instant, no model call:
+It is measured against `scripts/agent-corpus/`: ~2,900 lines written by persona agents, each with the expected answer — single messages (Saudi and Jordanian customers, Franco typists, adversarial non-requests, a transport round), orders graded on the shop *and* every item with its quantity (`o*_*.jsonl`, with an `order` object), and conversations (`c*_*.jsonl`, with `history` and `lastResults`) graded on follow-ups: "في ارخص؟", "التاني", "وزيد ٢ فلافل", "شيل البيبسي". Free and instant, no model call:
 
 ```bash
 npx ts-node -r tsconfig-paths/register scripts/eval-fallback.ts            # prints every miss
 npx ts-node -r tsconfig-paths/register scripts/eval-fallback.ts --dir=path # any other .jsonl set
 ```
 
-`keyword-classifier.spec.ts` holds the corpus to a floor and forbids any search on a chat line. To teach it something new, add the words to `keyword-tables.ts` and a line to the corpus.
+Orders are read by `order-parser.ts`, edits to a basket already in the conversation by `basket-edit.ts` (the app opens a fresh basket per order intent, so an edit returns the whole basket, never a delta), and follow-ups by `keywordClassifyInContext`, which `/classify` calls with the request's `history` and `lastResults`. `--orders` prints every order whose shop or basket came out wrong.
+
+`keyword-classifier.spec.ts` holds the corpus and its orders to a floor and forbids any search on a chat line. To teach it something new, add the words to `keyword-tables.ts` and a line to the corpus.
 
 ## Deploy (Render)
 

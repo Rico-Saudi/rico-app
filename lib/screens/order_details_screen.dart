@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/customer_order.dart';
 import '../theme/app_theme.dart';
 import '../utils/arabic_dates.dart';
+import '../utils/dialer.dart';
 import '../widgets/order_widgets.dart';
 import '../widgets/rico_surfaces.dart';
 
@@ -20,8 +20,7 @@ class OrderDetailsScreen extends StatelessWidget {
   Future<void> _callShop() async {
     final phone = order.businessPhone;
     if (phone == null) return;
-    final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[\s()-]'), ''));
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+    await openDialer(phone);
   }
 
   @override

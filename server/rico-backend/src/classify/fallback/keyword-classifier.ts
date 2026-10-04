@@ -14,6 +14,10 @@ import { distance } from 'fastest-levenshtein';
 import { normalizeArabic } from '../../learning/constants/normalize';
 import { professionRegistry } from '../../professionals/constants/professions.registry';
 import { Intent, validateIntent } from '../intent-validation';
+import { isOrderComplaint, OrderDeps, parseBasket, parseOrder } from './order-parser';
+import { editBasket } from './basket-edit';
+import { shopRegistry } from './shop-registry';
+import { parseCall } from './call-parser';
 import { CATEGORIES, MAX_INTENTS } from '../constants/categories';
 import {
   ABOUT_RICO,
@@ -36,6 +40,8 @@ import {
   PERSON_CUES,
   PROBLEMS,
   RANK_PATTERNS,
+  RENTALS,
+  RENTAL_WORDS,
   SHOP_WORDS,
   STRONG_NARRATIVE,
   WANT_WORDS,
@@ -179,6 +185,18 @@ const NEED_RE = anyOf(NEED_WORDS);
 const ABOUT_RICO_RE = anyOf(ABOUT_RICO);
 const NARRATIVE_RE = anyOf(NARRATIVE_WORDS);
 const STRONG_NARRATIVE_RE = anyOf(STRONG_NARRATIVE);
+const RENTAL_RE = anyOf(RENTAL_WORDS);
+// Rental targets, one pattern per vehicle noun. They only fire when a rental
+// word is in the message, and then outrank anything else on that span: "استأجر
+// سكوتر كهربائي" is a scooter rental, not an electrician.
+const RENTAL_PATTERNS: Pattern[] = RENTALS.flatMap((r) =>
+  compile(
+    r.nouns,
+    r.slug
+      ? { type: 'fixed', slug: r.slug }
+      : { type: 'free', place: { key: 'shop', value: r.value!, label: r.label, words: [] } },
+  ).map((p) => ({ ...p, len: p.len + 1000 })),
+);
 // A described problem is evidence of a request; a trade's name is not ("انا
 // ممرض" is a job, "اخوي سواق" a brother). The PROBLEMS table holds both, so
 // the names — the registry's own words, and the person nouns listed here —
@@ -189,8 +207,16 @@ const PERSON_NOUNS = foldedSet([
   'منظم حفلات', 'منظمه حفلات', 'منظم مناسبات', 'خبيره تجميل', 'مدرس خصوصي', 'معلم خصوصي', 'مدرب سباحه', 'مدربه سباحه', 'سباكه',
   'شركه تنظيف', 'شركات تنظيف', 'عامله نظافه', 'شركه نقل', 'شركه نقل عفش', 'شركه نقل اثاث', 'chef', 'driver', 'nurse',
   'translator', 'photographer', 'tutor', 'plumber', 'electrician', 'cleaner', 'handyman', 'painter', 'babysitter', 'movers',
+  // Service nouns: "مشوار" names a ride, it doesn't describe a problem.
+  'مشوار', 'مشاوير', 'توصيله', 'مندوب', 'سائقه', 'سواقه', 'سايق', 'سواقين',
 ]);
-const REMARK_RE = anyOf(['صار', 'صارت', 'كان', 'كانت', 'رجعت فتحت', 'سكرت', 'سكر']);
+// Nouns that name a kind of place — what can follow "احسن" in a request
+// ("احسن مطعم") as opposed to an opinion question ("احسن دوا").
+const PLACE_NOUN_RE = new RegExp(
+  `^(?:${['مطعم', 'كافيه', 'مقهى', 'صيدليه', 'مستشفى', 'فندق', 'صالون', 'نادي', 'مول', 'سوبرماركت', 'بقاله', 'عياده', 'كراج', 'ورشه', 'مخبز', 'حلاق', 'مغسله', 'شركه', 'مكتب', 'محل', 'مركز'].join('|')})(?:\\s|$)`,
+  'u',
+);
+const REMARK_RE = anyOf(['صار', 'صارت', 'كان', 'كانت', 'رجعت فتحت', 'سكرت', 'سكر', 'وصلت ولا', 'ولا لسا', 'لسا']);
 const PROBLEM_RE = anyOf(
   PROBLEMS.flatMap((p) => p.words).filter((w) => {
     const f = fold(w);
@@ -209,7 +235,7 @@ const RANK_RES = RANK_PATTERNS.map((r) => ({
 }));
 const CONTEXT = foldedSet(CONTEXT_WORDS);
 const OBJECT_VERB = foldedSet(OBJECT_VERBS);
-const FUZZY_STOP = foldedSet(FUZZY_STOPLIST);
+const FUZZY_STOP = foldedSet([...FUZZY_STOPLIST, ...RANK_PATTERNS.flatMap((r) => r.words), 'تقييم', 'التقييم', 'تقييمه', 'الاعلى', 'المفتوح', 'بعيدين', 'بعاد', 'شغاله', 'الشغال']);
 const INDIRECT = foldedSet(['لي', 'لنا', 'لك', 'له', 'لها']);
 
 function rankIn(text: string): string {
@@ -234,9 +260,10 @@ function isObjectVerb(word: string): boolean {
 }
 
 function findHits(text: string): Hit[] {
-  const hits: Hit[] = [];
+  const hits: Hit[] = [...knownShopHits(text)];
   const { patterns } = professionTables();
-  for (const p of [...PLACE_PATTERNS, ...patterns]) {
+  const rentals = RENTAL_RE.test(text) ? RENTAL_PATTERNS : [];
+  for (const p of [...PLACE_PATTERNS, ...patterns, ...rentals]) {
     p.re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = p.re.exec(text))) {
@@ -247,7 +274,12 @@ function findHits(text: string): Hit[] {
       // A verb's object is a description only when it's a place: "يطبخ
       // ذبايح" isn't a butcher search, but "يركب الستاير" is the trade.
       const modifier =
-        prefix === 'ب' || prefix === 'ل' || prefix === 'لل' || prefix === 'بال' || (p.target.type !== 'pro' && isObjectVerb(prev));
+        // On a trade, "ب" is a verb's present tense ("بنقل عفش" — "moves
+        // furniture"), not "in"; only places take it as a description.
+        (p.target.type !== 'pro' && (prefix === 'ب' || prefix === 'ل' || prefix === 'لل' || prefix === 'بال')) ||
+        // "عالمطار": where to, not what.
+        prefix === 'عال' ||
+        (p.target.type !== 'pro' && isObjectVerb(prev));
       hits.push({
         start: m.index,
         end: m.index + m[0].length,
@@ -260,6 +292,64 @@ function findHits(text: string): Hit[] {
     }
   }
   return hits;
+}
+
+/** Shops Rico actually has (shop-registry.ts, filled from the database):
+ * "وين مطعم تاج محل" searches for that shop by name, in its category. */
+function knownShopHits(text: string): Hit[] {
+  if (!shopRegistry.size) return [];
+  const tokens = text.split(' ');
+  const hits: Hit[] = [];
+  let offset = 0;
+  const starts = tokens.map((t) => {
+    const at = offset;
+    offset += t.length + 1;
+    return at;
+  });
+  for (let i = 0; i < tokens.length; i++) {
+    const m = shopRegistry.matchAt(tokens, i);
+    if (!m || !m.shop.category || !FIXED_SLUGS.has(m.shop.category)) continue;
+    const start = starts[i];
+    const end = starts[i + m.length - 1] + tokens[i + m.length - 1].length;
+    const prev = wordBefore(text, start);
+    hits.push({
+      start,
+      end,
+      len: end - start,
+      target: { type: 'brand', category: m.shop.category, name: m.shop.name },
+      modifier: isObjectVerb(prev),
+      contextual: CONTEXT.has(prev),
+    });
+  }
+  return hits;
+}
+
+/** Whether a single word already means something to the classifier — a
+ * category, a product, a trade, a want, a filler. A shop named only that
+ * would turn ordinary sentences into searches for it (see shop-registry.ts).
+ * A set lookup: the registry asks this for every word of every shop. */
+export function isGenericWord(word: string): boolean {
+  const w = fold(word);
+  if (!w) return true;
+  const set = genericWords();
+  const stripped = w.replace(/^(?:وال|بال|لل|ال|و|ب|ل)/u, '');
+  return [w, stripped, stripped.replace(/(?:ات|ين|ون|ه|ي)$/u, '')].some((v) => set.has(v));
+}
+
+let genericCache: { version: number; words: Set<string> } = { version: -1, words: new Set() };
+function genericWords(): Set<string> {
+  if (genericCache.version === professionRegistry.version) return genericCache.words;
+  const single = (list: string[]) => list.map(fold).filter((w) => w && !w.includes(' '));
+  const words = new Set<string>([
+    ...single(FIXED_PLACES.flatMap((p) => p.words)),
+    ...single(FREE_PLACES.flatMap((p) => p.words)),
+    ...single(PROBLEMS.flatMap((p) => p.words)),
+    ...single(professionRegistry.active().flatMap((e) => [e.label, ...e.aliases])),
+    ...single([...WANT_WORDS, ...NARRATIVE_WORDS, ...CONTEXT_WORDS, ...FILLER_WORDS, ...OPINION_WORDS, ...DEALS_WORDS]),
+    ...single(RANK_PATTERNS.flatMap((r) => r.words)),
+  ]);
+  genericCache = { version: professionRegistry.version, words };
+  return words;
 }
 
 /** Nothing matched exactly: one letter off is a typo ("تكيبف", "الجوزات"),
@@ -334,6 +424,43 @@ function dropModifiers(chosen: Hit[]): Hit[] {
   return real.length ? real : chosen;
 }
 
+const DESTINATIONS = new Set(['place:school', 'place:university', 'place:kindergarten', 'place:clinic', 'place:hospital', 'place:mall', 'place:other:airport']);
+const STATIONS = new Set(['place:other:bus_station', 'place:other:train_station', 'place:other:ferry_terminal']);
+
+/** Two readings a trip needs. Where a driver is taking someone ("يوصل
+ * الولاد المدرسه", "يوديني المطار") is the trip, not a second search. And a
+ * ticket bought at a station ("مكتب جت بقطع تذكرة") is that station, not a
+ * travel agency. */
+function markTrips(chosen: Hit[]): Hit[] {
+  const driverAt = chosen.findIndex((h) => h.target.type === 'pro' && h.target.slug === 'driver');
+  const hasStation = chosen.some((h) => STATIONS.has(key(h.target)));
+  return chosen.map((h, i) => {
+    if (driverAt >= 0 && i > driverAt && DESTINATIONS.has(key(h.target))) return { ...h, modifier: true };
+    if (hasStation && h.target.type === 'fixed' && h.target.slug === 'travel_agency') return { ...h, modifier: true };
+    return h;
+  });
+}
+
+/** "احسن مكتب سياحي", "افضل محل" — a ranking word followed by a place. */
+function rankedPlace(text: string, chosen: Hit[]): boolean {
+  const m = /(?:^|\s)(?:احسن|افضل|ارخص|اقرب)\s+/u.exec(text);
+  if (!m) return false;
+  const at = m.index + m[0].length;
+  return SHOP_LEAD.test(text.slice(at)) || PLACE_NOUN_RE.test(text.slice(at));
+}
+
+/** "مواقف المطار", "باصات الجامعة", "كراج العبدلي": a place followed
+ * straight away by a definite one is that first place, described by the
+ * second — Arabic's construct state, not two requests. */
+function markConstructs(text: string, chosen: Hit[]): Hit[] {
+  return chosen.map((h, i) => {
+    const prev = chosen[i - 1];
+    if (!prev || prev.target.type === 'deals' || h.target.type === 'pro' || h.target.type === 'deals') return h;
+    const adjacent = text.slice(prev.end, h.start).trim() === '';
+    return adjacent && text.startsWith('ال', h.start) ? { ...h, modifier: true } : h;
+  });
+}
+
 /** "عروض على المكيفات" and "عروض مطاعم" are one request for deals. A
  * request joined to the deals by "و" or "بعدين" is its own. */
 function foldIntoDeals(text: string, chosen: Hit[]): Hit[] {
@@ -387,166 +514,13 @@ function toIntent(t: Target, rank: string): Intent | null {
 
 // ─── Orders ────────────────────────────────────────────────────────────────
 
-/** Shop nouns that need the next word to name a shop: "مطعم هاشم", not "مطعم". */
-const SHOP_NOUNS = foldedSet([
-  'مطعم',
-  'مخبز',
-  'مخبزه',
-  'صيدليه',
-  'حلويات',
-  'محل',
-  'بقاله',
-  'سوبرماركت',
-  'كافيه',
-  'ملحمه',
-  'فرن',
-  'مقهى',
-  'كوفي',
-  'محمصه',
-  'مطبخ',
-  'هايبر',
-  'مكتبه',
-  'شوكولاته',
-]);
-const ANY_SHOP = foldedSet(['اي', 'اقرب', 'any']);
-const FILLER = foldedSet(FILLER_WORDS);
-const ORDINAL: Map<string, number> = new Map(Object.entries(ORDINALS).map(([k, v]) => [fold(k), v]));
-const NUMBER_WORDS: Map<string, number> = new Map(
-  Object.entries({
-    واحد: 1,
-    وحده: 1,
-    اثنين: 2,
-    ثنتين: 2,
-    اتنين: 2,
-    ثلاث: 3,
-    ثلاثه: 3,
-    تلاته: 3,
-    اربع: 4,
-    اربعه: 4,
-    خمس: 5,
-    خمسه: 5,
-    سته: 6,
-    ست: 6,
-    سبع: 7,
-    عشر: 10,
-    عشره: 10,
-  }).map(([k, v]) => [fold(k), v]),
-);
-/** Where the items stop: the rest is a second request or a delivery note. */
-const STOP = foldedSet(['وفيه', 'فيه', 'وعندكم', 'عندكم', 'توصيل', 'للبيت', 'عشان', 'وبعدين', 'بعدين', 'اللي', 'الي', 'لو', 'اذا']);
-
-interface Item {
-  name: string;
-  quantity: number;
-}
-
-/** "٢ مسحب و٣ بيبسي" → items. Numbers (digits or words) set the quantity of
- * what follows; "و" separates. */
-function parseItems(rawTokens: string[], tokens: string[]): Item[] {
-  const items: Item[] = [];
-  let qty = 1;
-  let words: string[] = [];
-  const flush = () => {
-    if (words.length) items.push({ name: words.join(' '), quantity: qty });
-    words = [];
-    qty = 1;
-  };
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (STOP.has(t)) break;
-    if (FILLER.has(t)) continue;
-    if (/^\d+$/u.test(t)) {
-      flush();
-      qty = Math.min(99, Math.max(1, Number(t)));
-    } else if (NUMBER_WORDS.has(t)) {
-      flush();
-      qty = NUMBER_WORDS.get(t)!;
-    } else if (t.startsWith('ل') && NUMBER_WORDS.has(t.slice(1))) {
-      break; // "منسف لخمس اشخاص" — a headcount, not an item
-    } else if (t === 'و') {
-      flush();
-    } else if (t.startsWith('و') && words.length && t.length > 3) {
-      flush();
-      words.push(rawTokens[i].slice(1));
-    } else {
-      words.push(rawTokens[i]);
-    }
-  }
-  flush();
-  return items;
-}
-
-/** "اطلب لي من البيك ٢ مسحب" → an order for البيك with one item. Kept
- * deliberately literal: the shop is the word(s) after "من", the items are
- * what sits around it. The server matches both against real menus later
- * (PublicService.resolveOrder), which is where fuzziness belongs. */
-function parseOrder(raw: string): Intent | null {
-  const rawTokens = raw.replace(DIACRITICS, '').replace(NON_WORD, ' ').split(/\s+/).filter(Boolean);
-  const tokens = rawTokens.map(fold);
-  const joined = tokens.join(' ');
-  const verb = ORDER_VERB_RE.exec(joined);
-  if (!verb) return null;
-  const verbEnd = joined
-    .slice(0, verb.index + verb[0].length)
-    .split(' ')
-    .filter(Boolean).length;
-
-  const from = tokens.findIndex((t, i) => i >= verbEnd - 1 && t === 'من' && i < tokens.length - 1);
-  const before = from > verbEnd ? parseItems(rawTokens.slice(verbEnd, from), tokens.slice(verbEnd, from)) : [];
-
-  if (from < 0) {
-    // No shop named — "اطلبلي منسف لخمس اشخاص": order the dish from
-    // whichever nearby shop of the right kind sells it.
-    const items = parseItems(rawTokens.slice(verbEnd), tokens.slice(verbEnd));
-    const category = firstFixedCategory(tokens.slice(verbEnd).join(' '));
-    return items.length && category ? validateIntent({ kind: 'order', category, orderItems: items }) : null;
-  }
-
-  let i = from + 1;
-  // "من الثاني" — a shop Rico just listed. The app resolves the position.
-  const ordinal = ORDINAL.get(tokens[i]) ?? ORDINAL.get(tokens[i + 1] ?? '');
-  if (ordinal) {
-    const skip = ORDINAL.has(tokens[i]) ? 1 : 2;
-    const after = parseItems(rawTokens.slice(i + skip), tokens.slice(i + skip));
-    return validateIntent({
-      kind: 'order',
-      referencedPosition: ordinal,
-      orderItems: [...before, ...after],
-    });
-  }
-
-  if (ANY_SHOP.has(tokens[i])) {
-    const kindWord = tokens.slice(i + 1, i + 2).join(' ');
-    const after = parseItems(rawTokens.slice(i + 2), tokens.slice(i + 2));
-    const items = [...before, ...after];
-    const category = firstFixedCategory(kindWord) ?? firstFixedCategory(items.map((it) => it.name).join(' '));
-    return items.length && category ? validateIntent({ kind: 'order', category, orderItems: items }) : null;
-  }
-
-  // "صيدلية النهدي" names a shop; "الصيدليه" alone is "the pharmacy", and
-  // the word after it isn't part of a name.
-  const first = tokens[i];
-  const definite = first.startsWith('ال');
-  const next = tokens[i + 1];
-  const takeTwo =
-    SHOP_NOUNS.has(first.replace(/^ال/u, '')) &&
-    !!next &&
-    !definite &&
-    !STOP.has(next) &&
-    !FILLER.has(next) &&
-    !/^و/u.test(next) &&
-    !/^\d/u.test(next);
-  const take = takeTwo ? 2 : 1;
-  const placeName = rawTokens.slice(i, i + take).join(' ');
-  const after = parseItems(rawTokens.slice(i + take), tokens.slice(i + take));
-  return validateIntent({
-    kind: 'order',
-    placeName,
-    orderItems: [...before, ...after],
-  });
-}
-
 const FIXED_SLUGS = new Set<string>(CATEGORIES);
+
+/** What the order parser needs to know about words, from the tables here. */
+const ORDER_DEPS: OrderDeps = {
+  categoryOf: (words) => firstFixedCategory(words),
+  isProduct: (word) => shopRegistry.isProductWord(word) || findHits(word).some((h) => h.target.type === 'fixed' || h.target.type === 'free'),
+};
 
 function firstFixedCategory(text: string): string | null {
   for (const h of pick(findHits(fold(text)), false)) {
@@ -570,8 +544,10 @@ function dropNegated(text: string, chosen: Hit[]): Hit[] {
     const nextWant = WANT_RE.exec(rest);
     spans.push([m.index, nextWant ? end + nextWant.index : text.length]);
   }
-  return chosen.filter((h) => !spans.some(([a, b]) => h.start >= a && h.start < b));
+  // "كافيه مو مطعم", "مش صراف آلي": the word right after "مو"/"مش" is turned down.
+  return chosen.filter((h) => !spans.some(([a, b]) => h.start >= a && h.start < b) && !NOT_WORDS.has(wordBefore(text, h.start)));
 }
+const NOT_WORDS = foldedSet(['مو', 'مش', 'مب', 'مهو', 'ماهو', 'not', 'بدل']);
 
 /**
  * Is this a request at all? A keyword alone isn't enough: "اخوي سباك",
@@ -584,7 +560,7 @@ function dropNegated(text: string, chosen: Hit[]): Hit[] {
 function asksForSomething(text: string, chosen: Hit[]): boolean {
   // "كنت محتاج سباك بس انحلت" — the need is over, whatever else it says.
   if (STRONG_NARRATIVE_RE.test(text)) return false;
-  if (WANT_RE.test(text) || IS_THERE_RE.test(text)) return true;
+  if (WANT_RE.test(text) || IS_THERE_RE.test(text) || ORDER_VERB_RE.test(text)) return true;
   // Asking for deals is a request however it's phrased ("صاحبي بيقول في
   // عروض، شو هي؟").
   if (chosen.some((h) => h.target.type === 'deals')) return true;
@@ -599,7 +575,7 @@ function asksForSomething(text: string, chosen: Hit[]): boolean {
   // What's left is a story, a remark or a thank-you unless it says otherwise:
   // "اخوي سباك", "صباح الخير يا احلى كافيه", "الكافيهات صارت غالية".
   if (NARRATIVE_RE.test(text)) return false;
-  if (ANY_RANK_RE.test(text) || chosen.some((h) => h.target.type === 'pro')) return true;
+  if (ANY_RANK_RE.test(text) || RENTAL_RE.test(text) || chosen.some((h) => h.target.type === 'pro')) return true;
   const words = text.split(' ').filter((w) => !['يا', 'ريكو', 'تدلل', 'لو', 'سمحت', 'بليز', 'الله', 'يخليك'].includes(w));
   return words.length <= 4;
 }
@@ -619,20 +595,25 @@ export function keywordClassify(message: string): Intent[] {
   // where — there is nothing to search for.
   if (ABOUT_RICO_RE.test(text)) return [];
   const wants = WANT_RE.test(text);
-  if (!wants && (HOW_TO_RE.test(text) || OPINION_RE.test(text))) return [];
+  if (!wants && HOW_TO_RE.test(text)) return [];
 
-  const order = parseOrder(message);
-  if (order) {
-    // "اطلب لي بنادول من الصيدليه وفيه عروض" — the deals ride along.
-    const dealsToo = DEALS_WORDS.some((w) => anyOf([w]).test(text));
-    return dealsToo ? [order, validateIntent({ kind: 'deals' })!] : [order];
+  const parsed = parseOrder(message, ORDER_DEPS);
+  if (parsed) {
+    // "اطلب لي بنادول من الصيدليه وفيه عروض", "…وكمان وين اقرب صراف": what
+    // follows the basket is read as requests of its own.
+    const rest = parsed.rest ? keywordClassify(parsed.rest.replace(/^و/u, '')).filter((i) => i.kind !== 'order') : [];
+    return [parsed.order, ...rest].slice(0, MAX_INTENTS);
   }
+  if (isOrderComplaint(message)) return [];
 
   let chosen = pick(findHits(text), PERSON_CUE_RE.test(text));
   if (!chosen.length) chosen = pick(fuzzyHits(text), false);
   chosen = dropNegated(text, chosen);
+  // "شو احسن دوا للصداع" asks an opinion; "شو احسن مكتب سياحي" asks for
+  // the best one nearby. The difference is a place right after the ranking.
+  if (!wants && OPINION_RE.test(text) && !rankedPlace(text, chosen)) return [];
   if (!chosen.length || !asksForSomething(text, chosen)) return [];
-  chosen = foldIntoDeals(text, dropModifiers(chosen));
+  chosen = foldIntoDeals(text, dropModifiers(markTrips(markConstructs(text, chosen))));
 
   const intents: Intent[] = [];
   const seen = new Set<string>();
@@ -649,4 +630,318 @@ export function keywordClassify(message: string): Intent[] {
   });
 
   return intents.slice(0, MAX_INTENTS);
+}
+
+// ─── Conversations ─────────────────────────────────────────────────────────
+
+export interface ConversationContext {
+  history: { role: string; content: string }[];
+  lastResults: { label: string; items: { position: number; name: string }[] } | null;
+}
+
+/** Words that only refine the search before ("في ارخص؟", "ابعد شوي",
+ * "غيره"), with no place of their own. */
+const REFINE_RE = anyOf([
+  'ارخص', 'الارخص', 'رخيص', 'احسن', 'افضل', 'اعلى تقييم', 'الاعلى', 'مفتوح', 'فاتح', 'فاتحه', 'مفتوحه', 'ابعد', 'اقرب', 'غيره',
+  'غيرها', 'غيرهم', 'كمان واحد', 'واحد ثاني', 'وحده ثانيه', 'نفس الشي', '24 ساعه', 'نظيف', 'اكبر', 'اوسع', 'cheaper',
+  'better', 'open', 'another', 'aw al 2rkhas', '2rkhas', 'arkhas', 'تقييم', 'تقييمه', 'تقييمة', 'شغال', 'شغاله', 'فاضي', 'غالي',
+  'غاليين', 'اسعارهم', 'نار', 'بعيدين', 'بعاد', 'بعيد', 'المفتوح', 'الاحسن', 'قريب', 'واحد قريب', 'وحده قريبه', 'اوفر',
+  'على قد الجيب', 'يمدحونه', 'بتحكي عنه', 'تقييمهم', 'سعره معقول', 'اسعاره', 'best rated', 'ar5as', 'fi ar5as', 'بالحاره',
+  'شي ثاني', 'اشي تاني', 'شي تاني', 'غالين', 'مب حلوين', 'مش حلوين', 'اقل',
+]);
+/** "التاني", "الأخير", "eltani": an item on the list just shown. */
+const POINTERS: Map<string, number> = new Map(
+  Object.entries({ الاول: 1, اول: 1, الاولى: 1, الثاني: 2, التاني: 2, الثانيه: 2, التانيه: 2, الثالث: 3, التالت: 3, الثالثه: 3, التالته: 3, الرابع: 4, الرابعه: 4, الخامس: 5, الخامسه: 5, eltani: 2, 'el tani': 2, elawal: 1, 'el awal': 1, eltalet: 3, '2wla': 1, awla: 1, '2wal': 1 }).map(([k, v]) => [fold(k), v]),
+);
+const LAST_RE = anyOf(['الاخير', 'الاخيره', 'اخر واحد', 'اخر وحده', 'last', 'akher', 'al akher', 'el akher']);
+/** "ايه", "اه": a yes before the answer. */
+const YES_RE = /^(?:ايه|اه|اي|ايوه|اكيد|yes|yeah|اوكي|تمام)\s+/u;
+/** "خلها ثلاث", "لا خليهم تنين", "لا لا ٣ بس": a corrected quantity. */
+const RECOUNT_RE = /(?:^|\s)(?:خلها|خليها|خليهم|خلهم|خليه|خله|عدلها|خلي)(?:\s|$)|^لا\s+(?:لا\s+)?\d/u;
+const FROM_IT_RE = anyOf(['منه', 'منها', 'منهم', 'من عنده', 'من عندهم']);
+/** Additions to an order already started. */
+const ADD_RE = /^(?:و|وبعد|زيد|وزيد|زود|وزود|ضيف|وضيف|كمان|وكمان|بعد|and)(?:\s|$)/u;
+/** Questions and remarks about the list itself — its phones, prices, hours,
+ * parking — or plans made from it. Rico has nothing to search for. */
+const ABOUT_LIST_RE = anyOf([
+  'هل', 'كم سعر', 'بكم', 'سعر', 'رقم', 'تلفون', 'تليفون', 'يفتح', 'بيفتح', 'بفتح', 'بقبل', 'يقبل', 'فيزا', 'مدى', 'قسم', 'عندهم',
+  'جربته', 'جربتها', 'اكله', 'صاحبه', 'بروح', 'رح اروح', 'بحكي', 'رح احكي', 'بتصرف', 'ههه', 'هههه', 'مش دايما', 'مو دايما',
+  'رح اكل بالبيت', 'بلاش', 'خلص بلاش', 'قرايبي', 'سهرانين', 'مواقف', 'يسوي', 'بيعمل', 'بيسوي',
+]);
+/** Where a message turns to something else: what comes after is the request. */
+const CUT_RE = /(?:^|\s)(?:لا استنى|استنى|لا لا|لا|خلص|بعدين|الحين|هلا|هلأ|هلق|هالمره|هسا)(?:\s|$)/u;
+/** "التاني شي", "اول اشي": an ordinal counting the customer's own requests. */
+const THING_RE = /(?:^|\s)(?:الاول|اول|التاني|الثاني|ثاني|تاني|التالت|الثالث)\s+(?:شي|اشي|شغله|حاجه|حاجة)(?:\s|$)/u;
+/** A comparison that asks for a different item than the one pointed at
+ * ("زي الأول بس ارخص"); a status ("الرابع فاتح؟") stays on the item. */
+const COMPARE_RE = anyOf(['ارخص', 'الارخص', 'احسن', 'افضل', 'اعلى تقييم', 'الاعلى', 'اقرب', 'اوفر', 'غيره', 'غيرها', 'واحد ثاني', 'بدل']);
+/** "مين فيهم…", "اي واحد…": which one of the list — a refinement by what follows. */
+const WHICH_RE = anyOf(['مين فيهم', 'مين منهم', 'اي واحد', 'اي وحده', 'انهي واحد', 'مين اللي', 'ايهم', 'مين فيهن']);
+/** A shop's kind → the trade that comes to the customer instead
+ * ("بلاش اروح، بدي فني يجي يشوفها"). */
+const PLACE_TO_PRO: Record<string, string> = {
+  'place:appliance_repair': 'appliance_repair', 'place:car_wash': 'mobile_car_wash', 'place:car_repair': 'car_mechanic',
+  'place:phone_repair': 'phone_repair', 'place:hairdresser': 'home_barber', 'place:beauty': 'home_beautician',
+  'place:maintenance_centre': 'handyman', 'place:tailor': 'tailor', 'place:other:tire_shop': 'tire_service',
+};
+const COMES_RE = anyOf(['يجي', 'يجيني', 'يجيلي', 'يجي البيت', 'عند البيت', 'بالبيت', 'للبيت', 'ما اقدر اطلع', 'ما بقدر اطلع', 'بلاش اروح']);
+const CAR_SEARCH = new Set(['place:car_repair', 'place:maintenance_centre', 'place:oil_change', 'place:auto_parts', 'place:car_wash', 'place:other:tire_shop']);
+/** Wants that leave no doubt — not "رح" ("رح اكل بالبيت" is a plan, not a request). */
+const CLEAR_WANT_RE = anyOf(['ابي', 'أبي', 'ابغى', 'ابغا', 'ابغي', 'بدي', 'بدنا', 'محتاج', 'محتاجه', 'احتاج', 'اريد', 'عايز', 'عاوز', 'نبي', 'نبغى', 'دلني', 'وين']);
+const JOINER_RE = /(?:^|\s)(?:وكمان|و كمان|وبعدين|وبعد|و)(?:\s|$)/u;
+const CLOSERS_RE = anyOf(['شكرا', 'يسلمو', 'مشكور', 'تمام', 'خلص', 'لا خلص', 'اوكي', 'ok', 'thanks', 'يعطيك العافيه', 'الله يعطيك العافيه']);
+
+function pointerIn(text: string, listLength: number): number | null {
+  if (LAST_RE.test(text)) return listLength || null;
+  for (const w of text.split(' ')) {
+    const n = POINTERS.get(w) ?? POINTERS.get(w.replace(/^(?:و|ب)/u, ''));
+    if (n && n <= Math.max(listLength, 5)) return n;
+  }
+  const two = text.match(/(?:^|\s)(el (?:tani|awal|talet))(?:\s|$)/u);
+  return two ? POINTERS.get(two[1]) ?? null : null;
+}
+
+/** The search the conversation was in: the list Rico last showed, or failing
+ * that the customer's own last request. */
+function previousSearch(ctx: ConversationContext): Intent | null {
+  const label = ctx.lastResults?.label;
+  if (label) {
+    const fromLabel = keywordClassify(label).find((i) => i.kind === 'place' || i.kind === 'professional');
+    if (fromLabel) return fromLabel;
+  }
+  const users = ctx.history.filter((h) => h.role === 'user').map((h) => h.content).reverse();
+  for (const u of users.slice(0, 4)) {
+    const found = keywordClassify(u).find((i) => i.kind === 'place' || i.kind === 'professional');
+    if (found) return found;
+  }
+  return null;
+}
+
+/** An order read against the list Rico just showed: "من الأخير" is its last
+ * item, "من النهدي" is "صيدلية النهدي" on it, and a position gets the shop's
+ * name from it. */
+function onTheList(order: Intent, ctx: ConversationContext): Intent {
+  const items = ctx.lastResults?.items ?? [];
+  if (!items.length) return order;
+  let position = order.referencedPosition;
+  if (!position && order.placeName && LAST_RE.test(fold(order.placeName))) position = items.length;
+  if (!position && order.placeName) {
+    const want = fold(order.placeName).replace(/^ال/u, '');
+    const hit = items.find((it) => fold(it.name).split(' ').some((w) => w.replace(/^ال/u, '') === want) || fold(it.name).includes(want));
+    if (hit) position = hit.position;
+  }
+  if (!position) return order;
+  const name = items.find((it) => it.position === position)?.name ?? order.placeName;
+  return validateIntent({ ...order, referencedPosition: position, placeName: name, category: null }) ?? order;
+}
+
+/** The order the conversation was building, if the customer's last request was one. */
+function previousOrder(ctx: ConversationContext): Intent | null {
+  const users = ctx.history.filter((h) => h.role === 'user').map((h) => h.content).reverse();
+  for (const u of users.slice(0, 3)) {
+    const found = keywordClassify(u).find((i) => i.kind === 'order');
+    if (found) return found;
+  }
+  return null;
+}
+
+/** The list item the customer picked a turn ago ("الأولى"), for "ابي منها…". */
+function focusedPosition(ctx: ConversationContext): number | null {
+  const listLength = ctx.lastResults?.items.length ?? 0;
+  if (listLength === 1) return 1;
+  const users = ctx.history.filter((h) => h.role === 'user').map((h) => fold(h.content)).reverse();
+  for (const u of users.slice(0, 2)) {
+    const p = pointerIn(u, listLength);
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
+ * keywordClassify, reading the message in the conversation it belongs to.
+ *
+ * A follow-up rarely names what it's about: "في ارخص؟", "التاني", "ابي منها
+ * كيلو", "وزيد ٢ فلافل". Those borrow the search, the list or the order from
+ * the turns before. A message that names something of its own ("طيب بدي
+ * صيدلية كمان") is read on its own, as before.
+ */
+export function keywordClassifyInContext(message: string, ctx: ConversationContext): Intent[] {
+  const listLength = ctx.lastResults?.items.length ?? 0;
+  const call = parseCall(message, {
+    shown: ctx.lastResults?.items ?? [],
+    pointer: listLength ? pointerIn(fold(message), listLength) : null,
+    focused: focusedPosition(ctx),
+  });
+  if (call) return [call];
+
+  const direct = keywordClassify(message).map((i) => (i.kind === 'order' ? onTheList(i, ctx) : i));
+  if (!ctx.history.length && !ctx.lastResults) return direct;
+  const text = fold(message);
+  const wantsNow = CLEAR_WANT_RE.test(text) || ORDER_VERB_RE.test(text);
+  // "ليش تأخر الطلب", "اجاني الطلب ناقص": about an order already sent.
+  if (isOrderComplaint(message, false) && !ORDER_VERB_RE.test(text)) return [];
+
+  // "في ارخص... لا استنى، بدي مخبز", "الأرخص بعدين، الحين ابغى ورشة": the
+  // customer changed their mind mid-message; only the end counts.
+  const cut = [...text.matchAll(new RegExp(CUT_RE.source, 'gu'))].pop();
+  if (cut && cut.index! > 0) {
+    const tail = text.slice(cut.index! + cut[0].length);
+    const tailIntents = CLEAR_WANT_RE.test(tail) ? keywordClassify(tail) : [];
+    if (tailIntents.some((i) => i.kind !== 'order') && !THING_RE.test(text.slice(0, cut.index))) return tailIntents;
+  }
+  // "التاني شي: بدي صيدلية" counts requests, not list items.
+  if (THING_RE.test(text)) return keywordClassify(text.replace(new RegExp(THING_RE.source, 'u'), ' '));
+
+  // "هل التاني بقبل فيزا؟", "كم سعر الليلة بالأول؟", "التاني جربته قبل":
+  // about the list, not a new search.
+  if (!wantsNow && !WHICH_RE.test(text) && (listLength || ctx.history.length) && ABOUT_LIST_RE.test(text) && (pointerIn(text, listLength) || !direct.some((i) => i.kind === 'order'))) {
+    const fresh = direct.filter((i) => {
+      const search = previousSearch(ctx);
+      return !search || key2(i) !== key2(search);
+    });
+    if (!fresh.length || pointerIn(text, listLength)) return [];
+  }
+
+  // Ordering from the list: "من التالت اطلبلي…" is read by the order parser
+  // already; "ابي منها ٢ كيلو" needs the item picked a turn ago.
+  if (FROM_IT_RE.test(text) && !direct.some((i) => i.kind === 'order' && (i.placeName || i.referencedPosition)) && !REFINE_RE.test(text) && (wantsNow || /\d/u.test(text))) {
+    const pos = focusedPosition(ctx) ?? pointerIn(text, listLength);
+    const items = parseBasket(message.replace(/(?:^|\s)(?:ابي|أبي|ابغى|بدي|اطلب|اطلبلي|لي|منه|منها|منهم)(?=\s|$)/gu, ' '), ORDER_DEPS);
+    if (pos && items.length) {
+      const order = validateIntent({ kind: 'order', referencedPosition: pos, placeName: ctx.lastResults?.items[pos - 1]?.name ?? null, orderItems: items });
+      if (order) return [order];
+    }
+  }
+
+  const hasPlace = direct.some((i) => i.kind === 'place' || i.kind === 'professional' || i.kind === 'deals');
+  const lastUser = [...ctx.history].reverse().find((h) => h.role === 'user')?.content ?? '';
+  const answer = text.replace(YES_RE, '');
+
+  // Naming the shop when Rico asked "من وين؟" ("ابي اطلب عشا" + "من البيك"),
+  // or the items when it asked what ("بدي اطلب من صيدلية" + "بنادول علبتين").
+  if (ORDER_VERB_RE.test(fold(lastUser)) && !previousOrder(ctx) && !direct.some((i) => i.kind === 'order' && (i.placeName || i.referencedPosition))) {
+    const joined = keywordClassify(`${lastUser} ${message}`).filter((i) => i.kind === 'order');
+    if (joined.length) return joined;
+  }
+
+  // Continuing an order already started: "وبعد ٢ كيلو رز", "وزيد ٢ فلافل",
+  // "ايه وفيتامين سي", or a corrected count ("لا خليهم تنين"). Dish words
+  // in it ("فلافل") would read as a restaurant search on their own; here
+  // they go in the basket.
+  const prevOrder = previousOrder(ctx);
+  if (prevOrder && !CLOSERS_RE.test(answer) && !/(?:^|\s)(?:وين|دلني|عروض|العروض)(?:\s|$)/u.test(answer)) {
+    // "شيل البيبسي", "بدل الشاورما خليها فلافل", "لا خلها من هرفي": the
+    // whole basket, edited — the app replaces the basket, it doesn't merge.
+    const edited = editBasket(prevOrder, message, ORDER_DEPS);
+    if (edited) return [edited];
+  }
+  if (prevOrder && !direct.some((i) => i.kind === 'order') && !CLOSERS_RE.test(answer) && !/(?:^|\s)(?:وين|دلني|عروض|العروض)(?:\s|$)/u.test(answer)) {
+    const recount = RECOUNT_RE.test(answer) ? /(\d+)|(?:^|\s)(ثلاث|ثلاثه|تلات|تلاته|تنين|اثنين|ثنتين|اربع|خمس|وحده|واحد)(?:\s|$)/u.exec(answer.replace(/(?:مو|مش)\s+\S+/u, '')) : null;
+    if (recount && prevOrder.orderItems?.length) {
+      const words: Record<string, number> = { ثلاث: 3, ثلاثه: 3, تلات: 3, تلاته: 3, تنين: 2, اثنين: 2, ثنتين: 2, اربع: 4, خمس: 5, وحده: 1, واحد: 1 };
+      const n = recount[1] ? Number(recount[1]) : words[recount[2]];
+      const items = prevOrder.orderItems.map((it, k, all) => (k === all.length - 1 ? { ...it, quantity: n } : it));
+      const order = validateIntent({ ...prevOrder, orderItems: items });
+      if (order) return [order];
+    }
+    const adding = ADD_RE.test(answer) || /\d|(?:^|\s)(?:نص|ربع|كيلو|علبه|كرتون)/u.test(answer) || YES_RE.test(text) || !WANT_RE.test(answer);
+    const items = adding ? parseBasket(answer.replace(ADD_RE, ' '), ORDER_DEPS) : [];
+    if (items.length && !WANT_RE.test(answer.replace(/^و/u, ''))) {
+      const order = validateIntent({ ...prevOrder, orderItems: [...(prevOrder.orderItems ?? []), ...items] });
+      if (order) return [order];
+    }
+  }
+
+  // An item picked a turn ago, then a basket: "التانية" → "اه بدي ٢ كيلو لحمة".
+  const picked = focusedPosition(ctx);
+  if (picked && !direct.some((i) => i.kind === 'order') && /\d|(?:^|\s)(?:نص|ربع|كيلو|علبه)/u.test(answer) && !pointerIn(answer, listLength)) {
+    const items = parseBasket(answer.replace(/(?:^|\s)(?:ابي|ابغى|بدي|اطلب|اطلبلي|منه|منها)(?=\s|$)/gu, ' '), ORDER_DEPS);
+    const order = items.length ? validateIntent({ kind: 'order', referencedPosition: picked, placeName: ctx.lastResults?.items[picked - 1]?.name ?? null, orderItems: items }) : null;
+    if (order) return [order];
+  }
+
+  // Pointing at the list: "التاني", "الأول كم يبعد؟".
+  const pointer = listLength ? pointerIn(text, listLength) : null;
+  const search = previousSearch(ctx);
+
+  // "مين فيهم شغال الحين؟", "مين فيهم سعره معقول؟": the list, re-ranked.
+  if (search && WHICH_RE.test(text) && !direct.some((i) => i.kind === 'order' || (i.kind === 'professional' && i.profession !== search.profession))) {
+    const refined = validateIntent({ ...search, rank: rankIn(text) });
+    if (refined) return [refined];
+  }
+  // "بلاش اروح، بدي فني يجي يشوفها بالبيت": the trade instead of the shop.
+  if (search && COMES_RE.test(text)) {
+    const pro = PLACE_TO_PRO[key(searchTarget(search))];
+    const named = direct.find((i) => i.kind === 'professional');
+    if (pro && (!named || named.profession === 'handyman' || named.profession === 'cleaner')) {
+      const intent = validateIntent({ kind: 'professional', profession: pro });
+      if (intent) return [intent];
+    }
+  }
+  // "كهرباء، البطارية تفصل" while looking for a garage: the car's electrician.
+  if (search && CAR_SEARCH.has(key(searchTarget(search)))) {
+    const swapped = direct.map((i) => (i.kind === 'professional' && i.profession === 'electrician' ? validateIntent({ kind: 'professional', profession: 'auto_electrician' }) ?? i : i));
+    if (swapped.some((i, k) => i !== direct[k])) return swapped;
+  }
+  if (pointer && !direct.some((i) => i.kind === 'order') && !COMPARE_RE.test(text)) {
+    const others = direct.filter((i) => !search || key2(i) !== key2(search));
+    if (search) {
+      const pointed = validateIntent({ ...search, referencedPosition: pointer, brandHint: null });
+      if (pointed) return [pointed, ...others].slice(0, MAX_INTENTS);
+    }
+  }
+
+  // Refining the search before: "في ارخص؟", "بس اللي فاتح هلأ", "الاعلى
+  // تقييم" — alone, or before a new request ("الارخص فيهم وكمان ابي خياط").
+  if (search && !direct.some((i) => i.kind === 'order')) {
+    const refineAt = REFINE_RE.exec(text)?.index ?? -1;
+    const newAt = hasPlace ? firstHitAt(text) : Infinity;
+    if (refineAt >= 0 && refineAt < newAt) {
+      const head = Number.isFinite(newAt) ? text.slice(0, newAt) : text;
+      const others = direct.filter((i) => key2(i) !== key2(search));
+      // "المفتوح الحين صيدلية؟": the rank is for the new place, not the old list.
+      if (others.length && !JOINER_RE.test(head) && !contextualOnly(text)) {
+        return others.map((i) => (i.kind === 'place' ? validateIntent({ ...i, rank: rankIn(text) }) ?? i : i));
+      }
+      const refined = validateIntent({ ...search, rank: rankIn(head) });
+      if (refined) return [refined, ...(contextualOnly(text) ? [] : others)].slice(0, MAX_INTENTS);
+    }
+  }
+
+  // Answering Rico's question ("وش تبي بالضبط؟" → "مندي") reads fine alone;
+  // when it doesn't, read it together with what the customer asked before.
+  if (!direct.length && !CLOSERS_RE.test(text)) {
+    if (lastUser && text.split(' ').length <= 4) {
+      const joined = keywordClassify(`${lastUser} ${message}`);
+      const before = keywordClassify(lastUser).map(key2);
+      // Only if the answer added something: otherwise it's just the old request.
+      if (joined.some((i) => !before.includes(key2(i)))) return joined;
+    }
+  }
+  return direct;
+}
+
+/** "في وحدة اقرب؟ انا هلأ عند مستشفى الخالدي": every place named is only
+ * where the customer is, not what they want. */
+function contextualOnly(text: string): boolean {
+  const hits = pick(findHits(text), false).filter((h) => h.target.type !== 'deals');
+  return hits.length > 0 && hits.every((h) => h.contextual || h.modifier);
+}
+
+/** The table target an intent came from, for looking it up by key(). */
+function searchTarget(i: Intent): Target {
+  if (i.kind === 'professional') return { type: 'pro', slug: i.profession! };
+  if (i.category === 'other' && i.customTag) return { type: 'free', place: { key: i.customTag.key as FreePlace['key'], value: i.customTag.value, label: i.label ?? '', words: [] } };
+  return { type: 'fixed', slug: i.category ?? '' };
+}
+
+/** Where the first request word sits, for telling a refinement before it
+ * from one after it. */
+function firstHitAt(text: string): number {
+  const hits = pick(findHits(text), false).filter((h) => h.target.type !== 'deals');
+  return hits.length ? hits[0].start : Infinity;
+}
+
+function key2(i: Intent): string {
+  return `${i.kind}:${i.category ?? ''}:${i.customTag?.value ?? ''}:${i.profession ?? ''}`;
 }
