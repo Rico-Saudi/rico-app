@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LayoutDashboard, Package, Tag, Percent, Inbox, Settings as SettingsIcon, LogOut, Store } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { createAuthedFetch } from './vendor/api';
@@ -8,6 +8,7 @@ import DealsTab from './vendor/DealsTab';
 import DiscountsTab from './vendor/DiscountsTab';
 import RequestsTab from './vendor/RequestsTab';
 import SettingsTab from './vendor/SettingsTab';
+import { profileFor } from './vendor/verticals';
 
 const TABS = [
   { id: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
@@ -27,11 +28,12 @@ export default function VendorDashboard() {
   const [me, setMe] = useState(null); // null = loading, false = unauthenticated
   const [tab, setTab] = useState(() => parseTab(window.location.search));
   const [activeBusinessId, setActiveBusinessId] = useState(null);
+  const [prefillName, setPrefillName] = useState(null);
+  const [waiting, setWaiting] = useState(0);
 
-  function handleUnauthorized() {
-    setMe(false);
-  }
-  const authedFetch = createAuthedFetch(handleUnauthorized);
+  // Stable across renders, so tabs that load in an effect keyed on it don't
+  // refetch every time the shell re-renders.
+  const authedFetch = useMemo(() => createAuthedFetch(() => setMe(false)), []);
 
   useEffect(() => {
     loadMe();
@@ -51,9 +53,30 @@ export default function VendorDashboard() {
     if (res.status === 401) return setMe(false);
     const data = await res.json();
     setMe(data);
-    const firstActive = data.claims.find((c) => c.status === 'active');
-    if (firstActive) setActiveBusinessId(String(firstActive.placeId));
+    // Keeps the business the vendor picked when /me is reloaded (after a
+    // settings save, say) unless that business is no longer active.
+    const active = data.claims.filter((c) => c.status === 'active').map((c) => String(c.placeId));
+    setActiveBusinessId((current) => (current && active.includes(current) ? current : active[0] ?? null));
   }
+
+  // Orders waiting on the shop, for the badge on the requests tab. Polled
+  // because they arrive from the chat while the dashboard sits open.
+  useEffect(() => {
+    if (!me) return undefined;
+    let stopped = false;
+    async function poll() {
+      const res = await authedFetch('/vendor/stats?days=1');
+      if (!res || !res.ok || stopped) return;
+      const data = await res.json();
+      setWaiting(data.requests?.waiting ?? 0);
+    }
+    poll();
+    const t = setInterval(poll, 120_000);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+    };
+  }, [me, authedFetch, tab]);
 
   const changeTab = useCallback((next) => {
     setTab(next);
@@ -62,6 +85,17 @@ export default function VendorDashboard() {
     const url = `${window.location.pathname}?${params}`;
     window.history.pushState({ tab: next }, '', url);
   }, []);
+
+  // The overview's "customers asked for X" list opens the add form with X
+  // already typed, on the business it was asked of.
+  const addItemFromOverview = useCallback(
+    (name, businessId) => {
+      if (businessId) setActiveBusinessId(String(businessId));
+      setPrefillName(name);
+      changeTab('products');
+    },
+    [changeTab],
+  );
 
   async function logout() {
     await fetch('/auth/logout', { method: 'POST' });
@@ -93,15 +127,21 @@ export default function VendorDashboard() {
   }
 
   const activeClaims = me.claims.filter((c) => c.status === 'active');
+  const activeClaim = activeClaims.find((c) => String(c.placeId) === String(activeBusinessId)) || activeClaims[0];
+  const profile = profileFor(activeClaim?.vertical);
+  const tabLabel = (t) => (t.id === 'products' ? profile.itemsLabel : t.label);
 
   return (
     <div className="min-h-screen flex bg-surface text-on-surface" dir="rtl">
-      <aside className="h-screen w-64 fixed right-0 top-0 flex flex-col py-8 bg-surface-container-lowest border-l border-outline-variant z-20">
+      <aside className="hidden lg:flex h-screen w-64 fixed right-0 top-0 flex-col py-8 bg-surface-container-lowest border-l border-outline-variant z-20">
         <div className="px-6 mb-8 flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
             <Store className="w-5 h-5" />
           </div>
-          <span className="font-bold text-lg text-primary">لوحة النشاط</span>
+          <div className="min-w-0">
+            <span className="font-bold text-lg text-primary block">لوحة النشاط</span>
+            {activeClaim && <span className="text-xs text-on-surface-variant truncate block">{activeClaim.placeName}</span>}
+          </div>
         </div>
 
         <nav className="flex-1 px-4 space-y-1">
@@ -117,7 +157,12 @@ export default function VendorDashboard() {
                 }`}
               >
                 <Icon className="w-5 h-5 shrink-0" />
-                {t.label}
+                <span className="flex-1 text-start">{tabLabel(t)}</span>
+                {t.id === 'requests' && waiting > 0 && (
+                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-error text-white text-[11px] font-bold flex items-center justify-center">
+                    {waiting}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -135,8 +180,34 @@ export default function VendorDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 ms-64 min-h-screen">
-        <div className="max-w-5xl mx-auto px-8 py-10">
+      <main className="flex-1 lg:ms-64 min-h-screen min-w-0">
+        {/* Below lg the sidebar gives way to a scrollable tab strip — shop
+            owners check orders from their phone far more than from a desk. */}
+        <div className="lg:hidden sticky top-0 z-20 bg-surface-container-lowest border-b border-outline-variant">
+          <div className="flex items-center justify-between px-4 pt-3">
+            <span className="font-bold text-primary truncate">{activeClaim?.placeName || 'لوحة النشاط'}</span>
+            <button onClick={logout} aria-label="تسجيل الخروج" className="p-2 bg-transparent text-error">
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto px-3 py-2">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => changeTab(t.id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold ${
+                  tab === t.id ? 'bg-primary/10 text-primary' : 'bg-transparent text-on-surface-variant'
+                }`}
+              >
+                {tabLabel(t)}
+                {t.id === 'requests' && waiting > 0 && (
+                  <span className="min-w-4 h-4 px-1 rounded-full bg-error text-white text-[10px] flex items-center justify-center">{waiting}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={tab}
@@ -146,7 +217,14 @@ export default function VendorDashboard() {
               transition={{ duration: 0.15 }}
             >
               {tab === 'overview' && (
-                <OverviewTab authedFetch={authedFetch} me={me} activeClaims={activeClaims} />
+                <OverviewTab
+                  authedFetch={authedFetch}
+                  me={me}
+                  activeClaims={activeClaims}
+                  profile={profile}
+                  onNavigate={changeTab}
+                  onAddItem={addItemFromOverview}
+                />
               )}
               {tab === 'products' && (
                 <ProductsTab
@@ -154,6 +232,9 @@ export default function VendorDashboard() {
                   activeClaims={activeClaims}
                   activeBusinessId={activeBusinessId}
                   onChangeBusiness={setActiveBusinessId}
+                  profile={profile}
+                  prefillName={prefillName}
+                  onPrefillConsumed={() => setPrefillName(null)}
                 />
               )}
               {tab === 'discounts' && (
@@ -172,7 +253,7 @@ export default function VendorDashboard() {
                   onChangeBusiness={setActiveBusinessId}
                 />
               )}
-              {tab === 'requests' && <RequestsTab authedFetch={authedFetch} />}
+              {tab === 'requests' && <RequestsTab authedFetch={authedFetch} activeClaims={activeClaims} />}
               {tab === 'settings' && <SettingsTab authedFetch={authedFetch} me={me} onClaimed={loadMe} />}
             </motion.div>
           </AnimatePresence>

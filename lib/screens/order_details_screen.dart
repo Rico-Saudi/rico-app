@@ -139,25 +139,50 @@ class _StatusExplainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final handled = order.status == OrderStatus.handled;
-    final tone = handled ? RicoColors.primaryDeep : RicoColors.goldInk;
+    final note = order.vendorNote;
+    final (tone, background, icon, text) = switch (order.status) {
+      OrderStatus.pending => (
+          RicoColors.goldInk,
+          RicoColors.goldTint,
+          Icons.hourglass_bottom_rounded,
+          'طلبك وصل المحل وينتظر ردّهم — يتواصلون معك على رقم حسابك.',
+        ),
+      OrderStatus.handled => (
+          RicoColors.primaryDeep,
+          RicoColors.primaryTint,
+          Icons.verified_rounded,
+          'المحل استلم طلبك وعلّمه كمتعامَل معه. لو ما وصلك اتصال، كلّمهم على الرقم تحت.',
+        ),
+      OrderStatus.ready => (
+          RicoColors.primaryDeep,
+          RicoColors.primaryTint,
+          Icons.shopping_bag_rounded,
+          'طلبك جاهز عند المحل. لو تحتاج تتأكد من شي، كلّمهم على الرقم تحت.',
+        ),
+      OrderStatus.cancelled => (
+          RicoColors.danger,
+          RicoColors.dangerTint,
+          Icons.cancel_rounded,
+          note != null ? 'المحل ألغى الطلب: $note' : 'المحل ألغى الطلب. تقدر تكلّمهم على الرقم تحت أو تطلب من محل ثاني.',
+        ),
+    };
+    // A note on any other stage ("جاهز بعد ساعة") is added under the sentence.
+    final shownNote = order.status != OrderStatus.cancelled && note != null ? '\n$note' : '';
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: handled ? RicoColors.primaryTint : RicoColors.goldTint,
+        color: background,
         borderRadius: RicoRadii.controlR,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(handled ? Icons.verified_rounded : Icons.hourglass_bottom_rounded, size: 17, color: tone),
+          Icon(icon, size: 17, color: tone),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
-              handled
-                  ? 'المحل استلم طلبك وعلّمه كمتعامَل معه. لو ما وصلك اتصال، كلّمهم على الرقم تحت.'
-                  : 'طلبك وصل المحل وينتظر ردّهم — يتواصلون معك على رقم حسابك.',
+              '$text$shownNote',
               style: RicoText.caption.copyWith(color: tone, height: 1.65),
             ),
           ),

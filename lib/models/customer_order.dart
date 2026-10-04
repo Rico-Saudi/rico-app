@@ -35,7 +35,30 @@ class OrderLine {
   }
 }
 
-enum OrderStatus { pending, handled }
+/// من زاوية العميل: «بانتظار المحل»، «تواصل معك» (أكّد أو سلّم)، «جاهز»
+/// للاستلام، أو «ملغي». الخادم يرسل `stage` بالتفصيل؛ النسخ الأقدم منه ترسل
+/// `status` وحده (new/handled)، فيُقرأ هو عند غياب الأول.
+enum OrderStatus { pending, handled, ready, cancelled }
+
+String? _nonBlank(String? text) {
+  final trimmed = text?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
+OrderStatus _statusFrom(Map<String, dynamic> json) {
+  switch (json['stage']) {
+    case 'new':
+      return OrderStatus.pending;
+    case 'confirmed':
+    case 'completed':
+      return OrderStatus.handled;
+    case 'ready':
+      return OrderStatus.ready;
+    case 'cancelled':
+      return OrderStatus.cancelled;
+  }
+  return json['status'] == 'handled' ? OrderStatus.handled : OrderStatus.pending;
+}
 
 /// طلب سابق أرسله العميل لمحل واحد، كما يرجعه GET /requests/mine.
 class CustomerOrder {
@@ -46,6 +69,9 @@ class CustomerOrder {
   final List<OrderLine> lines;
   final double total;
   final OrderStatus status;
+
+  /// ما كتبه المحل للعميل — سبب الإلغاء غالباً.
+  final String? vendorNote;
   final DateTime createdAt;
 
   const CustomerOrder({
@@ -56,6 +82,7 @@ class CustomerOrder {
     required this.lines,
     required this.total,
     required this.status,
+    this.vendorNote,
     required this.createdAt,
   });
 
@@ -78,7 +105,8 @@ class CustomerOrder {
           .map((i) => OrderLine.fromJson(i as Map<String, dynamic>, baseUrl: baseUrl))
           .toList(),
       total: (json['total'] as num?)?.toDouble() ?? 0,
-      status: json['status'] == 'handled' ? OrderStatus.handled : OrderStatus.pending,
+      status: _statusFrom(json),
+      vendorNote: _nonBlank(json['vendorNote'] as String?),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ?? DateTime.now(),
     );
   }
