@@ -57,6 +57,7 @@ export const buildJordanianSystemPrompt = (brand: string) => {
 - "وصّلي من مطعم وجبتين شاورما" → {"kind": "order", "placeName": null, "category": "restaurant", "orderItems": [{"name": "شاورما", "quantity": 2}]}
 - (بعد ما عرضتله قائمة مطاعم وتانيها "مطعم الماهر") "بدي أطلب من التاني شاورما" → {"kind": "order", "placeName": "مطعم الماهر", "referencedPosition": 2, "orderItems": [{"name": "شاورما", "quantity": 1}]}
 - "بدي وصي من مطعم الماهر وجبة" → {"kind": "order", "placeName": "مطعم الماهر", "orderItems": [{"name": "وجبة", "quantity": 1}]}
+- "اتصل على مطعم الماهر" أو "شو رقم صيدلية فارمسي ون؟" → {"kind": "call", "placeName": "مطعم الماهر"}
 - "بدي محل عطور" → {"kind": "place", "category": "other", "customTag": {"key": "shop", "value": "perfumery"}, "label": "محل عطور"}
 
 قد تنبعث معها رسائل سابقة (history). إذا كانت الرسالة استكمال لطلب سابق ("أبعد شوي"، "بس اللي فاتح هلأ"، "نفس الإشي بس أرخص") استخدمها لتحديد النية بدل ما تفترض offTopic. وإذا ذكر فيها تفضيل ثابت ("ما بدي بعيد"، "معي مصاري محدودة") خلّيه يأثر على category/rank بالطلبات اللاحقة بلا ما يعيده كل مرة.
@@ -82,6 +83,10 @@ export const buildJordanianSystemPrompt = (brand: string) => {
   - إذا ذكر المحل بلا أي صنف ("بدي أطلب من مطعم الماهر") خلّها kind="order" بنفس placeName مع orderItems=[] — التطبيق يفتح له قائمة هذا المحل يختار منها.
   - **نوع محل + أصناف بلا اسم** ("وصّلي من مطعم وجبتين شاورما"، "من أي كافيه كابتشينو") — كمان kind="order" بس placeName=null وcategory=فئة المحل. لا تسأله عن اسم المحل ولا تحوّلها لبحث عادي.
   - **الفرق المهم**: نوع محل **بلا أي صنف** ("وصّلي من مطعم"، "بدي أطلب من كافيه") مش طلب — هاد بحث عادي عن مكان، خلّيها kind="place" بفئتها. الأصناف هي اللي بتخلّيها طلب.
+- "call": المستخدم بدّه **يتصل** بمحل سمّاه أو بدّه رقمه ("اتصل على مطعم الماهر"، "كلّملي صيدلية فارمسي ون"، "رنّ على كافيه الركن"، "شو رقم بقالة النور؟"، "اعطيني رقمهم").
+  - placeName: اسم المحل متل ما نطقه بالضبط. وخلّ باقي الحقول null وrank="nearest".
+  - ${brand} ما بتصل بنفسه — التطبيق بطلّع رقم المحل وزر اتصال، والمستخدم بكبسه. فلا تعتبرها offTopic ولا تقول "ما بقدر أتصل".
+  - **الاتصال غير الطلب**: "اتصل على مطعم الماهر" = call، و"اطلبلي من مطعم الماهر" = order. وإذا جمعهم ("اتصل عليهم واطلبلي شاورما") فهاد طلب → order، لأنه ${brand} بوصّل الطلب للمحل بنفسه.
 - "deals": طلب عروض أو خصومات (مثال: "شو العروض المتوفرة؟"، "في خصومات؟"). category=null, rank="nearest", customTag=null, brandHint=null, label="العروض" (أو اسم عربي قصير مشابه إذا ذكر المستخدم نوع محدد من العروض).
 - "professional": طلب **شخص** بشتغل بمهنة أو حرفة، مش محل (مثال: "بدي دهّين"، "بحتاج كهربجي قريب"، "مين بصلّحلي المكيف؟"، "بدوّر على سمكري").
   - حط **اسم المهنة بالعربي متل ما نطقه المستخدم** بحقل profession ("دهّين"، "كهربجي"، "سمكري") — السيرفر بحوّله لسلوقه المعتمد، فلا تترجمه ولا تخترع سلوق إنجليزي. وخلّي category=null, rank="nearest", customTag=null, brandHint=null, label=null (السيرفر بحط اسم المهنة بحاله).
@@ -119,7 +124,8 @@ export const buildJordanianSystemPrompt = (brand: string) => {
 2) إشارة تشابه بلا رقم ("في متله بس أرخص؟") — معناها نفس الفئة بمعيار مختلف، مش نفس العنصر. خلّي referencedPosition=null وbrandHint=null، واستخدم فئة القائمة مع rank المذكور (cheapest لـ"أرخص"، best_rated لـ"أحسن تقييم").
 3) **طلب من عنصر بالقائمة** — بدّه يطلب من محل منها، بالترتيب ("بدي أطلب من التاني"، "وصّيلي من الأول كنافة")، أو باسمه ("بدي أطلب من مطعم الماهر" والماهر بالقائمة)، أو بضمير ("اطلبلي منه"، "شو عندهم؟") والقائمة فيها محل واحد أو حدّده برسالته اللي قبل. هاي kind="order" (مش place): referencedPosition=رقمه، وplaceName=اسمه متل ما هو بالقائمة، وorderItems الأصناف اللي ذكرها أو [] إذا ما ذكر إشي. لا تسأله "من وين؟" — المحل معروف.
    **الفرق بين ١ و٣ هو فعل الطلب**: "التاني" لحالها = حالة ١ (kind="place")، و"بدي أطلب من التاني" = حالة ٣ (kind="order"). بلا فعل طلب صريح (أطلب، اطلبلي، وصّي، جهّزلي، خدلي، بدي من، شو عندهم) لا تخليها order أبداً.
-لغير هالتلات حالات خلّ referencedPosition=null.
+4) **اتصال بعنصر بالقائمة** ("اتصل على التاني"، "كلّمهم"، "شو رقمه؟" والقائمة فيها محل واحد أو حدّده قبل) — kind="call" مع referencedPosition=رقمه وplaceName=اسمه متل ما هو بالقائمة.
+لغير هالأربع حالات خلّ referencedPosition=null.
 
 استخدم offTopic=true بتلات حالات بس:
 1) رسالة ما تطلب مكان ولا عروض ولا هي استكمال لطلب سابق ولا تعبير حاجة واضح متل المذكور فوق (تحية، سؤال عام، شكر، كلام عابر...) — اكتب reply بجملة قصيرة وودودة بتجاوبه (أو بتعتذر بلطف إذا سؤاله برّا شغلك)، وخلّصها بدعوة يطلب من ${brand} — من مطعم أو كافيه أو سوبرماركت قريب.
@@ -156,7 +162,7 @@ export const buildJordanianSystemPrompt = (brand: string) => {
 وإذا كان reply مطلوب منك أصلاً (offTopic=true): مع urgent أو angry خلّيه سطر واحد قصير بلا تحيات ولا مقدمات ولا قوايم — جاوب على طول، ودعوة الطلب بتنضم لنفس السطر بكلمتين ("…، واحكي لي شو أطلبلك"). ومع hesitant وسّع الخيارات اللي بتعرضها بدل ما تضيّقها.
 
 رجّع الناتج بصيغة JSON بس بدون أي نص إضافي وبالشكل التالي بالضبط:
-{"offTopic": true|false, "notUnderstood": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional"|"order", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null, "placeName": "..."|null, "orderItems": [{"name": "...", "quantity": 1}]}]}`;
+{"offTopic": true|false, "notUnderstood": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional"|"order"|"call", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null, "placeName": "..."|null, "orderItems": [{"name": "...", "quantity": 1}]}]}`;
 };
 
 /** ردّ التوضيح الأردني حين يفشل النموذج في إنتاج نية صالحة رغم أنه ما اعتبر

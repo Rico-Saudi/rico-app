@@ -14,7 +14,7 @@ export interface OrderItem {
 }
 
 export interface Intent {
-  kind: 'place' | 'deals' | 'professional' | 'order';
+  kind: 'place' | 'deals' | 'professional' | 'order' | 'call';
   category: string | null;
   rank: string;
   brandHint: string | null;
@@ -23,7 +23,7 @@ export interface Intent {
   referencedPosition: number | null;
   /** Trade slug, for kind='professional' only — null otherwise. */
   profession: string | null;
-  /** Shop the customer named, for kind='order' only — null otherwise. */
+  /** Shop the customer named, for kind='order' or 'call' only — null otherwise. */
   placeName?: string | null;
   /** Dishes they asked for, for kind='order' only. */
   orderItems?: OrderItem[];
@@ -131,6 +131,28 @@ export function validateIntent(raw: any, dialect?: string): Intent | null {
       profession: null,
       placeName: placeName || null,
       orderItems,
+    };
+  }
+
+  // "اتصل على مطعم الماهر" — the customer wants the shop's number, to call it
+  // themselves. Rico doesn't place the call: the app finds the shop and hands
+  // its number to the phone's dialer. A name or a position on the last list
+  // is enough; with neither there's no one to call.
+  if (raw.kind === 'call') {
+    const placeName = typeof raw.placeName === 'string' ? raw.placeName.trim() : '';
+    const referencedPosition = parseReferencedPosition(raw);
+    if (placeName.length > 120) return null;
+    if (!placeName && referencedPosition === null) return null;
+    return {
+      kind: 'call',
+      category: null,
+      rank: 'nearest',
+      brandHint: null,
+      customTag: null,
+      label: null,
+      referencedPosition,
+      profession: null,
+      placeName: placeName || null,
     };
   }
 

@@ -16,6 +16,8 @@ import { professionRegistry } from '../../professionals/constants/professions.re
 import { Intent, validateIntent } from '../intent-validation';
 import { isOrderComplaint, OrderDeps, parseBasket, parseOrder } from './order-parser';
 import { editBasket } from './basket-edit';
+import { shopRegistry } from './shop-registry';
+import { parseCall } from './call-parser';
 import { CATEGORIES, MAX_INTENTS } from '../constants/categories';
 import {
   ABOUT_RICO,
@@ -258,7 +260,7 @@ function isObjectVerb(word: string): boolean {
 }
 
 function findHits(text: string): Hit[] {
-  const hits: Hit[] = [];
+  const hits: Hit[] = [...knownShopHits(text)];
   const { patterns } = professionTables();
   const rentals = RENTAL_RE.test(text) ? RENTAL_PATTERNS : [];
   for (const p of [...PLACE_PATTERNS, ...patterns, ...rentals]) {
@@ -290,6 +292,64 @@ function findHits(text: string): Hit[] {
     }
   }
   return hits;
+}
+
+/** Shops Rico actually has (shop-registry.ts, filled from the database):
+ * "وين مطعم تاج محل" searches for that shop by name, in its category. */
+function knownShopHits(text: string): Hit[] {
+  if (!shopRegistry.size) return [];
+  const tokens = text.split(' ');
+  const hits: Hit[] = [];
+  let offset = 0;
+  const starts = tokens.map((t) => {
+    const at = offset;
+    offset += t.length + 1;
+    return at;
+  });
+  for (let i = 0; i < tokens.length; i++) {
+    const m = shopRegistry.matchAt(tokens, i);
+    if (!m || !m.shop.category || !FIXED_SLUGS.has(m.shop.category)) continue;
+    const start = starts[i];
+    const end = starts[i + m.length - 1] + tokens[i + m.length - 1].length;
+    const prev = wordBefore(text, start);
+    hits.push({
+      start,
+      end,
+      len: end - start,
+      target: { type: 'brand', category: m.shop.category, name: m.shop.name },
+      modifier: isObjectVerb(prev),
+      contextual: CONTEXT.has(prev),
+    });
+  }
+  return hits;
+}
+
+/** Whether a single word already means something to the classifier — a
+ * category, a product, a trade, a want, a filler. A shop named only that
+ * would turn ordinary sentences into searches for it (see shop-registry.ts).
+ * A set lookup: the registry asks this for every word of every shop. */
+export function isGenericWord(word: string): boolean {
+  const w = fold(word);
+  if (!w) return true;
+  const set = genericWords();
+  const stripped = w.replace(/^(?:وال|بال|لل|ال|و|ب|ل)/u, '');
+  return [w, stripped, stripped.replace(/(?:ات|ين|ون|ه|ي)$/u, '')].some((v) => set.has(v));
+}
+
+let genericCache: { version: number; words: Set<string> } = { version: -1, words: new Set() };
+function genericWords(): Set<string> {
+  if (genericCache.version === professionRegistry.version) return genericCache.words;
+  const single = (list: string[]) => list.map(fold).filter((w) => w && !w.includes(' '));
+  const words = new Set<string>([
+    ...single(FIXED_PLACES.flatMap((p) => p.words)),
+    ...single(FREE_PLACES.flatMap((p) => p.words)),
+    ...single(PROBLEMS.flatMap((p) => p.words)),
+    ...single(professionRegistry.active().flatMap((e) => [e.label, ...e.aliases])),
+    ...single([...WANT_WORDS, ...NARRATIVE_WORDS, ...CONTEXT_WORDS, ...FILLER_WORDS, ...OPINION_WORDS, ...DEALS_WORDS]),
+    ...single(RANK_PATTERNS.flatMap((r) => r.words)),
+  ]);
+  genericCache = { version: professionRegistry.version, words };
+  return words;
 }
 
 /** Nothing matched exactly: one letter off is a typo ("تكيبف", "الجوزات"),
@@ -459,7 +519,7 @@ const FIXED_SLUGS = new Set<string>(CATEGORIES);
 /** What the order parser needs to know about words, from the tables here. */
 const ORDER_DEPS: OrderDeps = {
   categoryOf: (words) => firstFixedCategory(words),
-  isProduct: (word) => findHits(word).some((h) => h.target.type === 'fixed' || h.target.type === 'free'),
+  isProduct: (word) => shopRegistry.isProductWord(word) || findHits(word).some((h) => h.target.type === 'fixed' || h.target.type === 'free'),
 };
 
 function firstFixedCategory(text: string): string | null {
@@ -706,10 +766,17 @@ function focusedPosition(ctx: ConversationContext): number | null {
  * صيدلية كمان") is read on its own, as before.
  */
 export function keywordClassifyInContext(message: string, ctx: ConversationContext): Intent[] {
+  const listLength = ctx.lastResults?.items.length ?? 0;
+  const call = parseCall(message, {
+    shown: ctx.lastResults?.items ?? [],
+    pointer: listLength ? pointerIn(fold(message), listLength) : null,
+    focused: focusedPosition(ctx),
+  });
+  if (call) return [call];
+
   const direct = keywordClassify(message).map((i) => (i.kind === 'order' ? onTheList(i, ctx) : i));
   if (!ctx.history.length && !ctx.lastResults) return direct;
   const text = fold(message);
-  const listLength = ctx.lastResults?.items.length ?? 0;
   const wantsNow = CLEAR_WANT_RE.test(text) || ORDER_VERB_RE.test(text);
   // "ليش تأخر الطلب", "اجاني الطلب ناقص": about an order already sent.
   if (isOrderComplaint(message, false) && !ORDER_VERB_RE.test(text)) return [];

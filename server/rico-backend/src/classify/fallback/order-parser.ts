@@ -13,6 +13,7 @@
 import { validateIntent, Intent } from '../intent-validation';
 import { normalizeArabic } from '../../learning/constants/normalize';
 import { ORDER_BRANDS, ORDER_VERBS, ORDINALS } from './keyword-tables';
+import { shopRegistry } from './shop-registry';
 
 export interface OrderDeps {
   /** The fixed category a few words name ("صيدليه" → pharmacy), or null. */
@@ -184,10 +185,22 @@ function tokenize(text: string): Tokens {
 }
 
 function brandAt(folded: string[], i: number): number {
+  return brandMatch(folded, i).length;
+}
+
+/** A known shop at [i]: from the shops Rico has (the registry, with its own
+ * spelling of the name) or the fixed brand list. The longer match wins. */
+function brandMatch(folded: string[], i: number): { length: number; name: string | null } {
+  let fixed = 0;
   for (const b of BRANDS) {
-    if (b.every((w, k) => (folded[i + k] ?? '').replace(/^ال/u, '') === w.replace(/^ال/u, ''))) return b.length;
+    if (b.every((w, k) => (folded[i + k] ?? '').replace(/^ال/u, '') === w.replace(/^ال/u, ''))) {
+      fixed = b.length;
+      break;
+    }
   }
-  return 0;
+  const live = shopRegistry.matchAt(folded, i);
+  if (live && live.length >= fixed) return { length: live.length, name: live.shop.name };
+  return { length: fixed, name: null };
 }
 
 function isVerbAt(folded: string[], i: number): number {
@@ -439,16 +452,18 @@ function parseShop(tok: Tokens, i: number, deps: OrderDeps): Shop | null {
     return { placeName: null, category: deps.categoryOf(raw.slice(i + 1, i + 2).join(' ')), position: null, length: len, kind: 'any' };
   }
 
-  let brand = brandAt(folded, i);
+  const known = brandMatch(folded, i);
+  let brand = known.length;
   // "لولو هايبر", "كارفور سيتي مول": a branch name after the brand.
   while (brand && BRANCH_WORDS.has(folded[i + brand] ?? '')) brand++;
-  if (brand) return { placeName: raw.slice(i, i + brand).join(' '), category: null, position: null, length: brand, kind: 'brand' };
+  // A shop Rico has goes by the name it has on Rico, so the order finds it.
+  if (brand) return { placeName: known.name && brand === known.length ? known.name : raw.slice(i, i + brand).join(' '), category: null, position: null, length: brand, kind: 'brand' };
 
   const bare = t.replace(/^ال/u, '');
   if (SHOP_NOUNS.has(bare)) {
     // "مطعم البيك", "صيدلية النهدي": the noun, then the brand.
-    const after = brandAt(folded, i + 1);
-    if (after) return { placeName: raw.slice(i, i + 1 + after).join(' '), category: null, position: null, length: 1 + after, kind: 'brand' };
+    const after = brandMatch(folded, i + 1);
+    if (after.length) return { placeName: after.name ?? raw.slice(i, i + 1 + after.length).join(' '), category: null, position: null, length: 1 + after.length, kind: 'brand' };
 
     // "كوفي شوب قريب": the noun's own second word.
     const shopWord = folded[i + 1] === 'شوب' || folded[i + 1] === 'shop' ? 1 : 0;
