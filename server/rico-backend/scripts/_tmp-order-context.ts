@@ -78,16 +78,18 @@ function check(r: any, e: Exp[], lr?: any): string[] {
 (async () => {
   const service = new ClassifyService(new LlmService(), { record: async () => {} } as unknown as LearningService);
   let pass = 0;
-  for (const c of cases.slice(Number(process.env.SKIP ?? 0))) {
+  const only = process.env.ONLY?.split(",").map(Number);
+  const run = only ? cases.filter((_, i) => only.includes(i)) : cases.slice(Number(process.env.SKIP ?? 0));
+  for (const c of run) {
     let r: any; let errs: string[];
     for (let attempt = 0; ; attempt++) {
-      await new Promise((res) => setTimeout(res, 100_000));
-      try { r = await service.classify({ message: c.m, brand: c.b, lastResults: c.lr, history: c.hi } as any); errs = check(r, c.e, c.lr); break; }
+      await new Promise((res) => setTimeout(res, 75_000));
+      try { r = await Promise.race([service.classify({ message: c.m, brand: c.b, lastResults: c.lr, history: c.hi } as any), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout 60s')), 60_000))]); errs = check(r, c.e, c.lr); break; }
       catch (err: any) { if (attempt >= 2) { r = null; errs = ['ERROR ' + JSON.stringify(err.getResponse?.() ?? err.message)]; break; } }
     }
     if (errs.length === 0) pass++;
     const short = r ? (r.offTopic ? 'offTopic' : JSON.stringify(r.intents.map((i: any) => ({ k: i.kind, pos: i.referencedPosition, pn: i.placeName, it: i.orderItems?.map((o: any) => `${o.name}×${o.quantity}`), cat: i.category, rank: i.rank })))) : '-';
     console.log(`${errs.length ? 'FAIL' : 'PASS'} [${c.b}] ${c.m}  (${c.note})\n     ${short}${errs.length ? '\n     ✗ ' + errs.join('; ') : ''}`);
   }
-  console.log(`\n${pass}/${cases.length - Number(process.env.SKIP ?? 0)} passed`);
+  console.log(`\n${pass}/${run.length} passed`);
 })();

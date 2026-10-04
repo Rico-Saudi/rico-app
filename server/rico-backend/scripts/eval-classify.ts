@@ -65,7 +65,7 @@ export const CASES: Case[] = [
   { message: 'وين أشتري دهانات', expect: [{ kind: 'place' }], note: 'buying paint IS a shop — the mirror of the case above' },
 
   // --- free-text categories with no fixed slug --------------------------
-  { message: 'أقرب مغسلة سيارات', expect: [{ kind: 'place', category: 'other' }], note: 'category we have no slug for' },
+  { message: 'أقرب مغسلة سيارات', expect: [{ kind: 'place', category: 'car_wash' }], note: 'was a free-text category until car_wash got its own slug' },
   { message: 'أقرب ستاربكس', expect: [{ kind: 'place', category: 'cafe' }], note: 'named brand' },
 
   // --- deals ------------------------------------------------------------
