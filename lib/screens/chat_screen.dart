@@ -483,9 +483,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         bestRated: intent.rank == RankMode.bestRated,
         brandHint: intent.brandHint,
         categorySlug: intent.slug,
-        // للفئات الحرة ("other") ما فيه slug ثابت — الاسم العربي هو نص البحث
-        // الوحيد المتاح، والخادم يمرره لـGoogle Text Search.
-        label: intent.slug == null ? intent.label : null,
+        // للفئات الحرة ("other") الـslug وسم إنجليزي (wedding_hall) لا فئة
+        // ثابتة — الاسم العربي ("قاعة أفراح") هو نص البحث الصحيح، والخادم
+        // يمرره لـGoogle Text Search. الفئات الثابتة لها نوع Google خاص فما
+        // تحتاجه.
+        label: intent.slug == null || IntentService.byCategorySlug(intent.slug!) == null ? intent.label : null,
       );
 
       if (places.isEmpty) {

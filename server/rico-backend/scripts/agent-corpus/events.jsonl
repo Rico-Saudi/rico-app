@@ -1,0 +1,106 @@
+{"msg": "قاعة افراح", "dialect": "saudi", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "صالة افراح", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "ابغى قصر افراح في شمال الرياض", "dialect": "saudi", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "بدي قاعة مناسبات بعمان تساع ٣٠٠ شخص", "dialect": "jordanian", "expect": "other:event_hall:قاعة مناسبات"}
+{"msg": "وين اقرب قاعة مناسبات", "dialect": "saudi", "expect": "other:event_hall:قاعة مناسبات"}
+{"msg": "فيه قاعة افراح رخيصه قريبه مني", "dialect": "saudi", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "دلني على ارخص صالة افراح باربد", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "قاعة احتفالات بفندق", "dialect": "jordanian", "expect": "place:hotel"}
+{"msg": "ابي فندق فيه قاعة زواجات", "dialect": "saudi", "expect": "place:hotel"}
+{"msg": "استراحة للايجار الليلة", "dialect": "saudi", "expect": "other:istiraha:استراحة"}
+{"msg": "ابغى استراحه فيها مسبح لحفلة تخرج", "dialect": "saudi", "expect": "other:istiraha:استراحة"}
+{"msg": "بدي شاليه بالبحر الميت لعيد ميلاد", "dialect": "jordanian", "expect": "other:chalet:شاليه"}
+{"msg": "وين في شاليهات بجرش للايجار يوم الجمعة", "dialect": "jordanian", "expect": "other:chalet:شاليه"}
+{"msg": "تاجير خيام", "dialect": "saudi", "expect": "other:tent_rental:تأجير خيام"}
+{"msg": "بدي اجار بيت شعر للعزا", "dialect": "jordanian", "expect": "other:tent_rental:تأجير خيام"}
+{"msg": "صيوان عزا بالزرقا", "dialect": "jordanian", "expect": "other:tent_rental:تأجير خيام"}
+{"msg": "محتاج احد يركب لي خيمة كبيرة في الحوش", "dialect": "saudi", "expect": "pro:tent_installer"}
+{"msg": "ابي فني خيام يجي يركب بيت شعر للعزايم", "dialect": "saudi", "expect": "pro:tent_installer"}
+{"msg": "بيت عزا", "dialect": "jordanian", "expect": "other:funeral_hall:بيت عزاء"}
+{"msg": "وين اقرب قاعة عزاء بجدة", "dialect": "saudi", "expect": "other:funeral_hall:بيت عزاء"}
+{"msg": "كوشة", "dialect": "saudi", "expect": "other:wedding_decor:كوش وتجهيز أفراح"}
+{"msg": "مين بيعمل كوشة خطوبة حلوة بعمان", "dialect": "jordanian", "expect": "pro:event_planner"}
+{"msg": "محل كوش وتنسيق افراح", "dialect": "saudi", "expect": "other:wedding_decor:كوش وتجهيز أفراح"}
+{"msg": "محل ورد", "dialect": "saudi", "expect": "place:florist"}
+{"msg": "بدي بوكيه ورد للعروس اقرب محل ورد", "dialect": "jordanian", "expect": "place:florist"}
+{"msg": "ابغى زهور طبيعيه للملكة مفتوح الحين", "dialect": "saudi", "expect": "place:florist"}
+{"msg": "محل حلويات", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "وين احسن محل كيك للاعراس", "dialect": "saudi", "expect": "place:sweets"}
+{"msg": "بدي كيكة عيد ميلاد مكتوب عليها اسم بنتي", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "ابي تورتة تخرج فيها صورة", "dialect": "saudi", "expect": "place:sweets"}
+{"msg": "كنافه للعزومة", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "مخبز يسوي كعك العيد", "dialect": "saudi", "expect": "place:bakery"}
+{"msg": "بدي معمول العيد من مخبز قريب", "dialect": "jordanian", "expect": "place:bakery"}
+{"msg": "محل شوكولاته توزيعات", "dialect": "saudi", "expect": "other:chocolate_shop:محل شوكولاتة"}
+{"msg": "بدي توزيعات مواليد شوكولاتة", "dialect": "jordanian", "expect": "other:chocolate_shop:محل شوكولاتة"}
+{"msg": "محل هدايا", "dialect": "saudi", "expect": "place:gift_shop"}
+{"msg": "ابغى هدية تخرج لاختي", "dialect": "saudi", "expect": "place:gift_shop"}
+{"msg": "وين بلاقي محل بيبيع هدايا عيد ميلاد ومغلفة", "dialect": "jordanian", "expect": "place:gift_shop"}
+{"msg": "محل عطور", "dialect": "saudi", "expect": "place:cosmetics"}
+{"msg": "بدي عطر هدية لخطيبتي", "dialect": "jordanian", "expect": "place:cosmetics"}
+{"msg": "محل ذهب للشبكة", "dialect": "saudi", "expect": "place:jewelry_store"}
+{"msg": "بدي اشتري محبس خطوبة وين اقرب محل مجوهرات", "dialect": "jordanian", "expect": "place:jewelry_store"}
+{"msg": "فساتين اعراس", "dialect": "saudi", "expect": "other:bridal_shop:فساتين أعراس"}
+{"msg": "بدي اجار فستان عرس بسعر معقول", "dialect": "jordanian", "expect": "other:bridal_shop:فساتين أعراس"}
+{"msg": "ابغى فستان سهرة لحفلة زواج اختي", "dialect": "saudi", "expect": "place:clothes"}
+{"msg": "وين محل بدلات عريس بعمان", "dialect": "jordanian", "expect": "place:clothes"}
+{"msg": "تاجير بدلات رسمية للعريس", "dialect": "saudi", "expect": "other:suit_rental:تأجير بدلات"}
+{"msg": "خياطه تخيط فستان خطوبة", "dialect": "jordanian", "expect": "place:tailor"}
+{"msg": "مشغل نسائي للعروس", "dialect": "saudi", "expect": "place:beauty"}
+{"msg": "صالون تجميل يسوي مكياج عرايس", "dialect": "jordanian", "expect": "place:beauty"}
+{"msg": "ابغى مكياج ارتست تجي البيت ليلة الملكة", "dialect": "saudi", "expect": "pro:home_beautician"}
+{"msg": "بدي ميك اب ارتيست للحنة بالبيت", "dialect": "jordanian", "expect": "pro:home_beautician"}
+{"msg": "نقاشة حنا", "dialect": "saudi", "expect": "pro:henna_artist"}
+{"msg": "بدي وحدة بتنقش حنة لسهرة الحنة", "dialect": "jordanian", "expect": "pro:henna_artist"}
+{"msg": "مصور زواجات", "dialect": "saudi", "expect": "pro:photographer"}
+{"msg": "بدي مصور فيديو للعرس", "dialect": "jordanian", "expect": "pro:photographer"}
+{"msg": "ابي مصورة نسائية لحفلة تخرج", "dialect": "saudi", "expect": "pro:photographer"}
+{"msg": "استوديو تصوير قريب", "dialect": "jordanian", "expect": "other:photo_studio:استوديو تصوير"}
+{"msg": "فرقة زفة", "dialect": "saudi", "expect": "other:zaffa_band:فرقة زفة"}
+{"msg": "بدي فرقة زفة شعبية دبكة للعرس", "dialect": "jordanian", "expect": "other:zaffa_band:فرقة زفة"}
+{"msg": "طقاقات للزواج بالرياض", "dialect": "saudi", "expect": "other:zaffa_band:فرقة زفة"}
+{"msg": "محتاج دي جي لحفلة عيد ميلاد", "dialect": "jordanian", "expect": "pro:sound_lighting"}
+{"msg": "ابغى فني صوتيات واضاءة لحفل", "dialect": "saudi", "expect": "pro:sound_lighting"}
+{"msg": "منظم حفلات", "dialect": "jordanian", "expect": "pro:event_planner"}
+{"msg": "ابغى شركة تنظيم مناسبات تتكفل بالزواج كامل", "dialect": "saudi", "expect": "other:event_planning_company:شركة تنظيم مناسبات"}
+{"msg": "بدي حدا ينظملي بيبي شاور", "dialect": "jordanian", "expect": "pro:event_planner"}
+{"msg": "مطبعة كروت دعوة", "dialect": "saudi", "expect": "other:printing_shop:مطبعة"}
+{"msg": "وين بطبع كروت عرس", "dialect": "jordanian", "expect": "other:printing_shop:مطبعة"}
+{"msg": "بدي خطاط يكتب اسماء المعازيم على الكروت", "dialect": "jordanian", "expect": "pro:calligrapher"}
+{"msg": "مصمم يصمم لي دعوة زواج الكترونية", "dialect": "saudi", "expect": "pro:graphic_designer"}
+{"msg": "تاجير كراسي وطاولات", "dialect": "saudi", "expect": "other:party_rentals:تأجير كراسي وطاولات"}
+{"msg": "بدي اجار كراسي للعزا ١٠٠ كرسي", "dialect": "jordanian", "expect": "other:party_rentals:تأجير كراسي وطاولات"}
+{"msg": "محل بالونات", "dialect": "saudi", "expect": "other:party_supplies:مستلزمات حفلات"}
+{"msg": "وين بلاقي زينة عيد ميلاد وبالونات هيليوم", "dialect": "jordanian", "expect": "other:party_supplies:مستلزمات حفلات"}
+{"msg": "زينة رمضان فوانيس", "dialect": "saudi", "expect": "other:party_supplies:مستلزمات حفلات"}
+{"msg": "بوفيه مفتوح للمناسبات", "dialect": "saudi", "expect": "other:catering:تموين حفلات"}
+{"msg": "بدي شركة تموين للعرس ٥٠٠ شخص", "dialect": "jordanian", "expect": "other:catering:تموين حفلات"}
+{"msg": "ابغى طباخ يطبخ ذبايح للعزيمة", "dialect": "saudi", "expect": "pro:chef"}
+{"msg": "بدي طباخ منسف للعرس", "dialect": "jordanian", "expect": "pro:chef"}
+{"msg": "مطعم مندي يسوي طلبات مناسبات", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "ملحمة ذبايح نعيمي للعقيقة", "dialect": "saudi", "expect": "place:butcher"}
+{"msg": "بدي خروف للعقيقة اقرب ملحمة", "dialect": "jordanian", "expect": "place:butcher"}
+{"msg": "قهوجي وصبابين للزواج", "dialect": "saudi", "expect": "other:coffee_servers:قهوجية وصبابين"}
+{"msg": "عروض قاعات الافراح", "dialect": "saudi", "expect": "deals"}
+{"msg": "في خصومات على الكيك هالاسبوع", "dialect": "jordanian", "expect": "deals"}
+{"msg": "ابي عروض فساتين العيد", "dialect": "saudi", "expect": "deals"}
+{"msg": "بدي قاعة افراح ومصور", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح + pro:photographer"}
+{"msg": "ابغى قاعة وفرقة زفة وكوشة", "dialect": "saudi", "expect": "other:wedding_hall:قاعة أفراح + other:zaffa_band:فرقة زفة + other:wedding_decor:كوش وتجهيز أفراح"}
+{"msg": "محتاج خيمة للعزا وكراسي", "dialect": "jordanian", "expect": "other:tent_rental:تأجير خيام + other:party_rentals:تأجير كراسي وطاولات"}
+{"msg": "ابي محل ورد ومحل شوكولاته للملكة", "dialect": "saudi", "expect": "place:florist + other:chocolate_shop:محل شوكولاتة"}
+{"msg": "بدي كيكة وبالونات لعيد ميلاد ابني", "dialect": "jordanian", "expect": "place:sweets + other:party_supplies:مستلزمات حفلات"}
+{"msg": "ابغى مكياج ارتست ونقاشة حنا لليلة الحنا", "dialect": "saudi", "expect": "pro:home_beautician + pro:henna_artist"}
+{"msg": "بدي مطبعة كروت دعوة ومحل هدايا للتوزيعات", "dialect": "jordanian", "expect": "other:printing_shop:مطبعة + place:gift_shop"}
+{"msg": "استراحة وطباخ ومصور لحفلة تخرج", "dialect": "saudi", "expect": "other:istiraha:استراحة + pro:chef + pro:photographer"}
+{"msg": "بدي دي جي ومنظم حفلات لعيد ميلاد", "dialect": "jordanian", "expect": "pro:sound_lighting + pro:event_planner"}
+{"msg": "محل ذهب ومحل فساتين اعراس قريبين من بعض", "dialect": "saudi", "expect": "place:jewelry_store + other:bridal_shop:فساتين أعراس"}
+{"msg": "اطلب لي من حلويات سعد كيكة كبيرة", "dialect": "saudi", "expect": "order"}
+{"msg": "بدي اطلب من حلويات حبيبة ٢ كيلو كنافة للعزومة", "dialect": "jordanian", "expect": "order"}
+{"msg": "ابغى اطلب من محل ورد الربيع بوكيه جوري احمر", "dialect": "saudi", "expect": "order"}
+{"msg": "اطلبلي من مخبز الاصيل ٣ كيلو معمول", "dialect": "jordanian", "expect": "order"}
+{"msg": "ابي من شوكولاتة باتشي علبة توزيعات ٥٠ حبة", "dialect": "saudi", "expect": "order"}
+{"msg": "السلام عليكم", "dialect": "saudi", "expect": "chat"}
+{"msg": "مشكور يا ريكو كفيت ووفيت", "dialect": "saudi", "expect": "chat"}
+{"msg": "يعطيك العافية تدلل", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو بتقدر تساعدني بترتيب عرس؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم عادة تكلف حفلة الزواج بالسعودية؟", "dialect": "saudi", "expect": "chat"}

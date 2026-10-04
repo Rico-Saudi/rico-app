@@ -6,6 +6,8 @@
 // the admin sourcing sync (owner.service.ts) and the live /search fallback
 // (search.service.ts) for categories the DB doesn't have enough of yet.
 
+import { FREE_PLACES } from '../classify/fallback/keyword-tables';
+
 export const GOOGLE_PLACES_PROVIDER = 'google_places';
 export const DEFAULT_GOOGLE_PLACES_MONTHLY_CAP = 200;
 
@@ -100,6 +102,10 @@ export const GOOGLE_TEXT_QUERY_BY_CATEGORY: Record<string, string> = {
   oil_change: 'محل تغيير زيت سيارات',
   money_exchange: 'صرافة وتحويل عملات',
   optician: 'محل نظارات وبصريات',
+  // The free-label places the keyword fallback answers with (قاعة أفراح,
+  // بنشر, مختبر…). The app sends their tag value as the category and no
+  // label, so without these Google was asked for "wedding_hall".
+  ...Object.fromEntries(FREE_PLACES.map((p) => [p.value, p.label])),
 };
 
 // rating/userRatingCount/priceLevel are Enterprise-SKU fields, so every call

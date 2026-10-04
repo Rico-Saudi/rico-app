@@ -113,8 +113,21 @@ Also: `POST /customer/auth/login`, `/resend-otp` (`purpose: verify_email|reset_p
 ## Tests
 
 ```bash
-npm test   # jest — currently covers the rule-based query-parser in isolation
+npm test   # jest
 ```
+
+### When the model can't answer: the keyword fallback
+
+`/classify` falls back to a keyword classifier (`src/classify/fallback/`) when Groq fails (a 429 on the free tier is the usual cause), returns unparseable JSON, or says it didn't understand. It knows the fixed categories, ~110 free-label places (قاعة أفراح، بنشر، مختبر، مسلخ…), every profession and its aliases, problems described instead of named («الحمام مسدود» → فني تسليك), shop orders («اطلب لي من البيك ٢ مسحب»), Franco and English. It searches only when the message asks for something, so «اخوي سباك» or «امبارح اكلت بمطعم» still fail and the app answers with its own chat replies. Responses it produced carry `source: "keywords"`.
+
+It is measured against `scripts/agent-corpus/`: ~1,000 messages written by persona agents (Saudi and Jordanian customers, Franco typists, adversarial non-requests), each with the expected answer. Free and instant, no model call:
+
+```bash
+npx ts-node -r tsconfig-paths/register scripts/eval-fallback.ts            # prints every miss
+npx ts-node -r tsconfig-paths/register scripts/eval-fallback.ts --dir=path # any other .jsonl set
+```
+
+`keyword-classifier.spec.ts` holds the corpus to a floor and forbids any search on a chat line. To teach it something new, add the words to `keyword-tables.ts` and a line to the corpus.
 
 ## Deploy (Render)
 
