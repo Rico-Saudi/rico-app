@@ -1,0 +1,90 @@
+{"msg":"تذاكر طيران","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"ابي احجز طيران للقاهره الاسبوع الجاي وين اقرب مكتب سفريات","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"احجز لي على ناس رايح جده","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"ارخص مكتب سياحه وسفر بالرياض","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"ابغى تذكره ذهاب وعوده دبي على فلاي دبي","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"مكتب سفريات قريب مني","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"وش احسن مكتب يحجز رحلات شهر عسل للمالديف","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"بكج سياحي جورجيا للعايله","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"ابي اطلع فيزا شنغن وين اروح","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"تاشيره بريطانيا مين يخلصها","dialect":"saudi","expect":"other:visa_office:مكتب تأشيرات"}
+{"msg":"وين مركز تاشيرات VFS","dialect":"saudi","expect":"other:visa_office:مكتب تأشيرات"}
+{"msg":"مكتب عمره قريب","dialect":"saudi","expect":"other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg":"ابي حمله حج لابوي وامي وش اقرب حمله","dialect":"saudi","expect":"other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg":"اقرب مطار لي","dialect":"saudi","expect":"other:airport:مطار"}
+{"msg":"ابي احد يوديني المطار الساعه 4 الفجر","dialect":"saudi","expect":"pro:driver"}
+{"msg":"سواق خاص يوصلني مطار الملك خالد","dialect":"saudi","expect":"pro:driver"}
+{"msg":"وين اوقف سيارتي عند المطار اسبوع","dialect":"saudi","expect":"place:parking"}
+{"msg":"مواقف المطار الطويله","dialect":"saudi","expect":"place:parking"}
+{"msg":"شنطه سفر كبيره وين القى محل","dialect":"saudi","expect":"other:luggage_shop:محل شنط سفر"}
+{"msg":"ارخص محل شنط سفر","dialect":"saudi","expect":"other:luggage_shop:محل شنط سفر"}
+{"msg":"تامين سفر للشنغن","dialect":"saudi","expect":"place:insurance"}
+{"msg":"صرافه قريبه ابي اصرف يورو قبل السفر","dialect":"saudi","expect":"place:money_exchange"}
+{"msg":"ابي احجز فندق في اسطنبول عن طريق مكتب","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"فندق قريب من المطار ابي انام ليله ترانزيت","dialect":"saudi","expect":"place:hotel"}
+{"msg":"عروض طيران","dialect":"saudi","expect":"deals"}
+{"msg":"فيه خصومات على تذاكر السعوديه هالايام؟","dialect":"saudi","expect":"deals"}
+{"msg":"كم سعر التذكره من الرياض لجده؟","dialect":"saudi","expect":"chat"}
+{"msg":"رحلتي على السعوديه رقم SV1020 متاخره ولا لا","dialect":"saudi","expect":"chat"}
+{"msg":"كم ساعه الرحله من جده للندن","dialect":"saudi","expect":"chat"}
+{"msg":"هل تحجزلي انت مباشره؟","dialect":"saudi","expect":"chat"}
+{"msg":"والله امس فاتتني الطياره عشان الزحمه وقعدت بالمطار 6 ساعات 😭","dialect":"saudi","expect":"chat"}
+{"msg":"كم الوزن المسموح على ناس؟","dialect":"saudi","expect":"chat"}
+{"msg":"i need flight booking office near me","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"abi t4kra l dubai","dialect":"saudi","expect":"place:travel_agency"}
+{"msg":"airport parking riyadh","dialect":"saudi","expect":"place:parking"}
+{"msg":"umrah package cheap","dialect":"saudi","expect":"other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg":"ابي مكتب سفريات واحد يوديني المطار بكره","dialect":"saudi","expect":"place:travel_agency + pro:driver"}
+{"msg":"ابي اصرف دولار وبعدين اشتري شنطه سفر","dialect":"saudi","expect":"place:money_exchange + other:luggage_shop:محل شنط سفر"}
+{"msg":"تامين سفر وصرافه قريبين","dialect":"saudi","expect":"place:insurance + place:money_exchange"}
+{"msg":"احجز طيران وفندق بماليزيا وابي سياره ايجار هناك","dialect":"saudi","expect":"place:travel_agency + place:car_rental"}
+{"msg":"عندي عمره الشهر الجاي ابي مكتب عمره ومحل احرامات وشنط","dialect":"saudi","expect":"other:hajj_umrah_office:مكتب حج وعمرة + other:luggage_shop:محل شنط سفر"}
+{"msg":"وزني زايد بالشنطه وين ابيع ميزان شنط","dialect":"saudi","expect":"other:luggage_shop:محل شنط سفر"}
+{"msg":"توصيل للمطار","dialect":"saudi","expect":"pro:driver"}
+{"msg":"وين موقف التكاسي اللي يروح المطار","dialect":"saudi","expect":"other:taxi_stand:موقف تكاسي"}
+{"msg":"سفاره امريكا وين مكانها","dialect":"saudi","expect":"other:embassy:سفارة"}
+{"msg":"حجز طيران","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"بدي احجز ع الملكيه الاردنيه لاسطنبول وين في مكتب سياحه قريب","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"احجزلي تذكره عمان دبي ع العربيه","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"ارخص مكتب سفريات بعمان","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"شو احسن مكتب سياحي بيعمل رحلات لتركيا","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"بدنا بكج شهر عسل لبالي بس بسعر معقول","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"مين بطلع فيزا كندا","dialect":"jordanian","expect":"other:visa_office:مكتب تأشيرات"}
+{"msg":"بدي فيزا عمل للسعوديه شو اعمل وين اروح","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"السفاره الالمانيه بعمان وين","dialect":"jordanian","expect":"other:embassy:سفارة"}
+{"msg":"مكتب حج وعمره بالزرقا","dialect":"jordanian","expect":"other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg":"بدي اطلع عمره بالباص مع امي مين بنظم","dialect":"jordanian","expect":"other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg":"قديش بعيد المطار عني؟ اقرب مطار","dialect":"jordanian","expect":"other:airport:مطار"}
+{"msg":"بدي سواق يوصلني ع مطار الملكه علياء الساعه 3 بالليل","dialect":"jordanian","expect":"pro:driver"}
+{"msg":"حدا بوصلني ع المطار بكرا الصبح","dialect":"jordanian","expect":"pro:driver"}
+{"msg":"وين بقدر اصف سيارتي ع المطار لاسبوعين","dialect":"jordanian","expect":"place:parking"}
+{"msg":"محل شنط سفر منيح بالجبيهه","dialect":"jordanian","expect":"other:luggage_shop:محل شنط سفر"}
+{"msg":"شنطه صغيره كابين بدي اشتري","dialect":"jordanian","expect":"other:luggage_shop:محل شنط سفر"}
+{"msg":"تامين سفر لفيزا اوروبا وين بعملو","dialect":"jordanian","expect":"place:insurance"}
+{"msg":"اقرب صرافه بدي اغير دنانير لدولار","dialect":"jordanian","expect":"place:money_exchange"}
+{"msg":"بدي حدا يحجزلي فندق بالقاهره","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"عروض سفر","dialect":"jordanian","expect":"deals"}
+{"msg":"في خصم ع رحلات انطاليا الصيف؟","dialect":"jordanian","expect":"deals"}
+{"msg":"قديش سعر تذكره عمان جده هالفتره؟","dialect":"jordanian","expect":"chat"}
+{"msg":"طيارة الملكيه من لندن وصلت ولا لسا","dialect":"jordanian","expect":"chat"}
+{"msg":"كم ساعه من عمان لكوالالمبور مع الترانزيت","dialect":"jordanian","expect":"chat"}
+{"msg":"انت بتحجز تذاكر ولا لا؟","dialect":"jordanian","expect":"chat"}
+{"msg":"شو بدي اخد معي اول مره بسافر بالطياره؟","dialect":"jordanian","expect":"chat"}
+{"msg":"هههه اخوي ضاعتله الشنطه بمطار اسطنبول ولسا ما لقوها","dialect":"jordanian","expect":"chat"}
+{"msg":"هل في رحله بكرا لعقبه؟","dialect":"jordanian","expect":"chat"}
+{"msg":"travel agency qareeb","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"bdi a7jez flight la istanbul","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"cheapest money exchange amman","dialect":"jordanian","expect":"place:money_exchange"}
+{"msg":"visa office near me","dialect":"jordanian","expect":"other:visa_office:مكتب تأشيرات"}
+{"msg":"بدي مكتب سياحه وصرافه جنبه","dialect":"jordanian","expect":"place:travel_agency + place:money_exchange"}
+{"msg":"بدي احجز طياره للعقبه وبدي سياره اجار هناك","dialect":"jordanian","expect":"place:travel_agency + place:car_rental"}
+{"msg":"شنطه سفر وتامين سفر وسواق للمطار","dialect":"jordanian","expect":"other:luggage_shop:محل شنط سفر + place:insurance + pro:driver"}
+{"msg":"بدي اطلع فيزا امريكا واحجز تذكره","dialect":"jordanian","expect":"other:visa_office:مكتب تأشيرات + place:travel_agency"}
+{"msg":"مسافر بكرا بدي صرافه وحدا يوصلني ع المطار","dialect":"jordanian","expect":"place:money_exchange + pro:driver"}
+{"msg":"فندق جنب المطار واصف سيارتي فيه","dialect":"jordanian","expect":"place:hotel + place:parking"}
+{"msg":"وزن زايد بالشنطه شو بعمل","dialect":"jordanian","expect":"chat"}
+{"msg":"تكسي ع المطار من وين بلاقي","dialect":"jordanian","expect":"other:taxi_stand:موقف تكاسي"}
+{"msg":"رحله سياحيه للبتراء ووادي رم مين بنظم","dialect":"jordanian","expect":"place:travel_agency"}
+{"msg":"عروض عمره رمضان","dialect":"saudi","expect":"deals"}
+{"msg":"بدي اكل قبل ما اطلع ع المطار اطلبلي من شاورما ريم وجبتين","dialect":"jordanian","expect":"order"}
+{"msg":"ترانزيت بالدوحه ٩ ساعات اقدر اطلع من المطار؟","dialect":"saudi","expect":"chat"}

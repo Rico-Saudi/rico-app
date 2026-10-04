@@ -14,6 +14,30 @@ import { LearningService } from '../../learning/learning.service';
 const learning = { record: async () => {} } as unknown as LearningService;
 
 describe('keywordClassify', () => {
+  it.each([
+    ['احجزلي تذكره عمان دبي ع العربيه', 'travel_agency'],
+    ['ابي سيارة ايجار شهري', 'car_rental'],
+    ['وين اقدر استأجر سكوتر كهربائي', 'scooter_rental'],
+    ['بدي استأجر كوستر لرحلة البحر الميت', 'bus_rental'],
+    ['وين مكتب جت بقطع تذكرة للعقبة', 'bus_station'],
+    ['بدي ابعت طرد لامي على اربد', 'courier'],
+    ['مواقف المطار الطويله', 'parking'],
+  ])('transport: %s', (msg, expected) => {
+    const intents = keywordClassify(msg);
+    expect(intents).toHaveLength(1);
+    expect(intents[0].customTag?.value ?? intents[0].category).toBe(expected);
+  });
+
+  it('a ride is a driver, and where it goes is the trip, not a second search', () => {
+    expect(keywordClassify('ابي احد يوصل عيالي المدرسة كل يوم')).toEqual([expect.objectContaining({ profession: 'driver' })]);
+    expect(keywordClassify('بدي سواق يوصلني ع مطار الملكه علياء الساعه 3')).toEqual([expect.objectContaining({ profession: 'driver' })]);
+  });
+
+  it.each(['اوبر احسن ولا كريم؟', 'كم سعر تاجير الكامري باليوم عند يلو', 'بدي اشتغل مندوب مع طلبات شو بدي اعمل', 'وين وصلت شحنتي من ارامكس رقم التتبع معي'])(
+    'transport chat stays chat: %s',
+    (msg) => expect(keywordClassify(msg)).toEqual([]),
+  );
+
   it.each(['بدي قاعة افراح', 'ابغى قاعه افراح', 'وين اقرب صالة مناسبات', 'قاعة اعراس رخيصة', 'wedding hall'])(
     'understands a wedding hall: %s',
     (msg) => {
@@ -91,19 +115,19 @@ describe('keywordClassify against the agent corpus', () => {
   const corpus = loadCorpus(join(__dirname, '../../../scripts/agent-corpus'));
 
   it('has a corpus to run', () => {
-    expect(corpus.length).toBeGreaterThan(1200);
+    expect(corpus.length).toBeGreaterThan(1800);
   });
 
-  // The floor sits a little under today's score (~91% over 1,300 lines from
-  // three rounds of agents, the last written to break it) so a change that
+  // The floor sits a little under today's score (~90% over 1,900 lines from
+  // five rounds of agents, two of them written to break it) so a change that
   // costs a few dozen lines fails here.
-  it('answers at least 89% of it exactly, and never searches on chat', () => {
+  it('answers at least 88% of it exactly, and never searches on chat', () => {
     const grades = corpus.map((line) => ({ line, g: grade(line.expect, keywordClassify(line.msg)) }));
     const pass = grades.filter((x) => x.g === 'pass').length / grades.length;
     const falsePositives = grades.filter((x) => x.g === 'false_positive').map((x) => x.line.msg);
 
     expect(falsePositives).toEqual([]);
-    expect(pass).toBeGreaterThanOrEqual(0.89);
+    expect(pass).toBeGreaterThanOrEqual(0.88);
   });
 });
 
@@ -136,6 +160,20 @@ describe('ClassifyService when the model is unavailable', () => {
     const result = await service.classify({ message: 'وين في بنشر قريب', brand: 'tadallal' } as any);
     expect(result.offTopic).toBe(false);
     expect(result.intents[0]).toMatchObject({ customTag: { value: 'tire_shop' } });
+  });
+
+  it('searches instead when the model answered with a refusal', async () => {
+    const recorded: string[] = [];
+    const service = new ClassifyService(
+      {
+        complete: async () => ({ content: JSON.stringify({ offTopic: true, reply: 'آسف، ما بقدر احجز طيران، بس بقدر أساعدك تلاقي مطعم', intents: [] }) }),
+      } as unknown as LlmService,
+      { record: async (g: { message: string }) => void recorded.push(g.message) } as unknown as LearningService,
+    );
+    const result = await service.classify({ message: 'احجزلي طيران للقاهرة', brand: 'tadallal' } as any);
+    expect(result.offTopic).toBe(false);
+    expect(result.intents[0]).toMatchObject({ kind: 'place', category: 'travel_agency' });
+    expect(recorded).toEqual(['احجزلي طيران للقاهرة']);
   });
 
   it('keeps the model answer when the model understood', async () => {

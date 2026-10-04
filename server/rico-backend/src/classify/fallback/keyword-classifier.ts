@@ -36,6 +36,8 @@ import {
   PERSON_CUES,
   PROBLEMS,
   RANK_PATTERNS,
+  RENTALS,
+  RENTAL_WORDS,
   SHOP_WORDS,
   STRONG_NARRATIVE,
   WANT_WORDS,
@@ -179,6 +181,18 @@ const NEED_RE = anyOf(NEED_WORDS);
 const ABOUT_RICO_RE = anyOf(ABOUT_RICO);
 const NARRATIVE_RE = anyOf(NARRATIVE_WORDS);
 const STRONG_NARRATIVE_RE = anyOf(STRONG_NARRATIVE);
+const RENTAL_RE = anyOf(RENTAL_WORDS);
+// Rental targets, one pattern per vehicle noun. They only fire when a rental
+// word is in the message, and then outrank anything else on that span: "استأجر
+// سكوتر كهربائي" is a scooter rental, not an electrician.
+const RENTAL_PATTERNS: Pattern[] = RENTALS.flatMap((r) =>
+  compile(
+    r.nouns,
+    r.slug
+      ? { type: 'fixed', slug: r.slug }
+      : { type: 'free', place: { key: 'shop', value: r.value!, label: r.label, words: [] } },
+  ).map((p) => ({ ...p, len: p.len + 1000 })),
+);
 // A described problem is evidence of a request; a trade's name is not ("انا
 // ممرض" is a job, "اخوي سواق" a brother). The PROBLEMS table holds both, so
 // the names — the registry's own words, and the person nouns listed here —
@@ -189,8 +203,16 @@ const PERSON_NOUNS = foldedSet([
   'منظم حفلات', 'منظمه حفلات', 'منظم مناسبات', 'خبيره تجميل', 'مدرس خصوصي', 'معلم خصوصي', 'مدرب سباحه', 'مدربه سباحه', 'سباكه',
   'شركه تنظيف', 'شركات تنظيف', 'عامله نظافه', 'شركه نقل', 'شركه نقل عفش', 'شركه نقل اثاث', 'chef', 'driver', 'nurse',
   'translator', 'photographer', 'tutor', 'plumber', 'electrician', 'cleaner', 'handyman', 'painter', 'babysitter', 'movers',
+  // Service nouns: "مشوار" names a ride, it doesn't describe a problem.
+  'مشوار', 'مشاوير', 'توصيله', 'مندوب', 'سائقه', 'سواقه', 'سايق', 'سواقين',
 ]);
-const REMARK_RE = anyOf(['صار', 'صارت', 'كان', 'كانت', 'رجعت فتحت', 'سكرت', 'سكر']);
+// Nouns that name a kind of place — what can follow "احسن" in a request
+// ("احسن مطعم") as opposed to an opinion question ("احسن دوا").
+const PLACE_NOUN_RE = new RegExp(
+  `^(?:${['مطعم', 'كافيه', 'مقهى', 'صيدليه', 'مستشفى', 'فندق', 'صالون', 'نادي', 'مول', 'سوبرماركت', 'بقاله', 'عياده', 'كراج', 'ورشه', 'مخبز', 'حلاق', 'مغسله', 'شركه', 'مكتب', 'محل', 'مركز'].join('|')})(?:\\s|$)`,
+  'u',
+);
+const REMARK_RE = anyOf(['صار', 'صارت', 'كان', 'كانت', 'رجعت فتحت', 'سكرت', 'سكر', 'وصلت ولا', 'ولا لسا', 'لسا']);
 const PROBLEM_RE = anyOf(
   PROBLEMS.flatMap((p) => p.words).filter((w) => {
     const f = fold(w);
@@ -236,7 +258,8 @@ function isObjectVerb(word: string): boolean {
 function findHits(text: string): Hit[] {
   const hits: Hit[] = [];
   const { patterns } = professionTables();
-  for (const p of [...PLACE_PATTERNS, ...patterns]) {
+  const rentals = RENTAL_RE.test(text) ? RENTAL_PATTERNS : [];
+  for (const p of [...PLACE_PATTERNS, ...patterns, ...rentals]) {
     p.re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = p.re.exec(text))) {
@@ -247,7 +270,12 @@ function findHits(text: string): Hit[] {
       // A verb's object is a description only when it's a place: "يطبخ
       // ذبايح" isn't a butcher search, but "يركب الستاير" is the trade.
       const modifier =
-        prefix === 'ب' || prefix === 'ل' || prefix === 'لل' || prefix === 'بال' || (p.target.type !== 'pro' && isObjectVerb(prev));
+        // On a trade, "ب" is a verb's present tense ("بنقل عفش" — "moves
+        // furniture"), not "in"; only places take it as a description.
+        (p.target.type !== 'pro' && (prefix === 'ب' || prefix === 'ل' || prefix === 'لل' || prefix === 'بال')) ||
+        // "عالمطار": where to, not what.
+        prefix === 'عال' ||
+        (p.target.type !== 'pro' && isObjectVerb(prev));
       hits.push({
         start: m.index,
         end: m.index + m[0].length,
@@ -332,6 +360,43 @@ function pick(hits: Hit[], wantsPerson: boolean): Hit[] {
 function dropModifiers(chosen: Hit[]): Hit[] {
   const real = chosen.filter((h, i) => !(h.modifier || (h.contextual && i > 0)));
   return real.length ? real : chosen;
+}
+
+const DESTINATIONS = new Set(['place:school', 'place:university', 'place:kindergarten', 'place:clinic', 'place:hospital', 'place:mall', 'place:other:airport']);
+const STATIONS = new Set(['place:other:bus_station', 'place:other:train_station', 'place:other:ferry_terminal']);
+
+/** Two readings a trip needs. Where a driver is taking someone ("يوصل
+ * الولاد المدرسه", "يوديني المطار") is the trip, not a second search. And a
+ * ticket bought at a station ("مكتب جت بقطع تذكرة") is that station, not a
+ * travel agency. */
+function markTrips(chosen: Hit[]): Hit[] {
+  const driverAt = chosen.findIndex((h) => h.target.type === 'pro' && h.target.slug === 'driver');
+  const hasStation = chosen.some((h) => STATIONS.has(key(h.target)));
+  return chosen.map((h, i) => {
+    if (driverAt >= 0 && i > driverAt && DESTINATIONS.has(key(h.target))) return { ...h, modifier: true };
+    if (hasStation && h.target.type === 'fixed' && h.target.slug === 'travel_agency') return { ...h, modifier: true };
+    return h;
+  });
+}
+
+/** "احسن مكتب سياحي", "افضل محل" — a ranking word followed by a place. */
+function rankedPlace(text: string, chosen: Hit[]): boolean {
+  const m = /(?:^|\s)(?:احسن|افضل|ارخص|اقرب)\s+/u.exec(text);
+  if (!m) return false;
+  const at = m.index + m[0].length;
+  return SHOP_LEAD.test(text.slice(at)) || PLACE_NOUN_RE.test(text.slice(at));
+}
+
+/** "مواقف المطار", "باصات الجامعة", "كراج العبدلي": a place followed
+ * straight away by a definite one is that first place, described by the
+ * second — Arabic's construct state, not two requests. */
+function markConstructs(text: string, chosen: Hit[]): Hit[] {
+  return chosen.map((h, i) => {
+    const prev = chosen[i - 1];
+    if (!prev || prev.target.type === 'deals' || h.target.type === 'pro' || h.target.type === 'deals') return h;
+    const adjacent = text.slice(prev.end, h.start).trim() === '';
+    return adjacent && text.startsWith('ال', h.start) ? { ...h, modifier: true } : h;
+  });
 }
 
 /** "عروض على المكيفات" and "عروض مطاعم" are one request for deals. A
@@ -599,7 +664,7 @@ function asksForSomething(text: string, chosen: Hit[]): boolean {
   // What's left is a story, a remark or a thank-you unless it says otherwise:
   // "اخوي سباك", "صباح الخير يا احلى كافيه", "الكافيهات صارت غالية".
   if (NARRATIVE_RE.test(text)) return false;
-  if (ANY_RANK_RE.test(text) || chosen.some((h) => h.target.type === 'pro')) return true;
+  if (ANY_RANK_RE.test(text) || RENTAL_RE.test(text) || chosen.some((h) => h.target.type === 'pro')) return true;
   const words = text.split(' ').filter((w) => !['يا', 'ريكو', 'تدلل', 'لو', 'سمحت', 'بليز', 'الله', 'يخليك'].includes(w));
   return words.length <= 4;
 }
@@ -619,7 +684,7 @@ export function keywordClassify(message: string): Intent[] {
   // where — there is nothing to search for.
   if (ABOUT_RICO_RE.test(text)) return [];
   const wants = WANT_RE.test(text);
-  if (!wants && (HOW_TO_RE.test(text) || OPINION_RE.test(text))) return [];
+  if (!wants && HOW_TO_RE.test(text)) return [];
 
   const order = parseOrder(message);
   if (order) {
@@ -631,8 +696,11 @@ export function keywordClassify(message: string): Intent[] {
   let chosen = pick(findHits(text), PERSON_CUE_RE.test(text));
   if (!chosen.length) chosen = pick(fuzzyHits(text), false);
   chosen = dropNegated(text, chosen);
+  // "شو احسن دوا للصداع" asks an opinion; "شو احسن مكتب سياحي" asks for
+  // the best one nearby. The difference is a place right after the ranking.
+  if (!wants && OPINION_RE.test(text) && !rankedPlace(text, chosen)) return [];
   if (!chosen.length || !asksForSomething(text, chosen)) return [];
-  chosen = foldIntoDeals(text, dropModifiers(chosen));
+  chosen = foldIntoDeals(text, dropModifiers(markTrips(markConstructs(text, chosen))));
 
   const intents: Intent[] = [];
   const seen = new Set<string>();

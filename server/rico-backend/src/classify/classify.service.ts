@@ -25,6 +25,10 @@ function buildLastResultsBlock(lastResults: LastResultsDto): string {
 referencedPosition هو رقم العنصر **بهذه القائمة بالضبط** (من 1 إلى ${lastResults.items.length})، لا رقم ذكره المستخدم برسالة سابقة لقائمة أقدم — مثلاً إذا القائمة فيها عنصر واحد فرقمه 1 حتى لو اختاره المستخدم قبل بكلمة "الثاني".`;
 }
 
+// A reply that turns the customer away instead of searching. Matched on the
+// model's own text, in both dialects.
+const REFUSAL_RE = /ما\s*(?:بقدر|بقدرش|اقدر|أقدر|نقدر|بنقدر|عندنا\s+خدمة|نوفر|بنوفر)|مش\s+(?:متوفر|متاح|بقدر)|لا\s+(?:أستطيع|استطيع|نستطيع|يمكنني)|غير\s+متوفر/u;
+
 // Exposed for tests only: validateIntent is where a malformed model response
 // gets turned into something safe, and that deserves direct coverage rather
 // than being reachable only through a live Groq call.
@@ -107,6 +111,18 @@ export class ClassifyService {
         // recorded so the model itself gets taught the phrasing.
         const fallback = this.keywordAnswer(dto, mood);
         if (fallback) return fallback;
+      }
+
+      // "آسف، ما بقدر احجز طيران، بس بقدر أساعدك تلاقي مطعم" — the model
+      // understood and still answered with a refusal, so notUnderstood was
+      // never set. When the words ask for something Rico can find (a travel
+      // agency, a driver), find it; and log the miss so the model is taught.
+      if (reply && REFUSAL_RE.test(reply)) {
+        const fallback = this.keywordAnswer(dto, mood);
+        if (fallback) {
+          this.recordGap(dto, reply);
+          return fallback;
+        }
       }
 
       return { offTopic: true, reply, intents: [], mood };

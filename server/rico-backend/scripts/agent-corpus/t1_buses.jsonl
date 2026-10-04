@@ -1,0 +1,90 @@
+{"msg": "وين اقرب موقف باص هنا", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وش اقرب محطة لباصات الرياض لي", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابي محطة سابتكو بالدمام", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وين مكتب سابتكو اقطع تذكره لجده", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابغى احجز تذكرة باص من الرياض للقصيم وين اروح", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "محطة قطار الحرمين بجدة وين مكانها بالضبط", "dialect": "saudi", "expect": "other:train_station:محطة قطار"}
+{"msg": "اقرب محطة قطار الشمال", "dialect": "saudi", "expect": "other:train_station:محطة قطار"}
+{"msg": "ابي اروح محطة سار بالرياض", "dialect": "saudi", "expect": "other:train_station:محطة قطار"}
+{"msg": "وين اقرب محطة مترو", "dialect": "saudi", "expect": "other:metro_station:محطة مترو"}
+{"msg": "ابغى محطة مترو قريبه من العليا", "dialect": "saudi", "expect": "other:metro_station:محطة مترو"}
+{"msg": "ابي اشحن بطاقة درب المترو وين", "dialect": "saudi", "expect": "other:metro_station:محطة مترو"}
+{"msg": "ابغى احد يوصل بناتي المدرسه كل يوم الصبح", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابي باص مدرسه لعيالي الترم الجاي", "dialect": "saudi", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "ابحث عن نقل طالبات للجامعة بحي النرجس", "dialect": "saudi", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "ابي اأجر باص كوستر لرحله البر نهاية الاسبوع", "dialect": "saudi", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "تأجير حافلة ٥٠ راكب لرحلة عمرة", "dialect": "saudi", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "نبي شركة نقل موظفين لمصنعنا بالمدينة الصناعية", "dialect": "saudi", "expect": "other:staff_transport:نقل موظفين"}
+{"msg": "الله يعافيك ابغى سواق ياخذني لمحطة القطار الحين", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "وين اقرب استراحه على طريق الرياض الدمام", "dialect": "saudi", "expect": "other:highway_rest_stop:استراحة طريق"}
+{"msg": "احتاج بنزينه على طريق القصيم", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "ابي مكتب سفريات يحجز لي باص لمكه", "dialect": "saudi", "expect": "place:travel_agency"}
+{"msg": "عبارة لمصر من ضبا وين محطتها", "dialect": "saudi", "expect": "other:ferry_terminal:محطة عبارات"}
+{"msg": "طال عمرك وين أقرب محطة باص للحرم", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابي محطة الباص السريع", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "الباص علق في الطريق نبي سطحه ضروري", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "كم ساعة القطار من الرياض للدمام", "dialect": "saudi", "expect": "chat"}
+{"msg": "متى اخر قطار للحرمين من مكه اليوم", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم سعر تذكرة سابتكو من الرياض لجدة", "dialect": "saudi", "expect": "chat"}
+{"msg": "هل فيه رحلة باص بكرة الفجر للمدينة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "مترو الرياض يشتغل يوم الجمعة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "والله اليوم ركبت الباص وكان زحمة مرة والمكيف خربان 😂", "dialect": "saudi", "expect": "chat"}
+{"msg": "فيه عروض على تذاكر قطار الحرمين؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "ابي خصومات على تأجير الباصات للرحلات", "dialect": "saudi", "expect": "deals"}
+{"msg": "ابي محطة باصات وفندق قريب منها", "dialect": "saudi", "expect": "other:bus_station:محطة باصات + place:hotel"}
+{"msg": "وين محطة القطار وفيه مطعم جنبها؟", "dialect": "saudi", "expect": "other:train_station:محطة قطار + place:restaurant"}
+{"msg": "ابي سواق يوديني محطة سابتكو وبعدين ابي مواقف سيارات قريبة", "dialect": "saudi", "expect": "pro:driver + other:bus_station:محطة باصات + place:parking"}
+{"msg": "ابغى صراف ومحطة مترو قريبه", "dialect": "saudi", "expect": "place:atm + other:metro_station:محطة مترو"}
+{"msg": "دلني على استراحة طريق وبنشر قريب الكفر نسم", "dialect": "saudi", "expect": "other:highway_rest_stop:استراحة طريق + other:tire_shop:بنشر"}
+{"msg": "wain a8rab ma7atat bus", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "where is the nearest Riyadh metro station", "dialect": "saudi", "expect": "other:metro_station:محطة مترو"}
+{"msg": "abi 2ajer coaster l re7la", "dialect": "saudi", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "Haramain train station Madinah location pls", "dialect": "saudi", "expect": "other:train_station:محطة قطار"}
+{"msg": "اطلب لي من البيك وجبتين توصلني قبل ما يطلع الباص", "dialect": "saudi", "expect": "order"}
+{"msg": "وين اقرب موقف باص", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي اروح على مجمع الشمال وين مكانه", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وين كراج العبدلي بالزبط", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي موقف باصات الزرقاء", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي محطة الباص السريع BRT اقرب وحدة", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وين مكتب جت بقطع تذكرة للعقبة", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي احجز باص جت على العقبة يوم الخميس وين بروح", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وين مجمع الجنوب للباصات", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "في باصات لاربد من هون؟ وين الموقف", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي حدا يوصل الولاد عالمدرسة كل يوم", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي باص مدرسة لبنتي بخلدا", "dialect": "jordanian", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "بدنا نقل طالبات لجامعة البلقاء", "dialect": "jordanian", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "بدي استأجر كوستر لرحلة البحر الميت يوم الجمعة", "dialect": "jordanian", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "تأجير باص سياحي لرحلة البترا", "dialect": "jordanian", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "شركة نقل موظفين بالمنطقة الصناعية بسحاب", "dialect": "jordanian", "expect": "other:staff_transport:نقل موظفين"}
+{"msg": "عبارة نويبع من العقبة وين بقطع تذكرة", "dialect": "jordanian", "expect": "other:ferry_terminal:محطة عبارات"}
+{"msg": "وين محطة العبارات بالعقبة", "dialect": "jordanian", "expect": "other:ferry_terminal:محطة عبارات"}
+{"msg": "استراحة على الطريق الصحراوي قريبة", "dialect": "jordanian", "expect": "other:highway_rest_stop:استراحة طريق"}
+{"msg": "بدي كازية على طريق المطار", "dialect": "jordanian", "expect": "place:fuel"}
+{"msg": "بدي سواق ياخدني على كراج العبدلي هلأ", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي مكتب سياحة يحجزلي رحلة بالباص لسوريا", "dialect": "jordanian", "expect": "place:travel_agency"}
+{"msg": "وين محطة القطار بعمان؟ في وحدة بالمحطة صح", "dialect": "jordanian", "expect": "other:train_station:محطة قطار"}
+{"msg": "يعطيك العافية وين موقف باصات الجامعة الأردنية", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "كم ساعة بالباص من عمان للعقبة", "dialect": "jordanian", "expect": "chat"}
+{"msg": "متى آخر باص من اربد لعمان؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "قديش اجرة الباص السريع هلأ", "dialect": "jordanian", "expect": "chat"}
+{"msg": "في باصات لعمان بعد الساعة ١٠ بالليل؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو أحسن جت ولا الباصات العادية على العقبة؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "والله اليوم استنيت الباص ساعة بالشمس وما اجا 😤", "dialect": "jordanian", "expect": "chat"}
+{"msg": "في عروض على تذاكر جت للعقبة؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "بدي كراج العبدلي وصراف قريب منه", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات + place:money_exchange"}
+{"msg": "بدي فندق بالعقبة وكمان محطة عبارات نويبع", "dialect": "jordanian", "expect": "place:hotel + other:ferry_terminal:محطة عبارات"}
+{"msg": "وين مجمع الشمال وفي مطعم فلافل جنبه؟", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات + place:restaurant"}
+{"msg": "بدي استأجر كوستر لرحلة ومصور للرحلة", "dialect": "jordanian", "expect": "other:bus_rental:تأجير حافلات + pro:photographer"}
+{"msg": "بدي حدا يوصلني على مجمع الجنوب وبعدين بدي صيدلية قريبة", "dialect": "jordanian", "expect": "pro:driver + other:bus_station:محطة باصات + place:pharmacy"}
+{"msg": "wen a2rab bus stop", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "bdi ma7atet el BRT", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "JETT office location in Amman", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "bdi coaster la re7let madrase", "dialect": "jordanian", "expect": "other:bus_rental:تأجير حافلات"}
+{"msg": "اطلبلي من فرن أبو علي كعك وشاي لأني رح اركب الباص", "dialect": "jordanian", "expect": "order"}
+{"msg": "سعادتك ابي باص ينقل عمال الشركة كل يوم", "dialect": "saudi", "expect": "other:staff_transport:نقل موظفين"}
+{"msg": "يا باشا وين بلاقي باصات الجامعة", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "القطار تأخر ساعتين اليوم وفاتني الاجتماع، الله يسامحهم", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم بتاخد العبارة من نويبع للعقبة", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو في عروض تأجير باصات للرحلات المدرسية", "dialect": "jordanian", "expect": "deals"}
+{"msg": "بدي اشحن بطاقة الباص السريع وين", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابي محطة قطار وتأجير سيارات قريب منها", "dialect": "saudi", "expect": "other:train_station:محطة قطار + place:car_rental"}

@@ -1,0 +1,110 @@
+{"msg": "وين اقرب موقف ابي اوقف فيه سيارتي، الشارع زحمة", "dialect": "saudi", "expect": "place:parking"}
+{"msg": "وين موقف باص الجامعة الهاشمية بالزرقاء؟ بدي الحق اول باص", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "وين اقرب محطة اعبي فيها، اللمبة ولعت", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "بدي اوصل عالمحطة الشمالية اركب باص لإربد", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابي اقرب محطة لقطار الحرمين عشان اروح المدينة", "dialect": "saudi", "expect": "other:train_station:محطة قطار"}
+{"msg": "بدي محل يشحنلي رصيد على خطي زين", "dialect": "jordanian", "expect": "place:mobile_phone"}
+{"msg": "بدي اشحن كرتونة اغراض لأختي بالرياض", "dialect": "jordanian", "expect": "other:courier:شركة شحن"}
+{"msg": "ابي احد يشحن بطارية السيارة، نامت من البرد", "dialect": "saudi", "expect": "pro:auto_electrician"}
+{"msg": "بدي تذكرتين سينما لفيلم الساعة تسعة", "dialect": "jordanian", "expect": "place:cinema"}
+{"msg": "ابي تذكرة للقاهرة الاسبوع الجاي ذهاب وعودة", "dialect": "saudi", "expect": "place:travel_agency"}
+{"msg": "من وين بقطع تذكرة جت من العقبة لعمّان؟", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "ابي سيارة يومين بس، ايجار يومي", "dialect": "saudi", "expect": "place:car_rental"}
+{"msg": "ناوي اشتري سيارة مستعملة نظيفة، وين المعارض؟", "dialect": "saudi", "expect": "place:car_dealer"}
+{"msg": "سيارتي فيها صوت طقطقة من تحت، بدي حد يفحصها", "dialect": "jordanian", "expect": "place:car_repair"}
+{"msg": "بدي توصيلة لبيت أهلي بخلدا هلأ", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "ابي مطعم مندي يوصل للبيت", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "بدي طيارة ريموت كنترول لابني هدية عيد ميلاده", "dialect": "jordanian", "expect": "place:toy_store"}
+{"msg": "ابي اركب طيارة لأبها بكرة، وين احجز؟", "dialect": "saudi", "expect": "place:travel_agency"}
+{"msg": "بدي استأجر باص كبير لرحلة المدرسة ٤٠ طالب", "dialect": "jordanian", "expect": "other:bus_rental:تأجير باصات"}
+{"msg": "ابي اغير الكفرات الاربع، صارت ملسا", "dialect": "saudi", "expect": "other:tire_shop:بنشر"}
+{"msg": "بدي ونش يسحب السيارة للكراج", "dialect": "jordanian", "expect": "pro:tow_truck"}
+{"msg": "ابي ونيت ينقل لي غسالة وثلاجة لشقتي الجديدة", "dialect": "saudi", "expect": "pro:mover"}
+{"msg": "ابي ابنزن الدباب، وين اقرب محطة؟", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "الدباب حقي ما يشتغل، ابي ميكانيكي دبابات", "dialect": "saudi", "expect": "pro:motorcycle_mechanic"}
+{"msg": "خلصت جرة الغاز وبدي حد يبدلها", "dialect": "jordanian", "expect": "other:gas_cylinders:محل غاز"}
+{"msg": "بدي محطة شحن للسيارة الكهربا قريبة", "dialect": "jordanian", "expect": "other:ev_charging:محطة شحن سيارات كهربائية"}
+{"msg": "بدي اتعلم سواقة قبل ما اطلع الرخصة", "dialect": "jordanian", "expect": "other:driving_school:مدرسة تعليم قيادة"}
+{"msg": "الفحص الدوري منتهي وابي اجدده", "dialect": "saudi", "expect": "other:vehicle_inspection:فحص دوري"}
+{"msg": "ابي غسيل للسيارة وانا بالبيت ما ابي اطلع", "dialect": "saudi", "expect": "pro:mobile_car_wash"}
+{"msg": "بدي ابعت طرد من البريد لابوي بإربد", "dialect": "jordanian", "expect": "place:post_office"}
+{"msg": "بدي تكسي للمطار وصرافة هناك", "dialect": "jordanian", "expect": "pro:driver + place:money_exchange"}
+{"msg": "ابي اغير زيت السيارة واغسلها بنفس المشوار", "dialect": "saudi", "expect": "place:oil_change + place:car_wash"}
+{"msg": "ابي فندق في جدة وسيارة ايجار للاسبوع", "dialect": "saudi", "expect": "place:hotel + place:car_rental"}
+{"msg": "بدي نقل عفش من الزرقاء لعمان وحد ينظف الشقة القديمة", "dialect": "jordanian", "expect": "pro:mover + pro:cleaner"}
+{"msg": "ابي احجز عمرة وفندق قريب من الحرم", "dialect": "saudi", "expect": "other:hajj_umrah_office:مكتب حج وعمرة + place:hotel"}
+{"msg": "الكفر بنشر وبعدين بدي اعبي بنزين", "dialect": "jordanian", "expect": "other:tire_shop:بنشر + place:fuel"}
+{"msg": "ابي تأمين للسيارة وبعدين اجدد الاستمارة", "dialect": "saudi", "expect": "place:insurance + place:government_office"}
+{"msg": "في عروض تذاكر لدبي؟ وكمان ابي فندق", "dialect": "saudi", "expect": "deals + place:hotel"}
+{"msg": "اطلب لي من الصيدلية بنادول، وابي سواق يوديني المستشفى", "dialect": "saudi", "expect": "order + pro:driver"}
+{"msg": "بدي ابعت هدية لإمي بالكويت وبدي اشتري ورد قبل", "dialect": "jordanian", "expect": "other:courier:شركة شحن + place:florist"}
+{"msg": "ابي قطع غيار للسيارة وميكانيكي يركبها عندي بالبيت", "dialect": "saudi", "expect": "place:auto_parts + pro:car_mechanic"}
+{"msg": "بدي فيزا لتركيا وتذكرة طيران", "dialect": "jordanian", "expect": "place:travel_agency"}
+{"msg": "ابي سطحة وبعدها ورشة تصلح القير", "dialect": "saudi", "expect": "pro:tow_truck + place:car_repair"}
+{"msg": "بدي صراف آلي وبعدين موقف تكاسي", "dialect": "jordanian", "expect": "place:atm + other:taxi_stand:موقف تكاسي"}
+{"msg": "على طريق القصيم ابي محطة بنزين ومغسلة ومطعم", "dialect": "saudi", "expect": "place:fuel + place:car_wash + place:restaurant"}
+{"msg": "بدي شنطة سفر كبيرة وحد يوصلني عالمطار الفجر", "dialect": "jordanian", "expect": "other:luggage_shop:محل شنط سفر + pro:driver"}
+{"msg": "ابي كهربائي سيارات وفني مكيف، السيارة كلها خربانة", "dialect": "saudi", "expect": "pro:auto_electrician + pro:car_ac"}
+{"msg": "بدي مكتب سياحة احجز رحلة للعقبة وسيارة اجار هناك", "dialect": "jordanian", "expect": "place:travel_agency + place:car_rental"}
+{"msg": "اطلب لي من كارفور مويه وثلج، وابي محطة اعبي قبل الكشتة", "dialect": "saudi", "expect": "order + place:fuel"}
+{"msg": "ولدي يبي سواق شهري للمدرسة ومدرس خصوصي", "dialect": "saudi", "expect": "pro:driver + pro:tutor"}
+{"msg": "بدي عمال ينقلوا الاثاث وفني يركب المطبخ بالبيت الجديد", "dialect": "jordanian", "expect": "pro:mover + pro:kitchen_installer"}
+{"msg": "ابي اجدد الجواز وبعدين مكتب سفريات", "dialect": "saudi", "expect": "place:government_office + place:travel_agency"}
+{"msg": "بدي ابعت اوراق بالبريد بس بدي اترجمها قبل", "dialect": "jordanian", "expect": "place:post_office + pro:translator"}
+{"msg": "ابي مرافق لابوي الكبير وسواق يوديه مواعيد المستشفى", "dialect": "saudi", "expect": "pro:elderly_care + pro:driver"}
+{"msg": "بدي اغسل السيارة واصلح الطعجة اللي بالباب", "dialect": "jordanian", "expect": "place:car_wash + pro:car_body"}
+{"msg": "ما بدي تكسي، أخوي جاي ياخدني", "dialect": "jordanian", "expect": "chat"}
+{"msg": "امس ركبت مع كابتن والسواق ضيع الطريق ساعة كاملة", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم سعر تذكرة القطار من الرياض للدمام؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "متى اول باص جت بطلع الصبح على العقبة؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بدي اشتغل سواق على سيارتي الخاصة", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ابي وظيفة مندوب توصيل، احد يعرف شركة توظف؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم ساعة بالسيارة من عمان للبترا؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "رحلتي على السعودية من جدة متأخرة ولا لا؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "المطار بعمان حلو بس بعيد كتير عن البلد", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ليش البنزين غلي هالشهر؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "زحمة طريق الملك فهد اليوم ما تنطاق والله", "dialect": "saudi", "expect": "chat"}
+{"msg": "لا خلاص ما ابي سطحة، السيارة اشتغلت الحمدلله", "dialect": "saudi", "expect": "chat"}
+{"msg": "شو رأيك، السيارة الكهربا احسن ولا البنزين؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "مسموح اسوق برخصتي الأردنية بالسعودية؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم الوزن المسموح للشنطة على طيران ناس؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "اخوي اشترى سيارة جديدة امبارح، الله يهنيه", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الباص اليوم كان نظيف ومكيف، اول مرة بصير", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ما في داعي تدورلي فندق، نازل عند خالتي", "dialect": "jordanian", "expect": "chat"}
+{"msg": "انا سواق تكسي وبدي ازيد زباين، شو بتنصحني؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "حلمت اني راكب طيارة وطاحت، وش تفسيره؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "الشحنة وصلت الحمدلله، مشكور", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم مخالفة قطع الإشارة في ساهر؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "التكسي الأصفر بعمان بيشتغل عالعداد ولا بتتفق معه؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "زمان كنا نسافر بالبر للشام بالجمس، ايام حلوة", "dialect": "saudi", "expect": "chat"}
+{"msg": "آخر مرة شحنت مع شركة شحن ضاع الطرد ولا عوضوني", "dialect": "saudi", "expect": "chat"}
+{"msg": "ولدي يبي يصير طيار، وش يدرس؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "لا ما بدي توصيل، رح امر استلم الطلب بنفسي", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم تاخذ الشحنة من الصين للسعودية عادة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "في باصات شغالة يوم الجمعة بعمان؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "السواقة بالليل على طريق المطار بتخوف، كله شاحنات", "dialect": "jordanian", "expect": "chat"}
+{"msg": "طيارتي الساعة ٦ الصبح ومافي حدا يوصلني", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "السيارة وقفت فيني بالطريق الصحراوي ومش راضية تدور", "dialect": "jordanian", "expect": "pro:tow_truck"}
+{"msg": "الشنطة ما سكرت من كثر الأغراض", "dialect": "jordanian", "expect": "other:luggage_shop:محل شنط سفر"}
+{"msg": "لمبة البنزين حمرا وانا بنص الطريق للطايف", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "الكفر نام وما عندي استبنة", "dialect": "saudi", "expect": "pro:tire_service"}
+{"msg": "السيارة ما تدور، بس تطق طق لما ادير المفتاح", "dialect": "saudi", "expect": "pro:auto_electrician"}
+{"msg": "زيت السيارة صار له ١٠ آلاف كيلو ما تغير", "dialect": "saudi", "expect": "place:oil_change"}
+{"msg": "السيارة صارت كلها غبار وطين من الكشتة", "dialect": "saudi", "expect": "place:car_wash"}
+{"msg": "الإقامة تنتهي الشهر الجاي وما جددتها", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "انتقلنا لبيت جديد والعفش لسا كله بالبيت القديم", "dialect": "jordanian", "expect": "pro:mover"}
+{"msg": "وصلت المطار الساعة ٢ بالليل وما معي ولا ريال، كله دولار", "dialect": "saudi", "expect": "place:money_exchange"}
+{"msg": "رحلتي لعمان بكرة ولسا ما رتبت وين بدي انام", "dialect": "jordanian", "expect": "place:hotel"}
+{"msg": "خلصت المي بالخزان والبيت ناشف", "dialect": "jordanian", "expect": "other:water_delivery:توصيل مياه"}
+{"msg": "ابوي ما يقدر يسوق بعد العملية وعنده مراجعات كل اسبوع", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "مكيف السيارة يطلع هوا حار والجو خمسين", "dialect": "saudi", "expect": "pro:car_ac"}
+{"msg": "واحد صدمني من ورا والصدام انبعج", "dialect": "saudi", "expect": "pro:car_body"}
+{"msg": "لفيت الحارة ٣ مرات وما لقيت وين اصف", "dialect": "jordanian", "expect": "place:parking"}
+{"msg": "عيالي مدرستهم بعيدة وانا دوامي من ست الصبح", "dialect": "saudi", "expect": "other:school_transport:نقل مدرسي"}
+{"msg": "فاتني آخر باص لإربد وانا لسا بالعبدلي", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "ناويين نعتمر الشهر الجاي وما رتبنا ولا شي", "dialect": "saudi", "expect": "other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg": "الموتور تبع الموتوسيكل صار يطلع دخان", "dialect": "jordanian", "expect": "pro:motorcycle_mechanic"}
+{"msg": "عرس اختي الخميس وبدنا العروس تطلع بسيارة فخمة", "dialect": "jordanian", "expect": "other:limousine_office:مكتب ليموزين"}
+{"msg": "الفرامل تصفر كل ما ادوس عليها", "dialect": "jordanian", "expect": "place:car_repair"}
+{"msg": "الجيب غرز بالرمل ومو راضي يطلع", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "سحبوا رخصتي وعندي دوام بكرة بعيد", "dialect": "saudi", "expect": "pro:driver"}

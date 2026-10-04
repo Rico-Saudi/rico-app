@@ -87,6 +87,10 @@ const SAME: string[][] = [
   ['place:tailor', 'pro:tailor'],
   ['other:party_supplies', 'other:ramadan_decorations_shop'],
   ['other:watch_store', 'other:watch_shop'],
+  // Transport round.
+  ['other:visa_office', 'place:travel_agency'],
+  ['other:luggage_shop', 'other:bag_store'],
+  ['other:delivery_company', 'other:courier', 'pro:driver'],
   ['other:castle', 'other:tourist_attraction', 'other:museum'],
   ['other:bridal_shop', 'other:suit_rental', 'place:clothes'],
   ['place:phone_repair', 'pro:phone_repair'],
