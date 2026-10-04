@@ -7,6 +7,7 @@ import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 import { validateIntent } from './intent-validation';
 import { distressReplyFor, isDistress } from './constants/distress';
 import { LearningService } from '../learning/learning.service';
+import { keywordClassify } from './fallback/keyword-classifier';
 
 // Strips characters that could break out of the plain-text block we
 // interpolate into the system prompt — item names are third-party-controlled
@@ -53,22 +54,36 @@ export class ClassifyService {
     // describe, and only for voice — see buildVoiceBlock.
     const systemContent = dto.voice ? `${withResults}${buildVoiceBlock(dto.voice)}` : withResults;
 
-    const { content } = await this.llm.complete({
-      purpose: 'classify',
-      messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
-      // Was 0 (fully deterministic) — bumped slightly so the `reply` field
-      // (small talk/off-topic text) doesn't sound robotically identical every
-      // time. category/rank/kind are small enums, so a modest bump is unlikely
-      // to destabilize them, but this is a judgment call worth re-checking if
-      // classification quality drops.
-      temperature: 0.2,
-      maxTokens: 500,
-    });
+    let content: string;
+    try {
+      ({ content } = await this.llm.complete({
+        purpose: 'classify',
+        messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
+        // Was 0 (fully deterministic) — bumped slightly so the `reply` field
+        // (small talk/off-topic text) doesn't sound robotically identical every
+        // time. category/rank/kind are small enums, so a modest bump is unlikely
+        // to destabilize them, but this is a judgment call worth re-checking if
+        // classification quality drops.
+        temperature: 0.2,
+        maxTokens: 500,
+      }));
+    } catch (error) {
+      // Groq's free tier runs out long before the day does (a 429), and
+      // the app's own offline table knows a fraction of what this one does.
+      // Answer from the keyword table when it understands the message; when
+      // it doesn't, fail exactly as before so the app's local replies
+      // (greetings, thanks, "وضّح لي") still take over.
+      const fallback = this.keywordAnswer(dto);
+      if (fallback) return fallback;
+      throw error;
+    }
 
     let parsed: any;
     try {
       parsed = JSON.parse(content);
     } catch {
+      const fallback = this.keywordAnswer(dto);
+      if (fallback) return fallback;
       throw new HttpException({ error: 'parse_error' }, HttpStatus.BAD_GATEWAY);
     }
 
@@ -87,6 +102,11 @@ export class ClassifyService {
       // تحت (intents فاضية). فبدون notUnderstood كان أغلب «ما فهمتك» يضيع.
       if (parsed.notUnderstood === true) {
         this.recordGap(dto, reply);
+        // The model gave up, but the words are ones Rico knows ("قاعة
+        // افراح", "بنشر"): a search beats "ما فهمتك". The gap stays
+        // recorded so the model itself gets taught the phrasing.
+        const fallback = this.keywordAnswer(dto, mood);
+        if (fallback) return fallback;
       }
 
       return { offTopic: true, reply, intents: [], mood };
@@ -117,10 +137,24 @@ export class ClassifyService {
       //
       this.recordGap(dto, reply);
 
+      const fallback = this.keywordAnswer(dto, mood);
+      if (fallback) return fallback;
+
       return { offTopic: true, reply, intents: [], mood };
     }
 
     return { offTopic: false, reply: null, intents, mood };
+  }
+
+  /** جواب القاموس (fallback/keyword-classifier.ts)، أو null إذا ما فهم.
+   *
+   * ما يُستعمل مع رسالة تشير لنتائج سابقة بلا كلمة مكان ("الثاني"،
+   * "أرخص منه"): هذي يحلّها التطبيق من ذاكرته، والقاموس ما بيرجع لها شي
+   * أصلاً. `source` للتشخيص فقط — التطبيق يتجاهل الحقول اللي ما يعرفها. */
+  private keywordAnswer(dto: ClassifyRequestDto, mood: ReturnType<typeof validateMood> = 'neutral') {
+    const intents = keywordClassify(dto.message);
+    if (!intents.length) return null;
+    return { offTopic: false, reply: null, intents, mood, source: 'keywords' as const };
   }
 
   /** يسجّل سؤالاً ما فهمه ريكو، بلا انتظار.

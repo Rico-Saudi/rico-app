@@ -222,6 +222,72 @@ function InstagramLink({ authedFetch, claim }) {
   );
 }
 
+// What a customer needs before driving over or calling: is it open, where
+// is it, which number. Name, category and map location stay with Rico's
+// review, since they decide which searches the shop shows up in.
+const DETAIL_FIELDS = [
+  { key: 'phone', label: 'رقم التواصل', placeholder: '05xxxxxxxx', dir: 'ltr', max: 20 },
+  { key: 'openingHours', label: 'أوقات العمل', placeholder: 'مثال: يومياً ٨ص – ١٢م، الجمعة من ٤م', max: 200 },
+  { key: 'district', label: 'الحي', placeholder: 'مثال: العليا', max: 80 },
+  { key: 'address', label: 'العنوان', placeholder: 'الشارع، أقرب معلم', max: 200 },
+];
+
+function StoreDetails({ authedFetch, claim, onSaved }) {
+  const initial = () => Object.fromEntries(DETAIL_FIELDS.map((f) => [f.key, claim[f.key] || '']));
+  const [form, setForm] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  const dirty = DETAIL_FIELDS.some((f) => (claim[f.key] || '') !== form[f.key]);
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    const res = await authedFetch(`/vendor/places/${claim.placeId}`, { method: 'PATCH', body: JSON.stringify(form) });
+    setBusy(false);
+    if (!res) return;
+    if (!res.ok) {
+      setStatus({ type: 'error', message: 'تعذر الحفظ.' });
+      return;
+    }
+    setStatus({ type: 'success', message: 'انحفظ.' });
+    onSaved();
+  }
+
+  return (
+    <form onSubmit={save} className="space-y-3">
+      <p className="text-sm font-semibold">{claim.placeName}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {DETAIL_FIELDS.map((f) => (
+          <label key={f.key} className="space-y-1">
+            <span className="text-xs font-bold text-on-surface-variant">{f.label}</span>
+            <input
+              type={f.key === 'phone' ? 'tel' : 'text'}
+              dir={f.dir}
+              maxLength={f.max}
+              value={form[f.key]}
+              placeholder={f.placeholder}
+              onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+              className="w-full bg-surface-container border-none rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={busy || !dirty}
+          className="text-sm font-bold px-4 py-2 rounded-xl bg-primary text-on-primary disabled:opacity-50"
+        >
+          حفظ
+        </button>
+        {status && <span className={`text-xs ${status.type === 'error' ? 'text-error' : 'text-primary'}`}>{status.message}</span>}
+      </div>
+    </form>
+  );
+}
+
 export default function SettingsTab({ authedFetch, me, onClaimed }) {
   // صورة المحل تفيد فقط النشاط المفعّل — غير المفعّل ما يظهر في نتائج البحث.
   const activeClaims = me.claims.filter((c) => c.status === 'active');
@@ -265,6 +331,18 @@ export default function SettingsTab({ authedFetch, me, onClaimed }) {
         <h1 className="text-3xl font-extrabold">الإعدادات</h1>
         <p className="text-on-surface-variant mt-1">{me.email}</p>
       </div>
+
+      {activeClaims.length > 0 && (
+        <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm space-y-5">
+          <div>
+            <h2 className="font-bold">بيانات المحل</h2>
+            <p className="text-sm text-on-surface-variant mt-1">تظهر للعميل في ريكو مع محلك وطلبه.</p>
+          </div>
+          {activeClaims.map((c) => (
+            <StoreDetails key={c.placeId} authedFetch={authedFetch} claim={c} onSaved={onClaimed} />
+          ))}
+        </div>
+      )}
 
       {activeClaims.length > 0 && (
         <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm space-y-5">

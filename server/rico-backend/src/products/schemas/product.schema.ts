@@ -17,6 +17,26 @@ export class Product {
   @Prop({ type: Number, required: true })
   price: number;
 
+  // What one `price` buys — "علبة", "كيلو", "جلسة". Free text rather than an
+  // enum: a butcher sells by the kilo, a pharmacy by the strip, a barber by
+  // the session, and the dashboard only suggests units per vertical.
+  @Prop({ type: String, default: null })
+  unit: string | null;
+
+  @Prop({ type: String, default: null })
+  brand: string | null;
+
+  // Barcode or the shop's own code. What a bulk import matches on, so a
+  // supermarket re-uploading its price list updates rows instead of
+  // duplicating them.
+  @Prop({ type: String, default: null })
+  sku: string | null;
+
+  // Out of stock, not deleted: the product keeps its photo, discounts and
+  // history, but customers stop being offered it until it's back.
+  @Prop({ type: Boolean, default: true })
+  inStock: boolean;
+
   @Prop({ type: Object, default: {} }) // fully dynamic — e.g. { spiceLevel, size, color, ... }
   attributes: Record<string, unknown>;
 
@@ -41,3 +61,4 @@ export class Product {
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
 ProductSchema.index({ name: 'text', keywords: 'text' });
+ProductSchema.index({ businessId: 1, sku: 1 });

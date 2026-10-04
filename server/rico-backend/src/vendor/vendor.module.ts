@@ -9,16 +9,25 @@ import { DealsModule } from '../deals/deals.module';
 import { ProductsModule } from '../products/products.module';
 import { DiscountsModule } from '../discounts/discounts.module';
 import { RequestsModule } from '../requests/requests.module';
+import { PricingModule } from '../pricing/pricing.module';
+import { VendorImpression, VendorImpressionSchema } from '../public/schemas/vendor-impression.schema';
+import { CatalogGap, CatalogGapSchema } from '../public/schemas/catalog-gap.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: BusinessClaim.name, schema: BusinessClaimSchema }]),
+    MongooseModule.forFeature([
+      { name: BusinessClaim.name, schema: BusinessClaimSchema },
+      // Read-only here, for the vendor's own stats. PublicModule writes them.
+      { name: VendorImpression.name, schema: VendorImpressionSchema },
+      { name: CatalogGap.name, schema: CatalogGapSchema },
+    ]),
     AccountsModule,
     BusinessesModule,
     DealsModule,
     ProductsModule,
     DiscountsModule,
     RequestsModule,
+    PricingModule,
   ],
   controllers: [VendorController],
   providers: [VendorService],

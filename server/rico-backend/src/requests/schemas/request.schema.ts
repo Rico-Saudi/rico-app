@@ -6,6 +6,22 @@ export type CustomerRequestDocument = HydratedDocument<CustomerRequest>;
 export const REQUEST_ITEM_TYPES = ['product', 'deal'] as const;
 export type RequestItemType = (typeof REQUEST_ITEM_TYPES)[number];
 
+// Where the shop is with an order. Rico neither delivers nor charges, so these
+// are the shop's own steps, the same for a pharmacy as for a bakery: it saw
+// the order, it's ready for pickup or on its way, and it's done or called off.
+export const REQUEST_STAGES = ['new', 'confirmed', 'ready', 'completed', 'cancelled'] as const;
+export type RequestStage = (typeof REQUEST_STAGES)[number];
+
+// Forward only: an order the customer already collected can't go back to
+// "being prepared", and a cancelled one is reopened by ordering again.
+export const NEXT_STAGES: Record<RequestStage, readonly RequestStage[]> = {
+  new: ['confirmed', 'ready', 'completed', 'cancelled'],
+  confirmed: ['ready', 'completed', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
 // One line of a request — a product or deal the customer put in their basket,
 // with how many they want. Every field here is derived server-side from the
 // real Product/Deal at creation time (see RequestsService.create), never
@@ -87,8 +103,20 @@ export class CustomerRequest {
   @Prop({ type: String, default: null })
   itemDetail?: string | null;
 
+  // Kept as the two-value field app builds already read: 'handled' the moment
+  // the shop moves the order past 'new'. `stage` carries the detail.
   @Prop({ type: String, required: true, default: 'new', enum: ['new', 'handled'], index: true })
   status: 'new' | 'handled';
+
+  @Prop({ type: String, required: true, default: 'new', enum: REQUEST_STAGES })
+  stage: RequestStage;
+
+  @Prop({ type: Date, default: null })
+  stageUpdatedAt: Date | null;
+
+  // What the shop tells the customer — why it cancelled, or "جاهز بعد ساعة".
+  @Prop({ type: String, default: null, maxlength: 300 })
+  vendorNote: string | null;
 }
 
 export const CustomerRequestSchema = SchemaFactory.createForClass(CustomerRequest);

@@ -1,0 +1,111 @@
+{"msg": "مندي", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "ابغى كبسه لحم", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "ميت جوع وش اقرب مطعم مفتوح الحين", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "وين احسن مطعم مشاوي قريب مني", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "برقر سماش", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "ابي بيتزا ارخص شي", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "مطعم سوشي الاعلى تقييم", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "ودي باكل هندي برياني", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "فول وتميس الحين", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "وين القى فطور شعبي الصبح بدري", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "مطعم مأكولات بحريه قريب", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "جعااان مره ابي اي شي ينوكل الساعه ٣ الفجر", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "شاورما مفتوحه الحين", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "مطعم صيني", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "كوفي مختص قريب", "dialect": "saudi", "expect": "place:cafe"}
+{"msg": "ابغى قهوه سبيشلتي هادي اذاكر فيه", "dialect": "saudi", "expect": "place:cafe"}
+{"msg": "محل عصيرات طازجه", "dialect": "saudi", "expect": "other:juice_bar:محل عصير"}
+{"msg": "ابي ايسكريم", "dialect": "saudi", "expect": "other:ice_cream:محل آيسكريم"}
+{"msg": "وين محل تمور زين ابي سكري", "dialect": "saudi", "expect": "other:dates_shop:محل تمور"}
+{"msg": "محمصه مكسرات قريبه", "dialect": "saudi", "expect": "other:roastery:محمصة"}
+{"msg": "محمصة قهوه ابي بن هرري", "dialect": "saudi", "expect": "other:coffee_roastery:محمصة قهوة"}
+{"msg": "مخبز تميس", "dialect": "saudi", "expect": "place:bakery"}
+{"msg": "ملحمه لحم حاشي", "dialect": "saudi", "expect": "place:butcher"}
+{"msg": "سوق السمك وين", "dialect": "saudi", "expect": "other:fish_market:سوق السمك"}
+{"msg": "ابي سوق خضار", "dialect": "saudi", "expect": "other:vegetable_market:سوق خضار"}
+{"msg": "اقرب جامع فيه صلاة جمعه", "dialect": "saudi", "expect": "place:mosque"}
+{"msg": "مصلى قريب انا بالطريق", "dialect": "saudi", "expect": "other:prayer_room:مصلى"}
+{"msg": "حديقه للعوايل", "dialect": "saudi", "expect": "place:park"}
+{"msg": "الكورنيش وين اقرب جلسه", "dialect": "saudi", "expect": "other:corniche:كورنيش"}
+{"msg": "ابغى استراحه للايجار ليله الخميس", "dialect": "saudi", "expect": "other:istiraha:استراحة"}
+{"msg": "شاليه فيه مسبح خاص ارخص سعر", "dialect": "saudi", "expect": "other:chalet:شاليه"}
+{"msg": "ملاهي للاطفال", "dialect": "saudi", "expect": "place:amusement"}
+{"msg": "سينما قريبه", "dialect": "saudi", "expect": "place:cinema"}
+{"msg": "بولينق", "dialect": "saudi", "expect": "other:bowling:بولينغ"}
+{"msg": "وين القى كارتنق", "dialect": "saudi", "expect": "other:karting:كارتينغ"}
+{"msg": "غرفه هروب escape room", "dialect": "saudi", "expect": "other:escape_room:غرفة هروب"}
+{"msg": "فندق قريب من الحرم", "dialect": "saudi", "expect": "place:hotel"}
+{"msg": "شقق مفروشه يومي", "dialect": "saudi", "expect": "other:furnished_apartments:شقق مفروشة"}
+{"msg": "مستلزمات كشته وتخييم", "dialect": "saudi", "expect": "other:camping_store:مستلزمات تخييم"}
+{"msg": "مكتب عمره", "dialect": "saudi", "expect": "other:hajj_umrah_office:مكتب حج وعمرة"}
+{"msg": "كوفي فيه معسل", "dialect": "saudi", "expect": "other:shisha_cafe:مقهى معسل"}
+{"msg": "ابي طباخ يطبخ لنا ذبيحه للعزيمه", "dialect": "saudi", "expect": "pro:chef"}
+{"msg": "جزار يجي البيت يذبح الخروف", "dialect": "saudi", "expect": "pro:butcher"}
+{"msg": "ابغى معلم قران للعيال", "dialect": "saudi", "expect": "pro:quran_teacher"}
+{"msg": "عروض المطاعم اليوم", "dialect": "saudi", "expect": "deals"}
+{"msg": "فيه خصومات على البرقر؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "وش رايك بالكبسه ولا المندي احسن", "dialect": "saudi", "expect": "chat"}
+{"msg": "منسف", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "بدي مطعم منسف بلدي قريب", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "جوعان موت وين في اشي مفتوح هلأ", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "بدي فلافل وحمص", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "مطعم فول وفلافل عالفطور", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "شاورما عربي", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "بدي مطعم لبناني منيح", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "مطعم ايطالي رومانسي", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "مشاوي مشكل ارخص اشي", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "مطعم سمك بالعقبة", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "بيتزا مفتوح بعد نص الليل", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "بدي اكل اي اشي الساعة ٢ بالليل", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "كنافه نابلسيه", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "وين احسن كنافة بعمان", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "بدي بوظة", "dialect": "jordanian", "expect": "other:ice_cream:محل بوظة"}
+{"msg": "محل عصير طبيعي قريب", "dialect": "jordanian", "expect": "other:juice_bar:محل عصير"}
+{"msg": "محمص مكسرات وقهوة", "dialect": "jordanian", "expect": "other:roastery:محمصة"}
+{"msg": "مخبز كعك وفطاير", "dialect": "jordanian", "expect": "place:bakery"}
+{"msg": "فرن معجنات زعتر وجبنة", "dialect": "jordanian", "expect": "place:bakery"}
+{"msg": "ملحمة بلدي", "dialect": "jordanian", "expect": "place:butcher"}
+{"msg": "حسبة خضرة", "dialect": "jordanian", "expect": "other:vegetable_market:سوق خضار"}
+{"msg": "جامع قريب للجمعة", "dialect": "jordanian", "expect": "place:mosque"}
+{"msg": "منتزه للعيلة", "dialect": "jordanian", "expect": "place:park"}
+{"msg": "بدي مزرعة بمسبح للويكند", "dialect": "jordanian", "expect": "other:farm:مزرعة"}
+{"msg": "شاليه بالبحر الميت", "dialect": "jordanian", "expect": "other:chalet:شاليه"}
+{"msg": "مسبح مختلط ولا للعائلات", "dialect": "jordanian", "expect": "other:swimming_pool:مسبح"}
+{"msg": "العاب اطفال مراجيح وزحليقة", "dialect": "jordanian", "expect": "other:playground:ألعاب أطفال"}
+{"msg": "بلياردو قريب", "dialect": "jordanian", "expect": "other:billiards:بلياردو"}
+{"msg": "سينما بالمول", "dialect": "jordanian", "expect": "place:cinema"}
+{"msg": "اماكن سياحيه بالسلط", "dialect": "jordanian", "expect": "other:tourist_attraction:أماكن سياحية"}
+{"msg": "متحف بعمان", "dialect": "jordanian", "expect": "other:museum:متحف"}
+{"msg": "قلعة عجلون كيف بوصللها", "dialect": "jordanian", "expect": "other:castle:قلعة"}
+{"msg": "فندق رخيص بالبترا", "dialect": "jordanian", "expect": "place:hotel"}
+{"msg": "شقة مفروشة بالشهر بعمان", "dialect": "jordanian", "expect": "other:furnished_apartments:شقق مفروشة"}
+{"msg": "مكتب سياحة وسفر", "dialect": "jordanian", "expect": "place:travel_agency"}
+{"msg": "قهوة ارجيلة", "dialect": "jordanian", "expect": "other:shisha_cafe:مقهى أرجيلة"}
+{"msg": "بدي باريستا لحفلة", "dialect": "jordanian", "expect": "pro:barista"}
+{"msg": "بدي حدا يخبزلي معجنات بالبيت للعزومة", "dialect": "jordanian", "expect": "pro:home_baker"}
+{"msg": "بدي خيم وحدا يركبهم للعرس", "dialect": "jordanian", "expect": "pro:tent_installer"}
+{"msg": "في عروض عالشاورما؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "شو احلى اكلة اردنية برأيك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "محمصة", "dialect": "jordanian", "expect": "other:roastery:محمصة"}
+{"msg": "ابغى مطعم مندي وبعدين كوفي قريب", "dialect": "saudi", "expect": "place:restaurant + place:cafe"}
+{"msg": "ابي حديقه للعيال وجنبها مطعم", "dialect": "saudi", "expect": "place:park + place:restaurant"}
+{"msg": "وين اقرب جامع ومخبز", "dialect": "saudi", "expect": "place:mosque + place:bakery"}
+{"msg": "ابغى شاليه وطباخ يطبخ لنا", "dialect": "saudi", "expect": "other:chalet:شاليه + pro:chef"}
+{"msg": "سينما ومطعم برقر وعروض اذا فيه", "dialect": "saudi", "expect": "place:cinema + place:restaurant + deals"}
+{"msg": "بدي فندق بالعقبة ومطعم سمك قريب منه", "dialect": "jordanian", "expect": "place:hotel + place:restaurant"}
+{"msg": "بدي ملحمة وحسبة خضرة", "dialect": "jordanian", "expect": "place:butcher + other:vegetable_market:سوق خضار"}
+{"msg": "كنافة وبعدها قهوة", "dialect": "jordanian", "expect": "place:sweets + place:cafe"}
+{"msg": "بدي مزرعة للويكند ومصور للحفلة", "dialect": "jordanian", "expect": "other:farm:مزرعة + pro:photographer"}
+{"msg": "ملاهي للولاد ومحل بوظة", "dialect": "jordanian", "expect": "place:amusement + other:ice_cream:محل بوظة"}
+{"msg": "اطلب لي من البيك ٢ مسحب", "dialect": "saudi", "expect": "order"}
+{"msg": "ابغى اطلب ٣ وجبات مندي من مطعم الرومانسيه", "dialect": "saudi", "expect": "order"}
+{"msg": "وصلني من اي مطعم وجبتين شاورما", "dialect": "saudi", "expect": "order"}
+{"msg": "اطلب لي بيتزا كبيره بيبروني من اقرب محل", "dialect": "saudi", "expect": "order"}
+{"msg": "ابي اطلب كيلو تمر سكري من محل التمور اللي طلع اول", "dialect": "saudi", "expect": "order"}
+{"msg": "اطلب لي من الكوفي اللي عرضته لاتيه وسبانش لاتيه", "dialect": "saudi", "expect": "order"}
+{"msg": "ابغى اطلب ٢ كيلو لحم حاشي من الملحمه", "dialect": "saudi", "expect": "order"}
+{"msg": "بدي من مطعم هاشم فول وحمص", "dialect": "jordanian", "expect": "order"}
+{"msg": "اطلبلي منسف لخمس اشخاص", "dialect": "jordanian", "expect": "order"}
+{"msg": "بدي اطلب كيلو كنافة من حبيبة", "dialect": "jordanian", "expect": "order"}
+{"msg": "جيبلي ٤ سندويش فلافل وكولا من اقرب مطعم", "dialect": "jordanian", "expect": "order"}
+{"msg": "بدي اطلب من الثاني بالقائمة نص كيلو مكسرات مشكل", "dialect": "jordanian", "expect": "order"}

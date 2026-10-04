@@ -28,9 +28,12 @@ class OrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final handled = status == OrderStatus.handled;
-    final tone = handled ? RicoColors.success : RicoColors.goldInk;
-    final background = handled ? RicoColors.primaryTint : RicoColors.goldTint;
+    final (tone, background, icon, label) = switch (status) {
+      OrderStatus.pending => (RicoColors.goldInk, RicoColors.goldTint, Icons.schedule_rounded, 'بانتظار المحل'),
+      OrderStatus.handled => (RicoColors.success, RicoColors.primaryTint, Icons.check_circle_rounded, 'تواصل معك'),
+      OrderStatus.ready => (RicoColors.success, RicoColors.primaryTint, Icons.shopping_bag_rounded, 'جاهز'),
+      OrderStatus.cancelled => (RicoColors.danger, RicoColors.dangerTint, Icons.cancel_rounded, 'ملغي'),
+    };
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: large ? 11 : 9, vertical: large ? 6 : 4),
@@ -38,10 +41,10 @@ class OrderStatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(handled ? Icons.check_circle_rounded : Icons.schedule_rounded, size: large ? 14 : 12, color: tone),
+          Icon(icon, size: large ? 14 : 12, color: tone),
           const SizedBox(width: 5),
           Text(
-            handled ? 'تواصل معك' : 'بانتظار المحل',
+            label,
             style: (large ? RicoText.caption : RicoText.overline).copyWith(color: tone, fontWeight: FontWeight.w700),
           ),
         ],
