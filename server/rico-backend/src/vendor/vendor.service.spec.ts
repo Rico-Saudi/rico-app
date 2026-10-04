@@ -20,6 +20,9 @@ import { ProductsService } from '../products/products.service';
 import { DiscountsService } from '../discounts/discounts.service';
 import { RequestsService } from '../requests/requests.service';
 import { PriceCalcService } from '../pricing/price-calc.service';
+import { OrderNotifierService } from '../requests/order-notifier.service';
+import { PublicService } from '../public/public.service';
+import { SearchGap, SearchGapSchema } from '../public/schemas/search-gap.schema';
 
 // What these features promise is about data across collections — a bulk
 // import matching existing rows, a discount surviving a price edit, stats
@@ -29,6 +32,8 @@ describe('VendorService — dashboard for every kind of shop', () => {
   let mongod: MongoMemoryServer;
   let service: VendorService;
   let requestsService: RequestsService;
+  let sentEmails: any[];
+  let publicService: PublicService;
   let discountsService: DiscountsService;
   let productModel: Model<ProductDocument>;
   let businessModel: Model<BusinessDocument>;
@@ -63,7 +68,25 @@ describe('VendorService — dashboard for every kind of shop', () => {
     const productsService = new ProductsService(productModel, productImageModel as any);
     const priceCalcService = new PriceCalcService(productModel, discountModel, productsService);
     discountsService = new DiscountsService(discountModel, priceCalcService);
-    requestsService = new RequestsService(requestModel, businessModel, productModel, dealModel);
+    // A mailer that records instead of sending — and fails for one address,
+    // to prove one bad inbox doesn't stop the rest.
+    const mailer = {
+      sendNewOrderEmail: async (args: any) => {
+        if (args.to === 'broken@example.com') throw new Error('bounce');
+        sentEmails.push(args);
+      },
+    };
+    const notifier = new OrderNotifierService(claimModel, accountModel, mailer as any);
+    requestsService = new RequestsService(requestModel, businessModel, productModel, dealModel, notifier);
+    publicService = new PublicService(
+      businessModel,
+      productModel,
+      impressionModel,
+      model(SearchGap.name, SearchGapSchema),
+      gapModel,
+      requestModel,
+      { findActiveForBusiness: async () => [] } as any,
+    );
     service = new VendorService(
       accountModel,
       claimModel,
@@ -87,6 +110,7 @@ describe('VendorService — dashboard for every kind of shop', () => {
   });
 
   beforeEach(async () => {
+    sentEmails = [];
     await Promise.all(Object.values(mongoose.connection.collections).map((c) => c.deleteMany({})));
     const account = await accountModel.create({ email: 'shop@example.com', passwordHash: 'x', app: 'vendor' });
     accountId = String(account._id);
@@ -367,6 +391,117 @@ describe('VendorService — dashboard for every kind of shop', () => {
 
     it("refuses stats for a shop the account doesn't run", async () => {
       await expect(service.getStats(accountId, { businessId: otherShopId })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('pausing orders', () => {
+    const basket = async () => {
+      const product: any = await service.createOwnProduct(accountId, { businessId: pharmacyId, name: 'بنادول', price: 12 });
+      return { businessId: pharmacyId, customerName: 'سارة', customerPhone: '0551112222', items: [{ itemType: 'product', itemId: String(product._id) }] } as any;
+    };
+
+    it('refuses new orders while paused, with when it reopens and why', async () => {
+      const dto = await basket();
+      const paused = await service.setOwnOrdersPause(accountId, pharmacyId, { paused: true, minutes: 60, note: 'جرد' });
+      expect(paused.ordersPause).toMatchObject({ note: 'جرد' });
+      expect(paused.ordersPause!.until!.getTime()).toBeGreaterThan(Date.now() + 59 * 60_000);
+
+      await expect(requestsService.create(dto)).rejects.toMatchObject({
+        response: { error: 'orders_paused', note: 'جرد' },
+      });
+      expect(await requestModel.countDocuments()).toBe(0);
+    });
+
+    it('takes orders again once the vendor reopens', async () => {
+      const dto = await basket();
+      await service.setOwnOrdersPause(accountId, pharmacyId, { paused: true });
+      const reopened = await service.setOwnOrdersPause(accountId, pharmacyId, { paused: false });
+      expect(reopened.ordersPause).toBeNull();
+      await expect(requestsService.create(dto)).resolves.toMatchObject({ status: 'new' });
+    });
+
+    it('reopens by itself when the pause runs out', async () => {
+      const dto = await basket();
+      await businessModel.updateOne({ _id: pharmacyId }, { ordersPaused: true, ordersPausedUntil: new Date(Date.now() - 1000) });
+      await expect(requestsService.create(dto)).resolves.toMatchObject({ status: 'new' });
+      const me = await service.me(accountId);
+      expect(me.claims[0].ordersPause).toBeNull();
+    });
+
+    it('shows the pause on the catalog and stops offering the shop in the chat', async () => {
+      await service.createOwnProduct(accountId, { businessId: pharmacyId, name: 'بنادول', price: 12 });
+      await service.setOwnOrdersPause(accountId, pharmacyId, { paused: true, note: 'مسكّرين' });
+
+      const catalog = await publicService.getCatalog(pharmacyId);
+      expect(catalog.ordersPause).toMatchObject({ until: null, note: 'مسكّرين' });
+
+      const options = await publicService.resolveOrder({
+        items: [{ name: 'بنادول' }],
+        categorySlug: 'pharmacy',
+        lat: 24.7136,
+        lng: 46.6753,
+      } as any);
+      expect(options.shopOptions.map((o: any) => o.id)).not.toContain(pharmacyId);
+    });
+
+    it("can't pause a shop the account doesn't run", async () => {
+      await expect(service.setOwnOrdersPause(accountId, otherShopId, { paused: true })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('new-order emails', () => {
+    const placeOrder = async () => {
+      const product: any = await service.createOwnProduct(accountId, { businessId: pharmacyId, name: 'بنادول', price: 12 });
+      const result = await requestsService.create(
+        {
+          businessId: pharmacyId,
+          customerName: 'سارة',
+          customerPhone: '0551112222',
+          items: [{ itemType: 'product', itemId: String(product._id), quantity: 2 }],
+        } as any,
+        undefined,
+        'https://app.rico-go.com',
+      );
+      await requestsService.notifyWrite;
+      return result;
+    };
+
+    it('emails everyone running the shop, with the order and a link to it', async () => {
+      const second = await accountModel.create({ email: 'manager@example.com', passwordHash: 'x', app: 'vendor' });
+      await claimModel.create({ accountId: second._id, businessId: pharmacyId, status: 'active' });
+
+      const result = await placeOrder();
+
+      expect(sentEmails.map((e) => e.to).sort()).toEqual(['manager@example.com', 'shop@example.com']);
+      expect(sentEmails[0]).toMatchObject({
+        shopName: 'صيدلية الدواء',
+        reference: String(result.requestId).slice(-6).toUpperCase(),
+        customerPhone: '0551112222',
+        items: [{ label: 'بنادول', quantity: 2 }],
+        total: 24,
+        dashboardUrl: 'https://app.rico-go.com/vendor/dashboard?tab=requests',
+      });
+    });
+
+    it('skips vendors who turned order emails off, and claims that are not active', async () => {
+      await service.updatePreferences(accountId, { orderEmails: false });
+      const pending = await accountModel.create({ email: 'pending@example.com', passwordHash: 'x', app: 'vendor' });
+      await claimModel.create({ accountId: pending._id, businessId: pharmacyId, status: 'pending_review' });
+
+      await placeOrder();
+      expect(sentEmails).toEqual([]);
+      expect((await service.me(accountId)).preferences).toEqual({ orderEmails: false });
+    });
+
+    it('keeps the order, and the other emails, when one email fails', async () => {
+      const broken = await accountModel.create({ email: 'broken@example.com', passwordHash: 'x', app: 'vendor' });
+      await claimModel.create({ accountId: broken._id, businessId: pharmacyId, status: 'active' });
+
+      const result = await placeOrder();
+      expect(result.status).toBe('new');
+      expect(sentEmails.map((e) => e.to)).toEqual(['shop@example.com']);
     });
   });
 });

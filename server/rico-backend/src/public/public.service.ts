@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { OrdersPause, ordersPauseState } from '../businesses/orders-pause.util';
 import { Business, BusinessDocument } from '../businesses/schemas/business.schema';
 import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { VendorImpression, VendorImpressionDocument } from './schemas/vendor-impression.schema';
@@ -37,7 +38,7 @@ const NAME_MATCH_THRESHOLD = 0.7;
  * exactly what the client then fails to read.
  */
 export interface ResolvedOrderResult {
-  business: { id: string; name: string } | null;
+  business: { id: string; name: string; ordersPause?: OrdersPause | null } | null;
   catalog: any | null;
   matched: any[];
   unmatched: string[];
@@ -79,6 +80,9 @@ export class PublicService {
     return {
       businessId: String(business._id),
       businessName: business.nameAr || business.name,
+      // Null when the shop is taking orders. When it isn't, the app can say
+      // so before the customer builds a basket that POST /requests refuses.
+      ordersPause: ordersPauseState(business),
       products: products.map((p) => ({
         id: p._id,
         name: p.name,
@@ -258,7 +262,7 @@ export class PublicService {
     }
 
     return {
-      business: { id: businessId, name: catalog.businessName },
+      business: { id: businessId, name: catalog.businessName, ordersPause: catalog.ordersPause },
       catalog,
       matched,
       unmatched,
@@ -308,7 +312,12 @@ export class PublicService {
       .limit(PublicService.ORDER_SHOP_CANDIDATES)
       .lean();
 
-    if (candidates.length === 0) return empty;
+    // A paused shop can't take the order, so it isn't offered as somewhere to
+    // send it. Filtered here, not in the query: $near can't share a filter
+    // with the $or a pause check needs.
+    const now = new Date();
+    const open = candidates.filter((b) => !ordersPauseState(b, now));
+    if (open.length === 0) return empty;
 
     // A generic line ("وجبة") is served by any shop, so it tells us nothing
     // about which — it is left out of the comparison and picked once the
@@ -316,7 +325,7 @@ export class PublicService {
     const named = dto.items.filter((i) => !readGenericItem(i.name).isGeneric);
 
     const options: any[] = [];
-    for (const doc of candidates) {
+    for (const doc of open) {
       const id = String(doc._id);
       const { has, missing } = named.length === 0 ? { has: [], missing: [] } : await this.splitByAvailability(id, named);
       options.push({

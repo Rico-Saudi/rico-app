@@ -85,6 +85,20 @@ export class Business {
   @Prop({ type: Date, default: null })
   photoRefUpdatedAt: Date | null;
 
+  // A shop that can't take orders right now — closed early, out of staff,
+  // swamped. It still shows up in search; it just can't be ordered from until
+  // the vendor reopens or ordersPausedUntil passes. Read through
+  // ordersPauseState(), never these fields directly, so an expired pause reads
+  // as open without a job having to clear it.
+  @Prop({ type: Boolean, default: false })
+  ordersPaused: boolean;
+
+  @Prop({ type: Date, default: null })
+  ordersPausedUntil: Date | null;
+
+  @Prop({ type: String, default: null })
+  ordersPausedNote: string | null;
+
   @Prop({ type: [SourceLinkSchema], default: [] })
   sourceLinks: SourceLink[];
 

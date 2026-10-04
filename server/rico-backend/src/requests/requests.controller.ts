@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { CustomerAuthGuard, OptionalCustomerAuthGuard } from '../customers/customer-auth.guard';
@@ -16,8 +17,8 @@ export class RequestsController {
   // keep working; see OptionalCustomerAuthGuard.
   @UseGuards(OptionalCustomerAuthGuard)
   @Post()
-  create(@Body() dto: CreateRequestDto, @CurrentCustomer() customer?: CustomerDocument) {
-    return this.requestsService.create(dto, customer);
+  create(@Req() req: Request, @Body() dto: CreateRequestDto, @CurrentCustomer() customer?: CustomerDocument) {
+    return this.requestsService.create(dto, customer, `${req.protocol}://${req.get('host')}`);
   }
 
   // The customer's own history. Full auth here, not the optional guard: there

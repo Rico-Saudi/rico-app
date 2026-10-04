@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { LayoutDashboard, Package, Tag, Percent, Inbox, Settings as SettingsIcon, LogOut, Store } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { createAuthedFetch } from './vendor/api';
@@ -9,6 +9,9 @@ import DiscountsTab from './vendor/DiscountsTab';
 import RequestsTab from './vendor/RequestsTab';
 import SettingsTab from './vendor/SettingsTab';
 import { profileFor } from './vendor/verticals';
+import OrdersPauseControl from './vendor/OrdersPauseControl';
+
+const BASE_TITLE = 'لوحة النشاط — ريكو';
 
 const TABS = [
   { id: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
@@ -71,12 +74,49 @@ export default function VendorDashboard() {
       setWaiting(data.requests?.waiting ?? 0);
     }
     poll();
-    const t = setInterval(poll, 120_000);
+    const t = setInterval(poll, 60_000);
     return () => {
       stopped = true;
       clearInterval(t);
     };
   }, [me, authedFetch, tab]);
+
+  // A dashboard left open in a background tab still has to get noticed: the
+  // count goes in the tab title, and a rise in it raises a browser
+  // notification if the vendor allowed them (Settings → تنبيهات المتصفح).
+  const lastWaiting = useRef(null);
+  useEffect(() => {
+    document.title = waiting > 0 ? `(${waiting}) ${BASE_TITLE}` : BASE_TITLE;
+    const previous = lastWaiting.current;
+    lastWaiting.current = waiting;
+    if (previous === null || waiting <= previous) return;
+    try {
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        const n = new Notification('طلب جديد في ريكو', {
+          body: waiting === 1 ? 'عندك طلب ينتظر ردك.' : `عندك ${waiting} طلبات تنتظر ردك.`,
+          tag: 'rico-new-order',
+        });
+        n.onclick = () => {
+          window.focus();
+          changeTab('requests');
+          n.close();
+        };
+      }
+    } catch {
+      // Some browsers expose Notification but throw when constructing it
+      // outside a service worker; the title count still does the job.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
+
+  useEffect(() => () => {
+    document.title = BASE_TITLE;
+  }, []);
+
+  // Stable, so children that re-read /me after a change (the pause switch's
+  // auto-reopen timer) don't reset on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reloadMe = useCallback(() => loadMe(), []);
 
   const changeTab = useCallback((next) => {
     setTab(next);
@@ -144,6 +184,12 @@ export default function VendorDashboard() {
           </div>
         </div>
 
+        {activeClaim && (
+          <div className="px-4 mb-4">
+            <OrdersPauseControl authedFetch={authedFetch} claim={activeClaim} onChanged={reloadMe} />
+          </div>
+        )}
+
         <nav className="flex-1 px-4 space-y-1">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -184,8 +230,10 @@ export default function VendorDashboard() {
         {/* Below lg the sidebar gives way to a scrollable tab strip — shop
             owners check orders from their phone far more than from a desk. */}
         <div className="lg:hidden sticky top-0 z-20 bg-surface-container-lowest border-b border-outline-variant">
-          <div className="flex items-center justify-between px-4 pt-3">
+          <div className="flex items-center gap-2 px-4 pt-3">
             <span className="font-bold text-primary truncate">{activeClaim?.placeName || 'لوحة النشاط'}</span>
+            <div className="flex-1" />
+            {activeClaim && <OrdersPauseControl authedFetch={authedFetch} claim={activeClaim} onChanged={reloadMe} compact />}
             <button onClick={logout} aria-label="تسجيل الخروج" className="p-2 bg-transparent text-error">
               <LogOut className="w-5 h-5" />
             </button>
@@ -254,7 +302,7 @@ export default function VendorDashboard() {
                 />
               )}
               {tab === 'requests' && <RequestsTab authedFetch={authedFetch} activeClaims={activeClaims} />}
-              {tab === 'settings' && <SettingsTab authedFetch={authedFetch} me={me} onClaimed={loadMe} />}
+              {tab === 'settings' && <SettingsTab authedFetch={authedFetch} me={me} onClaimed={reloadMe} />}
             </motion.div>
           </AnimatePresence>
         </div>

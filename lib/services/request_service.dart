@@ -52,9 +52,43 @@ class RequestService {
       throw RequestException('انتهت جلستك، سجّل دخولك من جديد وأعد التأكيد.');
     }
 
+    // المحل أوقف الطلبات مؤقتاً: نقول للعميل هذا بالذات، ومتى يرجع وكلمة
+    // المحل إن كتب، بدل «حاول مرة ثانية» اللي ما راح تنفع.
+    if (response.statusCode == 409) {
+      final paused = ordersPausedMessage(utf8.decode(response.bodyBytes));
+      if (paused != null) throw RequestException(paused);
+    }
+
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw RequestException('ما قدرت أرسل طلبك حالياً، حاول مرة ثانية.');
     }
+  }
+
+  /// نص رفض «المحل موقف الطلبات» من جسم رد 409، أو null لأي رفض ثاني.
+  static String? ordersPausedMessage(String body, {DateTime? now}) {
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+    if (data['error'] != 'orders_paused') return null;
+
+    final buffer = StringBuffer('المحل موقف استقبال الطلبات مؤقتاً');
+    final resumesAt = DateTime.tryParse(data['resumesAt'] as String? ?? '')?.toLocal();
+    if (resumesAt != null) {
+      final today = now ?? DateTime.now();
+      final sameDay = resumesAt.year == today.year && resumesAt.month == today.month && resumesAt.day == today.day;
+      final h = resumesAt.hour % 12 == 0 ? 12 : resumesAt.hour % 12;
+      final m = resumesAt.minute.toString().padLeft(2, '0');
+      final period = resumesAt.hour < 12 ? 'ص' : 'م';
+      buffer.write(sameDay ? '، يرجع الساعة $h:$m$period' : '، يرجع ${resumesAt.day}/${resumesAt.month} الساعة $h:$m$period');
+    }
+    buffer.write('.');
+    final note = (data['note'] as String?)?.trim();
+    if (note != null && note.isNotEmpty) buffer.write(' «$note»');
+    buffer.write(' جرّب محل ثاني أو ارجع له بعدين.');
+    return buffer.toString();
   }
 
   /// سجلّ طلبات العميل (GET /requests/mine) — الأحدث أولاً.

@@ -58,7 +58,8 @@ describe('RequestsService baskets', () => {
       productModel.deleteMany({}),
       dealModel.deleteMany({}),
     ]);
-    service = new RequestsService(requestModel, businessModel, productModel, dealModel);
+    // Who gets emailed about an order is VendorService's spec's business.
+    service = new RequestsService(requestModel, businessModel, productModel, dealModel, { notifyNewOrder: async () => 0 } as any);
 
     const business = await makeBusiness({ name: 'Rico Mart', nameAr: 'ريكو مارت' });
     businessId = String(business._id);

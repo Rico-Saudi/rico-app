@@ -288,6 +288,78 @@ function StoreDetails({ authedFetch, claim, onSaved }) {
   );
 }
 
+// How the shop hears about a new order when it isn't looking at the
+// dashboard: an email (server-side, on by default) and, while a dashboard tab
+// is open in the background, a browser notification.
+function OrderAlerts({ authedFetch, me, onSaved }) {
+  const [busy, setBusy] = useState(false);
+  const supported = typeof window !== 'undefined' && 'Notification' in window;
+  const [permission, setPermission] = useState(supported ? Notification.permission : 'unsupported');
+  const emailsOn = me.preferences?.orderEmails !== false;
+
+  async function toggleEmails() {
+    setBusy(true);
+    const res = await authedFetch('/vendor/preferences', { method: 'PATCH', body: JSON.stringify({ orderEmails: !emailsOn }) });
+    setBusy(false);
+    if (res?.ok) onSaved();
+  }
+
+  async function askPermission() {
+    try {
+      setPermission(await Notification.requestPermission());
+    } catch {
+      setPermission('denied');
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <label className="flex items-center justify-between gap-4">
+        <span>
+          <span className="block text-sm font-semibold">إيميل عند كل طلب جديد</span>
+          <span className="block text-xs text-on-surface-variant mt-0.5">يوصل على {me.email} مع تفاصيل الطلب ورقم العميل.</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={emailsOn}
+          disabled={busy}
+          onClick={toggleEmails}
+          className={`relative w-10 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${
+            emailsOn ? 'bg-primary' : 'bg-surface-container-highest'
+          }`}
+        >
+          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${emailsOn ? 'start-5' : 'start-1'}`} />
+        </button>
+      </label>
+
+      <div className="flex items-center justify-between gap-4">
+        <span>
+          <span className="block text-sm font-semibold">تنبيهات المتصفح</span>
+          <span className="block text-xs text-on-surface-variant mt-0.5">
+            {permission === 'granted'
+              ? 'مفعّلة على هالجهاز — توصلك واللوحة مفتوحة بتبويب ثاني.'
+              : permission === 'denied'
+                ? 'المتصفح رافضها. فعّلها من إعدادات الموقع بالمتصفح.'
+                : permission === 'unsupported'
+                  ? 'هالمتصفح ما يدعمها.'
+                  : 'تنبيه على الجهاز لما يوصل طلب واللوحة مفتوحة بالخلفية.'}
+          </span>
+        </span>
+        {permission === 'default' && (
+          <button
+            type="button"
+            onClick={askPermission}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-primary/10 text-primary"
+          >
+            فعّل
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsTab({ authedFetch, me, onClaimed }) {
   // صورة المحل تفيد فقط النشاط المفعّل — غير المفعّل ما يظهر في نتائج البحث.
   const activeClaims = me.claims.filter((c) => c.status === 'active');
@@ -331,6 +403,13 @@ export default function SettingsTab({ authedFetch, me, onClaimed }) {
         <h1 className="text-3xl font-extrabold">الإعدادات</h1>
         <p className="text-on-surface-variant mt-1">{me.email}</p>
       </div>
+
+      {activeClaims.length > 0 && (
+        <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm space-y-5">
+          <h2 className="font-bold">تنبيهات الطلبات</h2>
+          <OrderAlerts authedFetch={authedFetch} me={me} onSaved={onClaimed} />
+        </div>
+      )}
 
       {activeClaims.length > 0 && (
         <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm space-y-5">
