@@ -13,6 +13,8 @@ import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { Deal, DealDocument } from '../deals/schemas/deal.schema';
 import { CreateRequestDto, CreateRequestItemDto } from './dto/create-request.dto';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
+import { OrderNotifierService } from './order-notifier.service';
+import { ordersPauseState } from '../businesses/orders-pause.util';
 
 // Same wording as the Flutter Deal.typeLabel getter and the owner dashboard's
 // DEAL_TYPE_LABELS — kept in sync by hand since this is the one place a deal's
@@ -41,11 +43,23 @@ export class RequestsService {
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
+    private readonly orderNotifier: OrderNotifierService,
   ) {}
 
-  async create(dto: CreateRequestDto, customer?: CustomerDocument) {
+  // The latest new-order notification, kept so tests can wait for the email
+  // that create() deliberately doesn't wait for.
+  notifyWrite: Promise<unknown> = Promise.resolve();
+
+  async create(dto: CreateRequestDto, customer?: CustomerDocument, baseUrl = 'https://app.rico-go.com') {
     const business = await this.businessModel.findById(dto.businessId).lean();
     if (!business) throw new NotFoundException({ error: 'business_not_found' });
+
+    // Refused up front rather than saved and left unanswered: the customer
+    // learns now, while they can still order somewhere else.
+    const pause = ordersPauseState(business);
+    if (pause) {
+      throw new ConflictException({ error: 'orders_paused', resumesAt: pause.until, note: pause.note });
+    }
 
     // A logged-in customer's own name/phone win over anything the client
     // sent: the vendor calls this number back, so it has to be the one tied
@@ -67,6 +81,21 @@ export class RequestsService {
       items,
       total,
     });
+
+    // Not awaited: the customer's confirmation shouldn't wait on an email
+    // provider, and a failed email mustn't undo an order that's saved.
+    this.notifyWrite = this.orderNotifier
+      .notifyNewOrder({
+        requestId: String(request._id),
+        businessId: String(business._id),
+        shopName: business.nameAr || business.name,
+        customerName,
+        customerPhone,
+        items,
+        total,
+        baseUrl,
+      })
+      .catch((e) => console.error('[requests] new-order notification failed:', e?.message || e));
 
     return { requestId: request._id, status: request.status, itemCount: items.length, total };
   }

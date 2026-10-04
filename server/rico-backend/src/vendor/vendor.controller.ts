@@ -18,6 +18,8 @@ import { BulkProductsDto } from './dto/bulk-products.dto';
 import { UpdatePlaceDto } from './dto/update-place.dto';
 import { UpdateRequestStageDto } from './dto/update-request-stage.dto';
 import { VendorStatsDto } from './dto/vendor-stats.dto';
+import { PauseOrdersDto } from './dto/pause-orders.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 @Controller('vendor')
 @UseGuards(SessionGuard)
@@ -28,6 +30,11 @@ export class VendorController {
   @Get('me')
   me(@AccountId() accountId: string) {
     return this.vendorService.me(accountId);
+  }
+
+  @Patch('preferences')
+  updatePreferences(@AccountId() accountId: string, @Body() dto: UpdatePreferencesDto) {
+    return this.vendorService.updatePreferences(accountId, dto);
   }
 
   @Post('claim-place')
@@ -116,6 +123,11 @@ export class VendorController {
   @Patch('places/:id')
   updatePlace(@AccountId() accountId: string, @Param('id') businessId: string, @Body() dto: UpdatePlaceDto) {
     return this.vendorService.updateOwnPlace(accountId, businessId, dto);
+  }
+
+  @Patch('places/:id/orders')
+  pauseOrders(@AccountId() accountId: string, @Param('id') businessId: string, @Body() dto: PauseOrdersDto) {
+    return this.vendorService.setOwnOrdersPause(accountId, businessId, dto);
   }
 
   @Delete('places/:id/image')

@@ -27,6 +27,9 @@ import { UpdatePlaceDto } from './dto/update-place.dto';
 import { UpdateRequestStageDto } from './dto/update-request-stage.dto';
 import { VendorStatsDto } from './dto/vendor-stats.dto';
 import { verticalFor } from './constants/verticals';
+import { ordersPauseState } from '../businesses/orders-pause.util';
+import { PauseOrdersDto } from './dto/pause-orders.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 // Every shop on Rico today is in Saudi Arabia or Jordan, both UTC+3 all year,
 // so "a day" in the vendor's charts is a Riyadh day.
@@ -133,11 +136,12 @@ export class VendorService {
 
     const claims = await this.claimModel
       .find({ accountId: account._id })
-      .populate('businessId', 'name nameAr categorySlug imageUrl phone openingHours address district city')
+      .populate('businessId', 'name nameAr categorySlug imageUrl phone openingHours address district city ordersPaused ordersPausedUntil ordersPausedNote')
       .lean();
 
     return {
       email: account.email,
+      preferences: { orderEmails: account.orderEmails !== false },
       claims: claims.map((c: any) => ({
         placeId: c.businessId._id,
         placeName: c.businessId.nameAr || c.businessId.name,
@@ -150,6 +154,7 @@ export class VendorService {
         address: c.businessId.address ?? null,
         district: c.businessId.district ?? null,
         city: c.businessId.city ?? null,
+        ordersPause: ordersPauseState(c.businessId),
         // Lets the dashboard show the storefront photo the vendor already has
         // (or that they have none) without a second round-trip per business.
         imageUrl: c.businessId.imageUrl ?? null,
@@ -420,6 +425,30 @@ export class VendorService {
   async markOwnRequestHandled(accountId: string, requestId: string) {
     const activeBusinessIds = await this.activeBusinessIdsForAccount(accountId);
     return this.requestsService.markHandled(requestId, activeBusinessIds);
+  }
+
+  // minutes: how long until orders reopen by themselves; omitted or null =
+  // until the vendor reopens. paused: false reopens now and clears the note.
+  async setOwnOrdersPause(accountId: string, businessId: string, dto: PauseOrdersDto) {
+    await this.assertOwnsBusiness(accountId, businessId);
+    const set = dto.paused
+      ? {
+          ordersPaused: true,
+          ordersPausedUntil: dto.minutes ? new Date(Date.now() + dto.minutes * 60_000) : null,
+          ordersPausedNote: dto.note?.trim() || null,
+        }
+      : { ordersPaused: false, ordersPausedUntil: null, ordersPausedNote: null };
+    const business = await this.businessModel.findByIdAndUpdate(businessId, { $set: set }, { new: true }).lean();
+    if (!business) throw new NotFoundException({ error: 'place_not_found' });
+    return { placeId: business._id, ordersPause: ordersPauseState(business) };
+  }
+
+  async updatePreferences(accountId: string, dto: UpdatePreferencesDto) {
+    const account = await this.accountModel
+      .findByIdAndUpdate(accountId, { $set: { ...(dto.orderEmails !== undefined ? { orderEmails: dto.orderEmails } : {}) } }, { new: true })
+      .lean();
+    if (!account) throw new UnauthorizedException({ error: 'unauthorized' });
+    return { orderEmails: account.orderEmails !== false };
   }
 
   async setOwnRequestStage(accountId: string, requestId: string, dto: UpdateRequestStageDto) {
