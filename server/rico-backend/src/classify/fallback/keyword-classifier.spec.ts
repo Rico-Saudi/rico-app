@@ -6,7 +6,7 @@
 import { join } from 'path';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { keywordClassify } from './keyword-classifier';
-import { grade, loadCorpus } from './corpus-grading';
+import { grade, gradeOrder, loadCorpus } from './corpus-grading';
 import { ClassifyService } from '../classify.service';
 import { LlmService } from '../../llm/llm.service';
 import { LearningService } from '../../learning/learning.service';
@@ -69,7 +69,7 @@ describe('keywordClassify', () => {
     expect(keywordClassify('ابي دهان يدهن الصاله')).toEqual([expect.objectContaining({ kind: 'professional', profession: 'painter' })]);
   });
 
-  it('parses an order from a named shop', () => {
+  it('parses an order from a named shop (legacy cases)', () => {
     expect(keywordClassify('اطلب لي من البيك ٢ مسحب')).toEqual([
       expect.objectContaining({ kind: 'order', placeName: 'البيك', orderItems: [{ name: 'مسحب', quantity: 2 }] }),
     ]);
@@ -129,6 +129,39 @@ describe('keywordClassify against the agent corpus', () => {
     expect(falsePositives).toEqual([]);
     expect(pass).toBeGreaterThanOrEqual(0.88);
   });
+});
+
+describe('orders against the agent corpus', () => {
+  const orders = loadCorpus(join(__dirname, '../../../scripts/agent-corpus')).filter((l) => l.order && l.expect.includes('order'));
+
+  // ~93% today over ~435 orders from five agents, two of them written to
+  // break the parser; the floor leaves room for a few lines, not a habit.
+  it('gets the shop and the whole basket right for at least 88% of them', () => {
+    expect(orders.length).toBeGreaterThan(400);
+    const right = orders.filter((l) => {
+      const g = gradeOrder(l.order!, keywordClassify(l.msg));
+      return g.shop && g.items;
+    }).length;
+    expect(right / orders.length).toBeGreaterThanOrEqual(0.88);
+  });
+
+  it.each([
+    ['اطلب لي من البيك ٣ مسحب حار و٢ بيبسي', 'البيك', [['مسحب حار', 3], ['بيبسي', 2]]],
+    ['جيبلي من جبري كنافتين ناعمة', 'جبري', [['كنافة ناعمة', 2]]],
+    ['ابي من حلويات سعد الدين كيلو بسبوسة ونص كيلو معمول', 'حلويات سعد الدين', [['كيلو بسبوسة', 1], ['نص كيلو معمول', 1]]],
+    ['٢ كابتشينو من ستاربكس', 'ستاربكس', [['كابتشينو', 2]]],
+    ['مرحبا، من غاز العتيبي جرة غاز وحدة', 'غاز العتيبي', [['جرة غاز', 1]]],
+    ['ريكو ابي اطلب من ماكدونالدز بيق ماك اثنين لا لا ثلاثة وماك فلوري', 'ماكدونالدز', [['بيق ماك', 3], ['ماك فلوري', 1]]],
+  ])('basket: %s', (msg, shop, items) => {
+    const order = keywordClassify(msg as string).find((i) => i.kind === 'order');
+    expect(order?.placeName).toBe(shop);
+    expect(order?.orderItems?.map((i) => [i.name, i.quantity])).toEqual(items);
+  });
+
+  it.each(['وصلني من مطعم', 'وين اطلب منسف؟', 'الغي طلبي من كودو', 'طلبي من البيك تأخر ساعة', 'شو بتنصحني اطلب من البيك؟', 'بقاله قريبه ابي حليب وخبز'])(
+    'not an order: %s',
+    (msg) => expect(keywordClassify(msg).some((i) => i.kind === 'order')).toBe(false),
+  );
 });
 
 describe('ClassifyService when the model is unavailable', () => {

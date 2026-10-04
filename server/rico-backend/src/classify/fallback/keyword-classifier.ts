@@ -14,6 +14,7 @@ import { distance } from 'fastest-levenshtein';
 import { normalizeArabic } from '../../learning/constants/normalize';
 import { professionRegistry } from '../../professionals/constants/professions.registry';
 import { Intent, validateIntent } from '../intent-validation';
+import { isOrderComplaint, OrderDeps, parseOrder } from './order-parser';
 import { CATEGORIES, MAX_INTENTS } from '../constants/categories';
 import {
   ABOUT_RICO,
@@ -452,166 +453,13 @@ function toIntent(t: Target, rank: string): Intent | null {
 
 // ─── Orders ────────────────────────────────────────────────────────────────
 
-/** Shop nouns that need the next word to name a shop: "مطعم هاشم", not "مطعم". */
-const SHOP_NOUNS = foldedSet([
-  'مطعم',
-  'مخبز',
-  'مخبزه',
-  'صيدليه',
-  'حلويات',
-  'محل',
-  'بقاله',
-  'سوبرماركت',
-  'كافيه',
-  'ملحمه',
-  'فرن',
-  'مقهى',
-  'كوفي',
-  'محمصه',
-  'مطبخ',
-  'هايبر',
-  'مكتبه',
-  'شوكولاته',
-]);
-const ANY_SHOP = foldedSet(['اي', 'اقرب', 'any']);
-const FILLER = foldedSet(FILLER_WORDS);
-const ORDINAL: Map<string, number> = new Map(Object.entries(ORDINALS).map(([k, v]) => [fold(k), v]));
-const NUMBER_WORDS: Map<string, number> = new Map(
-  Object.entries({
-    واحد: 1,
-    وحده: 1,
-    اثنين: 2,
-    ثنتين: 2,
-    اتنين: 2,
-    ثلاث: 3,
-    ثلاثه: 3,
-    تلاته: 3,
-    اربع: 4,
-    اربعه: 4,
-    خمس: 5,
-    خمسه: 5,
-    سته: 6,
-    ست: 6,
-    سبع: 7,
-    عشر: 10,
-    عشره: 10,
-  }).map(([k, v]) => [fold(k), v]),
-);
-/** Where the items stop: the rest is a second request or a delivery note. */
-const STOP = foldedSet(['وفيه', 'فيه', 'وعندكم', 'عندكم', 'توصيل', 'للبيت', 'عشان', 'وبعدين', 'بعدين', 'اللي', 'الي', 'لو', 'اذا']);
-
-interface Item {
-  name: string;
-  quantity: number;
-}
-
-/** "٢ مسحب و٣ بيبسي" → items. Numbers (digits or words) set the quantity of
- * what follows; "و" separates. */
-function parseItems(rawTokens: string[], tokens: string[]): Item[] {
-  const items: Item[] = [];
-  let qty = 1;
-  let words: string[] = [];
-  const flush = () => {
-    if (words.length) items.push({ name: words.join(' '), quantity: qty });
-    words = [];
-    qty = 1;
-  };
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (STOP.has(t)) break;
-    if (FILLER.has(t)) continue;
-    if (/^\d+$/u.test(t)) {
-      flush();
-      qty = Math.min(99, Math.max(1, Number(t)));
-    } else if (NUMBER_WORDS.has(t)) {
-      flush();
-      qty = NUMBER_WORDS.get(t)!;
-    } else if (t.startsWith('ل') && NUMBER_WORDS.has(t.slice(1))) {
-      break; // "منسف لخمس اشخاص" — a headcount, not an item
-    } else if (t === 'و') {
-      flush();
-    } else if (t.startsWith('و') && words.length && t.length > 3) {
-      flush();
-      words.push(rawTokens[i].slice(1));
-    } else {
-      words.push(rawTokens[i]);
-    }
-  }
-  flush();
-  return items;
-}
-
-/** "اطلب لي من البيك ٢ مسحب" → an order for البيك with one item. Kept
- * deliberately literal: the shop is the word(s) after "من", the items are
- * what sits around it. The server matches both against real menus later
- * (PublicService.resolveOrder), which is where fuzziness belongs. */
-function parseOrder(raw: string): Intent | null {
-  const rawTokens = raw.replace(DIACRITICS, '').replace(NON_WORD, ' ').split(/\s+/).filter(Boolean);
-  const tokens = rawTokens.map(fold);
-  const joined = tokens.join(' ');
-  const verb = ORDER_VERB_RE.exec(joined);
-  if (!verb) return null;
-  const verbEnd = joined
-    .slice(0, verb.index + verb[0].length)
-    .split(' ')
-    .filter(Boolean).length;
-
-  const from = tokens.findIndex((t, i) => i >= verbEnd - 1 && t === 'من' && i < tokens.length - 1);
-  const before = from > verbEnd ? parseItems(rawTokens.slice(verbEnd, from), tokens.slice(verbEnd, from)) : [];
-
-  if (from < 0) {
-    // No shop named — "اطلبلي منسف لخمس اشخاص": order the dish from
-    // whichever nearby shop of the right kind sells it.
-    const items = parseItems(rawTokens.slice(verbEnd), tokens.slice(verbEnd));
-    const category = firstFixedCategory(tokens.slice(verbEnd).join(' '));
-    return items.length && category ? validateIntent({ kind: 'order', category, orderItems: items }) : null;
-  }
-
-  let i = from + 1;
-  // "من الثاني" — a shop Rico just listed. The app resolves the position.
-  const ordinal = ORDINAL.get(tokens[i]) ?? ORDINAL.get(tokens[i + 1] ?? '');
-  if (ordinal) {
-    const skip = ORDINAL.has(tokens[i]) ? 1 : 2;
-    const after = parseItems(rawTokens.slice(i + skip), tokens.slice(i + skip));
-    return validateIntent({
-      kind: 'order',
-      referencedPosition: ordinal,
-      orderItems: [...before, ...after],
-    });
-  }
-
-  if (ANY_SHOP.has(tokens[i])) {
-    const kindWord = tokens.slice(i + 1, i + 2).join(' ');
-    const after = parseItems(rawTokens.slice(i + 2), tokens.slice(i + 2));
-    const items = [...before, ...after];
-    const category = firstFixedCategory(kindWord) ?? firstFixedCategory(items.map((it) => it.name).join(' '));
-    return items.length && category ? validateIntent({ kind: 'order', category, orderItems: items }) : null;
-  }
-
-  // "صيدلية النهدي" names a shop; "الصيدليه" alone is "the pharmacy", and
-  // the word after it isn't part of a name.
-  const first = tokens[i];
-  const definite = first.startsWith('ال');
-  const next = tokens[i + 1];
-  const takeTwo =
-    SHOP_NOUNS.has(first.replace(/^ال/u, '')) &&
-    !!next &&
-    !definite &&
-    !STOP.has(next) &&
-    !FILLER.has(next) &&
-    !/^و/u.test(next) &&
-    !/^\d/u.test(next);
-  const take = takeTwo ? 2 : 1;
-  const placeName = rawTokens.slice(i, i + take).join(' ');
-  const after = parseItems(rawTokens.slice(i + take), tokens.slice(i + take));
-  return validateIntent({
-    kind: 'order',
-    placeName,
-    orderItems: [...before, ...after],
-  });
-}
-
 const FIXED_SLUGS = new Set<string>(CATEGORIES);
+
+/** What the order parser needs to know about words, from the tables here. */
+const ORDER_DEPS: OrderDeps = {
+  categoryOf: (words) => firstFixedCategory(words),
+  isProduct: (word) => findHits(word).some((h) => h.target.type === 'fixed' || h.target.type === 'free'),
+};
 
 function firstFixedCategory(text: string): string | null {
   for (const h of pick(findHits(fold(text)), false)) {
@@ -649,7 +497,7 @@ function dropNegated(text: string, chosen: Hit[]): Hit[] {
 function asksForSomething(text: string, chosen: Hit[]): boolean {
   // "كنت محتاج سباك بس انحلت" — the need is over, whatever else it says.
   if (STRONG_NARRATIVE_RE.test(text)) return false;
-  if (WANT_RE.test(text) || IS_THERE_RE.test(text)) return true;
+  if (WANT_RE.test(text) || IS_THERE_RE.test(text) || ORDER_VERB_RE.test(text)) return true;
   // Asking for deals is a request however it's phrased ("صاحبي بيقول في
   // عروض، شو هي؟").
   if (chosen.some((h) => h.target.type === 'deals')) return true;
@@ -686,12 +534,14 @@ export function keywordClassify(message: string): Intent[] {
   const wants = WANT_RE.test(text);
   if (!wants && HOW_TO_RE.test(text)) return [];
 
-  const order = parseOrder(message);
-  if (order) {
-    // "اطلب لي بنادول من الصيدليه وفيه عروض" — the deals ride along.
-    const dealsToo = DEALS_WORDS.some((w) => anyOf([w]).test(text));
-    return dealsToo ? [order, validateIntent({ kind: 'deals' })!] : [order];
+  const parsed = parseOrder(message, ORDER_DEPS);
+  if (parsed) {
+    // "اطلب لي بنادول من الصيدليه وفيه عروض", "…وكمان وين اقرب صراف": what
+    // follows the basket is read as requests of its own.
+    const rest = parsed.rest ? keywordClassify(parsed.rest.replace(/^و/u, '')).filter((i) => i.kind !== 'order') : [];
+    return [parsed.order, ...rest].slice(0, MAX_INTENTS);
   }
+  if (isOrderComplaint(message)) return [];
 
   let chosen = pick(findHits(text), PERSON_CUE_RE.test(text));
   if (!chosen.length) chosen = pick(fuzzyHits(text), false);
@@ -717,4 +567,16 @@ export function keywordClassify(message: string): Intent[] {
   });
 
   return intents.slice(0, MAX_INTENTS);
+}
+
+// ─── Conversations ─────────────────────────────────────────────────────────
+
+export interface ConversationContext {
+  history: { role: string; content: string }[];
+  lastResults: { label: string; items: { position: number; name: string }[] } | null;
+}
+
+/** keywordClassify, reading the message in the conversation it belongs to. */
+export function keywordClassifyInContext(message: string, ctx: ConversationContext): Intent[] {
+  return keywordClassify(message);
 }

@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { Intent } from '../intent-validation';
+import { normalizeArabic } from '../../learning/constants/normalize';
 
 export interface CorpusLine {
   file: string;
@@ -14,6 +15,22 @@ export interface CorpusLine {
   /** "place:<slug>" | "other:<value>:<label>" | "pro:<slug>" | "deals" |
    * "order" | "chat", several joined by " + ". */
   expect: string;
+  /** For order lines: what the basket should hold (see the agents' guide). */
+  order?: ExpectedOrder;
+  /** Conversation lines: what came before the message. */
+  history?: { role: 'user' | 'assistant'; content: string }[];
+  lastResults?: { label: string; items: { position: number; name: string }[] } | null;
+  /** For a refinement ("في ارخص؟"), the rank it asks for. */
+  rank?: string | null;
+  /** For "التاني", the list position it points at. */
+  position?: number | null;
+}
+
+export interface ExpectedOrder {
+  placeName: string | null;
+  category: string | null;
+  position: number | null;
+  items: { name: string; quantity: number }[];
 }
 
 export type Grade = 'pass' | 'partial' | 'miss' | 'wrong' | 'false_positive';
@@ -138,6 +155,9 @@ export function grade(expect: string, intents: Intent[]): Grade {
   const want = expect.split('+').map(expectedKey);
   const got = intents.map(intentKey);
 
+  // "order + chat": an order and a question Rico answers in words. Only an
+  // all-chat line forbids a search; otherwise the chat part is left to the reply.
+  if (want.includes('chat') && want.length > 1) want.splice(want.indexOf('chat'), 1);
   if (want.includes('chat')) return got.length ? 'false_positive' : 'pass';
   if (!got.length) return 'miss';
 
@@ -146,4 +166,64 @@ export function grade(expect: string, intents: Intent[]): Grade {
   if (found.length === want.length && !extra.length) return 'pass';
   if (found.length) return 'partial';
   return 'wrong';
+}
+
+const PLURAL_CONTAINERS: Record<string, string> = { قطع: 'قطعه', صحون: 'صحن', قناني: 'قنينه', علب: 'علبه', ربطات: 'ربطه', اكياس: 'كيس', كراتين: 'كرتون' };
+
+// ─── Orders ──────────────────────────────────────────────────────────────
+
+/** Two spellings of one shop or dish: the same words once folded, "ال" and
+ * order aside, or one contained in the other ("البيك" / "مطعم البيك"). */
+function sameName(a: string, b: string): boolean {
+  const words = (s: string) =>
+    normalizeArabic(s)
+      .split(' ')
+      .map((w) => w.replace(/^(?:وال|بال|ال|و)/u, ''))
+      // "قطع"/"قطعة", "صحون"/"صحن": a container counted either way.
+      .map((w) => PLURAL_CONTAINERS[w] ?? w)
+      .filter((w) => w && w !== 'من' && w !== 'مطعم' && w !== 'محل');
+  const wa = words(a).join(' ');
+  const wb = words(b).join(' ');
+  if (!wa || !wb) return normalizeArabic(a) === normalizeArabic(b);
+  if (wa === wb || wa.includes(wb) || wb.includes(wa)) return true;
+  // Same words in another order ("موز كيلو" / "كيلو موز").
+  const sa = new Set(wa.split(' '));
+  const sb = new Set(wb.split(' '));
+  const [small, big] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+  return [...small].every((w) => big.has(w));
+}
+
+export interface OrderGrade {
+  /** An order intent came back at all. */
+  found: boolean;
+  /** It points at the right shop: by name, by kind, or by list position. */
+  shop: boolean;
+  /** Every expected item is there with its quantity, and nothing else. */
+  items: boolean;
+}
+
+export function gradeOrder(expected: ExpectedOrder, intents: Intent[]): OrderGrade {
+  const got = intents.find((i) => i.kind === 'order');
+  if (!got) return { found: false, shop: false, items: false };
+
+  let shop: boolean;
+  if (expected.position) shop = got.referencedPosition === expected.position;
+  else if (expected.placeName) shop = !!got.placeName && sameName(expected.placeName, got.placeName);
+  else shop = !got.placeName && got.referencedPosition === null && (!expected.category || got.category === expected.category);
+
+  const gotItems = got.orderItems ?? [];
+  const items =
+    gotItems.length === expected.items.length &&
+    expected.items.every((e) => gotItems.some((g) => sameName(e.name, g.name) && g.quantity === e.quantity));
+
+  return { found: true, shop, items };
+}
+
+/** Whether a refinement or a pointer landed: the place intent carries the
+ * rank or the list position the line asks for. Lines without either pass. */
+export function gradeFollowUp(line: CorpusLine, intents: Intent[]): boolean {
+  const place = intents.find((i) => i.kind === 'place' || i.kind === 'professional');
+  if (line.rank && line.rank !== 'nearest' && place?.rank !== line.rank) return false;
+  if (line.position && !line.expect.includes('order') && place?.referencedPosition !== line.position) return false;
+  return true;
 }
