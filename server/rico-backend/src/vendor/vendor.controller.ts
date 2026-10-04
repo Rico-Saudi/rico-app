@@ -13,6 +13,11 @@ import { MAX_PRODUCT_IMAGE_BYTES } from '../products/constants/product-image.con
 import { MAX_BUSINESS_IMAGE_BYTES } from '../businesses/constants/business-image.constants';
 import { CreateDiscountDto } from '../discounts/dto/create-discount.dto';
 import { UpdateDiscountDto } from '../discounts/dto/update-discount.dto';
+import { ListOwnProductsDto } from './dto/list-own-products.dto';
+import { BulkProductsDto } from './dto/bulk-products.dto';
+import { UpdatePlaceDto } from './dto/update-place.dto';
+import { UpdateRequestStageDto } from './dto/update-request-stage.dto';
+import { VendorStatsDto } from './dto/vendor-stats.dto';
 
 @Controller('vendor')
 @UseGuards(SessionGuard)
@@ -45,14 +50,26 @@ export class VendorController {
     return this.vendorService.updateOwnDeal(accountId, dealId, dto);
   }
 
+  @Get('stats')
+  stats(@AccountId() accountId: string, @Query() query: VendorStatsDto) {
+    return this.vendorService.getStats(accountId, query);
+  }
+
   @Get('products')
-  listProducts(@AccountId() accountId: string, @Query('businessId') businessId: string) {
-    return this.vendorService.listOwnProducts(accountId, businessId);
+  listProducts(@AccountId() accountId: string, @Query() query: ListOwnProductsDto) {
+    return this.vendorService.listOwnProducts(accountId, query);
   }
 
   @Post('products')
   createProduct(@AccountId() accountId: string, @Body() dto: CreateProductDto) {
     return this.vendorService.createOwnProduct(accountId, dto);
+  }
+
+  // A whole price list at once — declared before products/:id so "bulk" is
+  // never read as a product id.
+  @Post('products/bulk')
+  bulkProducts(@AccountId() accountId: string, @Body() dto: BulkProductsDto) {
+    return this.vendorService.bulkUpsertOwnProducts(accountId, dto);
   }
 
   @Patch('products/:id')
@@ -96,6 +113,11 @@ export class VendorController {
     return this.vendorService.setOwnBusinessImage(accountId, businessId, image);
   }
 
+  @Patch('places/:id')
+  updatePlace(@AccountId() accountId: string, @Param('id') businessId: string, @Body() dto: UpdatePlaceDto) {
+    return this.vendorService.updateOwnPlace(accountId, businessId, dto);
+  }
+
   @Delete('places/:id/image')
   removePlaceImage(@AccountId() accountId: string, @Param('id') businessId: string) {
     return this.vendorService.removeOwnBusinessImage(accountId, businessId);
@@ -129,5 +151,10 @@ export class VendorController {
   @Patch('requests/:id/handled')
   markRequestHandled(@AccountId() accountId: string, @Param('id') requestId: string) {
     return this.vendorService.markOwnRequestHandled(accountId, requestId);
+  }
+
+  @Patch('requests/:id/stage')
+  setRequestStage(@AccountId() accountId: string, @Param('id') requestId: string, @Body() dto: UpdateRequestStageDto) {
+    return this.vendorService.setOwnRequestStage(accountId, requestId, dto);
   }
 }

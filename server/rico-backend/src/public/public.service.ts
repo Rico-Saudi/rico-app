@@ -70,7 +70,9 @@ export class PublicService {
     if (!business) throw new NotFoundException({ error: 'business_not_found' });
 
     const [products, deals] = await Promise.all([
-      this.productModel.find({ businessId, isActive: true }).lean(),
+      // Out of stock means not on offer: the chat neither lists it nor builds
+      // a basket around it until the shop marks it back in.
+      this.productModel.find({ businessId, isActive: true, inStock: { $ne: false } }).lean(),
       this.dealsService.findActiveForBusiness(businessId, new Date()),
     ]);
 
@@ -83,6 +85,7 @@ export class PublicService {
         category: p.category,
         price: p.price,
         finalPrice: p.finalPrice,
+        unit: p.unit ?? null,
         imageUrl: p.imageUrl ?? null,
       })),
       deals: deals.map((d: any) => ({

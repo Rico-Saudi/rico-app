@@ -395,7 +395,7 @@ export class SearchService {
   async searchProducts(text: string, businessId?: string) {
     const parsed = parseQuery(text);
 
-    const filter: Record<string, unknown> = { isActive: true };
+    const filter: Record<string, unknown> = { isActive: true, inStock: { $ne: false } };
     if (businessId) filter.businessId = businessId;
     if (parsed.category) filter.category = parsed.category;
     for (const [key, value] of Object.entries(parsed.attributes)) {
@@ -419,6 +419,7 @@ export class SearchService {
         category: p.category,
         price: p.price,
         finalPrice: p.finalPrice,
+        unit: p.unit ?? null,
         imageUrl: p.imageUrl ?? null,
         attributes: p.attributes,
       })),

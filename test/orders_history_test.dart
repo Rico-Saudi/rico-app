@@ -58,6 +58,22 @@ void main() {
       expect(CustomerOrder.fromJson(apiOrder(status: 'handled')).status, OrderStatus.handled);
     });
 
+    test('يقرأ مرحلة الطلب من المحل ويقدّمها على الحالة القديمة', () {
+      OrderStatus read(String stage) => CustomerOrder.fromJson({...apiOrder(status: 'handled'), 'stage': stage}).status;
+      expect(read('new'), OrderStatus.pending);
+      expect(read('confirmed'), OrderStatus.handled);
+      expect(read('ready'), OrderStatus.ready);
+      expect(read('completed'), OrderStatus.handled);
+      expect(read('cancelled'), OrderStatus.cancelled);
+    });
+
+    test('يحمل ملاحظة المحل ويتجاهل الفارغة', () {
+      final withNote = CustomerOrder.fromJson({...apiOrder(), 'stage': 'cancelled', 'vendorNote': ' الصنف نفد '});
+      expect(withNote.vendorNote, 'الصنف نفد');
+      expect(CustomerOrder.fromJson({...apiOrder(), 'vendorNote': '  '}).vendorNote, isNull);
+      expect(CustomerOrder.fromJson(apiOrder()).vendorNote, isNull);
+    });
+
     test('يرصد العرض بلا سعر حتى لا يبدو الإجمالي نهائياً', () {
       final order = CustomerOrder.fromJson(
         apiOrder(items: [

@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { CustomerRequest, CustomerRequestDocument, RequestItem } from './schemas/request.schema';
+import {
+  CustomerRequest,
+  CustomerRequestDocument,
+  NEXT_STAGES,
+  RequestItem,
+  RequestStage,
+} from './schemas/request.schema';
 import { Business, BusinessDocument } from '../businesses/schemas/business.schema';
 import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { Deal, DealDocument } from '../deals/schemas/deal.schema';
@@ -153,6 +159,9 @@ export class RequestsService {
         items,
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
+        stage: this.readStage(r),
+        vendorNote: r.vendorNote ?? null,
+        stageUpdatedAt: r.stageUpdatedAt ?? null,
         createdAt: r.createdAt,
       };
     });
@@ -182,9 +191,21 @@ export class RequestsService {
         items,
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
+        stage: this.readStage(r),
+        vendorNote: r.vendorNote ?? null,
         createdAt: r.createdAt,
       };
     });
+  }
+
+  // Requests from before stages existed only have status; one the shop marked
+  // handled reads as completed, since that's all "handled" ever promised. A
+  // hydrated document reports the schema default 'new' for the missing stage,
+  // hence the check on the pair rather than on stage being absent — nothing
+  // written today is both handled and new.
+  private readStage(raw: any): RequestStage {
+    if (raw.status === 'handled' && (!raw.stage || raw.stage === 'new')) return 'completed';
+    return raw.stage || 'new';
   }
 
   // Requests predating baskets carry their single item in the legacy top-level
@@ -206,13 +227,35 @@ export class RequestsService {
     ];
   }
 
+  // The original one-button flow, still called by older dashboards. It only
+  // ever meant "the shop dealt with it", so it confirms a new order and leaves
+  // one already further along where it is.
   async markHandled(id: string, businessIds: string[]) {
-    const request = await this.requestModel.findOneAndUpdate(
-      { _id: id, businessId: { $in: businessIds } },
-      { $set: { status: 'handled' } },
-      { new: true },
-    );
+    const request = await this.requestModel.findOne({ _id: id, businessId: { $in: businessIds } });
     if (!request) throw new NotFoundException({ error: 'request_not_found' });
-    return { id: request._id, status: request.status };
+    if (this.readStage(request) === 'new') {
+      request.stage = 'confirmed';
+      request.stageUpdatedAt = new Date();
+    }
+    request.status = 'handled';
+    await request.save();
+    return { id: request._id, status: request.status, stage: request.stage };
+  }
+
+  async setStage(id: string, businessIds: string[], stage: RequestStage, note?: string | null) {
+    const request = await this.requestModel.findOne({ _id: id, businessId: { $in: businessIds } });
+    if (!request) throw new NotFoundException({ error: 'request_not_found' });
+
+    const current = this.readStage(request);
+    if (!NEXT_STAGES[current].includes(stage)) {
+      throw new ConflictException({ error: 'invalid_stage_transition', from: current, to: stage });
+    }
+
+    request.stage = stage;
+    request.stageUpdatedAt = new Date();
+    request.status = 'handled';
+    if (note !== undefined) request.vendorNote = note?.trim() || null;
+    await request.save();
+    return { id: request._id, status: request.status, stage: request.stage, vendorNote: request.vendorNote };
   }
 }
