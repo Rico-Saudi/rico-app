@@ -1,0 +1,125 @@
+{"msg": "امس رحت مطعم وكان الاكل زفت والخدمة اسوأ", "dialect": "saudi", "expect": "chat"}
+{"msg": "اخوي سباك وشغله نظيف ما شاء الله", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابوي دكتور اسنان من ثلاثين سنة", "dialect": "saudi", "expect": "chat"}
+{"msg": "الكافيهات صارت غالية مرة، كوب القهوة بعشرين ريال", "dialect": "saudi", "expect": "chat"}
+{"msg": "كيف اطلب منك؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "هل توصلون للبيت؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم سعر التوصيل عندكم؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "متى يفتح الحرم؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "الطلب اللي طلبته من المطعم وصل بارد", "dialect": "saudi", "expect": "chat"}
+{"msg": "صباح الخير يا احلى كافيه", "dialect": "saudi", "expect": "chat"}
+{"msg": "شكرا لقيت الصيدلية", "dialect": "saudi", "expect": "chat"}
+{"msg": "ما ابي مطعم، بس ابي اسولف", "dialect": "saudi", "expect": "chat"}
+{"msg": "زوجتي تشتغل في مستشفى الملك فهد", "dialect": "saudi", "expect": "chat"}
+{"msg": "وش الفرق بين المستوصف والمستشفى؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "انت تعرف كل المطاعم اللي بالرياض؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "ههههه صاحبي دخل الصالون وطلع راسه كأنه بيضة", "dialect": "saudi", "expect": "chat"}
+{"msg": "تعبت اليوم، رحت البنك ثلاث مرات عشان معاملة وحدة", "dialect": "saudi", "expect": "chat"}
+{"msg": "البنزين غلي مرة هالشهر", "dialect": "saudi", "expect": "chat"}
+{"msg": "ودي اصير كهربائي لما اكبر", "dialect": "saudi", "expect": "chat"}
+{"msg": "جارنا عنده محل جوالات وكل يوم يسولف معنا", "dialect": "saudi", "expect": "chat"}
+{"msg": "الحمدلله الكهربائي خلص الشغل وراح", "dialect": "saudi", "expect": "chat"}
+{"msg": "لا ما احتاج سباك خلاص انحلت المشكلة", "dialect": "saudi", "expect": "chat"}
+{"msg": "كيف تختار لي اقرب صيدلية؟ من وين تجيب المعلومات؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "وش يعني صيدلية مناوبة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "السوبرماركت اللي جنبنا سكر للأبد، حزنت عليه", "dialect": "saudi", "expect": "chat"}
+{"msg": "اختي تخرجت من الجامعة اليوم الحمدلله", "dialect": "saudi", "expect": "chat"}
+{"msg": "الحلاق خرب راسي امس 😂", "dialect": "saudi", "expect": "chat"}
+{"msg": "تعرف ان اول مطعم ماكدونالدز في السعودية فتح بالرياض؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "شكرا يا ريكو، النجار اللي دليتني عليه كان ممتاز", "dialect": "saudi", "expect": "chat"}
+{"msg": "هل اقدر ادفع كاش للمندوب؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "كم ياخذ الطلب لين يوصل عادة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "انا ممرض واشتغل ليلي، الشغل متعب", "dialect": "saudi", "expect": "chat"}
+{"msg": "المطعم اللي طلبت منه نسى البطاطس، وش السالفة؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابغى اسولف معك شوي قبل لا انام", "dialect": "saudi", "expect": "chat"}
+{"msg": "وش رايك بالقهوة المختصة؟ تستاهل فلوسها؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "سيارتي في الورشة من اسبوع وزهقت", "dialect": "saudi", "expect": "chat"}
+{"msg": "المول زحمة مرة اليوم، والله ما ارجع له", "dialect": "saudi", "expect": "chat"}
+{"msg": "انت تشتغل مع المطاعم ولا مستقل؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "كيف اسجل محلي عندكم؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "حلمت اني فتحت مخبز 😂", "dialect": "saudi", "expect": "chat"}
+{"msg": "مبارح اكلت بمطعم وكان زفت", "dialect": "jordanian", "expect": "chat"}
+{"msg": "اخوي سباك بس ما بحب يشتغل بالصيف", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ابوي دكتور اسنان بس انا بخاف من عيادته", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الكافيهات بعمان صارت غالية كتير", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كيف بطلب منك؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بتوصلوا عالبيت؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "قديش التوصيل عندكم؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو يعني صيدلية مناوبة؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الطلبية اللي طلبتها من المطعم وصلت باردة", "dialect": "jordanian", "expect": "chat"}
+{"msg": "صباح الورد، انا قاعد بالكافيه هلأ وبتسلى", "dialect": "jordanian", "expect": "chat"}
+{"msg": "يسلمو لقيت الصيدلية", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ما بدي مطعم، بس بدي احكي معك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "خالي ميكانيكي وعنده كراج بالزرقاء", "dialect": "jordanian", "expect": "chat"}
+{"msg": "والله الدهّان اللي جبناه السنة الماضية خرّب الحيطان", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو رأيك بالمنسف؟ احسن اكلة بالدنيا صح؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ليش الصيدليات بالاردن كتير هيك؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "امي ممرضة وبتشتغل بمستشفى البشير", "dialect": "jordanian", "expect": "chat"}
+{"msg": "انا محاسب وبكره الارقام 😂", "dialect": "jordanian", "expect": "chat"}
+{"msg": "اليوم رحت عالمول ولقيت صاحبي القديم", "dialect": "jordanian", "expect": "chat"}
+{"msg": "هو انتو بتاخدوا عمولة من المحلات؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كيف بتعرف وين انا؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الحلاق تبعي سافر عتركيا وزعلت", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شكرا كتير، الكهربجي اجا وصلّح كل اشي", "dialect": "jordanian", "expect": "chat"}
+{"msg": "لا خلص ما بدي سباك، ابوي صلحها", "dialect": "jordanian", "expect": "chat"}
+{"msg": "احكيلي نكتة عن واحد دخل مطعم", "dialect": "jordanian", "expect": "chat"}
+{"msg": "زهقان ومش عارف شو اعمل اليوم", "dialect": "jordanian", "expect": "chat"}
+{"msg": "البنوك بالاردن بتسكر بكير", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الطلب اجا ناقص، وين بقدر اشتكي؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم عمرك يا تدلل؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "انا بشتغل بالبقالة عند عمي", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الدكتور قلي ارتاح اسبوع", "dialect": "jordanian", "expect": "chat"}
+{"msg": "الجيم صار ممل، بطلت اروح", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ابني بدو يصير مهندس معماري", "dialect": "jordanian", "expect": "chat"}
+{"msg": "يعطيك العافية، الطلب وصل وكان طيب", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو الفرق بين الملحمة والسوبرماركت؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بنت خالتي فاتحة صالون تجميل بإربد", "dialect": "jordanian", "expect": "chat"}
+{"msg": "انا مش جوعان، اكلت قبل شوي بالمطعم", "dialect": "jordanian", "expect": "chat"}
+{"msg": "امس اكلت بمطعم زفت، دلني على مطعم احسن", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "اخوي السباك مسافر وانا محتاج سباك ضروري", "dialect": "saudi", "expect": "pro:plumber"}
+{"msg": "لو سمحت اذا ما عليك امر، ودي اعرف وين اقرب صيدلية", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "الجو حار والمكيف وقف، تعرف احد يصلحه؟", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "ابوي دكتور اسنان بس مسافر، وضرسي يوجعني، فيه عيادة اسنان قريبة؟", "dialect": "saudi", "expect": "place:dentist"}
+{"msg": "ما ابي مطعم، ابي كافيه هادي اذاكر فيه", "dialect": "saudi", "expect": "place:cafe"}
+{"msg": "ولدي عيد ميلاده بكرة وما جبت له شي، وين القى محل العاب؟", "dialect": "saudi", "expect": "place:toy_store"}
+{"msg": "السيارة طفت بنص الطريق، ابي سطحة", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "الصراحة جوعان مرة وكسلان اطلع، ابي اطلب اكل", "dialect": "saudi", "expect": "order"}
+{"msg": "فيه عروض حلوة اليوم؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "تعبت من الكافيهات الغالية، فيه عروض على القهوة؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "الحمام يهرب موية من تحت البلاط، ابي احد يكشف التسريب", "dialect": "saudi", "expect": "pro:leak_detection"}
+{"msg": "بيتنا فيه صراصير الله يكرمك، ابي احد يرشه", "dialect": "saudi", "expect": "pro:pest_control"}
+{"msg": "ودي اعرف اقرب محطة بنزين لأن السيارة على الاحتياط", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "امي تعبانة شوي، وين اقرب مستشفى؟", "dialect": "saudi", "expect": "place:hospital"}
+{"msg": "عندي زواج الاسبوع الجاي، ابي محل حلاقة وبعدها محل ورد", "dialect": "saudi", "expect": "place:hairdresser + place:florist"}
+{"msg": "رحت المول وما لقيت جزمة مقاسي، فيه محل احذية ثاني قريب؟", "dialect": "saudi", "expect": "place:shoe_store"}
+{"msg": "اذا تكرمت ابي اطلب من البقالة حليب وخبز", "dialect": "saudi", "expect": "order"}
+{"msg": "ابي مدرس خصوصي رياضيات لولدي، درجاته نازلة", "dialect": "saudi", "expect": "pro:tutor"}
+{"msg": "نقلنا بيت جديد ونبي احد يركب الستاير وفني يركب الشاشة", "dialect": "saudi", "expect": "pro:curtain_installer + pro:tv_mount"}
+{"msg": "صديقي يقول فيه مغسلة سيارات زينة قريبة مني، وينها؟", "dialect": "saudi", "expect": "place:car_wash"}
+{"msg": "والله ما ادري وش اسوي، القطو حقي ما ياكل من يومين، ابي بيطري", "dialect": "saudi", "expect": "place:veterinary"}
+{"msg": "عيوني صارت تتعب من الشاشة، ابي محل نظارات", "dialect": "saudi", "expect": "place:optician"}
+{"msg": "ودي احد ينظف المكيفات قبل الصيف", "dialect": "saudi", "expect": "pro:ac_cleaning"}
+{"msg": "كنت ابي اسولف بس صراحة ابي اقرب صراف", "dialect": "saudi", "expect": "place:atm"}
+{"msg": "دلني على محل عود وبخور قريب", "dialect": "saudi", "expect": "other:oud_incense_shop:محل عود وبخور"}
+{"msg": "نبي مكان نسهر فيه مع الشباب، استراحة يعني", "dialect": "saudi", "expect": "other:rest_house:استراحة"}
+{"msg": "اطلب لي من نفس المطعم اللي طلبت منه امس", "dialect": "saudi", "expect": "order"}
+{"msg": "مبارح اكلت بمطعم زفت، دلني على مطعم احسن", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "اخوي سافر وانا محتاج سباك", "dialect": "jordanian", "expect": "pro:plumber"}
+{"msg": "بعد اذنك، بتعرف وين في صيدلية قريبة مني؟", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "الكهربا قاطعة بس عنا، بدي كهربجي", "dialect": "jordanian", "expect": "pro:electrician"}
+{"msg": "بدي اطلب شاورما عالبيت", "dialect": "jordanian", "expect": "order"}
+{"msg": "في عروض على الحلويات اليوم؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "السيارة بتطلع صوت غريب، وين في كراج تصليح قريب؟", "dialect": "jordanian", "expect": "place:car_repair"}
+{"msg": "بنتي بدها معلمة خصوصية انجليزي", "dialect": "jordanian", "expect": "pro:tutor"}
+{"msg": "الغسالة خربت ومش عارفة لمين احكي", "dialect": "jordanian", "expect": "pro:appliance_repair"}
+{"msg": "وين في محل حلويات قريب؟ بدي كنافة", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "امي كبيرة بالعمر وبدها حدا يقعد معها بالنهار", "dialect": "jordanian", "expect": "pro:elderly_care"}
+{"msg": "ما بدي اكل، بدي بس قهوة من كافيه قريب", "dialect": "jordanian", "expect": "place:cafe"}
+{"msg": "بدي حدا ينقلي العفش للشقة الجديدة", "dialect": "jordanian", "expect": "pro:mover"}
+{"msg": "والله تعبت من الحر، في مسبح قريب؟", "dialect": "jordanian", "expect": "other:swimming_pool:مسبح"}
+{"msg": "بدي صراف قريب وبعدها محطة بنزين", "dialect": "jordanian", "expect": "place:atm + place:fuel"}
+{"msg": "صاحبي بيقول في عروض بالسوبرماركت، شو هي؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "تلفوني وقع وانكسرت الشاشة، وين بصلحه؟", "dialect": "jordanian", "expect": "place:phone_repair"}
+{"msg": "بدي حدا يصمملي لوغو لمحلي", "dialect": "jordanian", "expect": "pro:graphic_designer"}
+{"msg": "اطلبلي منسف من مطعم قريب", "dialect": "jordanian", "expect": "order"}
+{"msg": "الولد عنده حرارة، في عيادة فاتحة هلأ؟", "dialect": "jordanian", "expect": "place:clinic"}

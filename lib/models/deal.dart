@@ -53,7 +53,7 @@ class Deal {
       case 'percent':
         return value != null ? 'خصم ${value!.toStringAsFixed(0)}٪' : 'خصم';
       case 'fixed':
-        return value != null ? 'خصم ${value!.toStringAsFixed(0)} ${currencyLabel(currency)}' : 'خصم';
+        return value != null ? 'خصم ${formatPrice(value!, currency)}' : 'خصم';
       case 'bogo':
         return 'اشتري واحد واحصل على الثاني مجاناً';
       case 'free_item':

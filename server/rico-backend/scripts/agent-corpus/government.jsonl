@@ -1,0 +1,102 @@
+{"msg": "وين اقرب جوازات", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "ابغى مكتب الاحول المدنيه القريب مني", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "صراف", "dialect": "saudi", "expect": "place:atm"}
+{"msg": "ابي صراف الراجحي قريب", "dialect": "saudi", "expect": "place:atm"}
+{"msg": "فيه بنك الاهلي مفتوح الحين؟", "dialect": "saudi", "expect": "place:bank"}
+{"msg": "دلني على اقرب صرافه احول ريال لدولار", "dialect": "saudi", "expect": "place:money_exchange"}
+{"msg": "احسن مكتب ترجمه معتمد بالرياض", "dialect": "saudi", "expect": "other:translation_office:مكتب ترجمة"}
+{"msg": "ابغى مترجم يترجم لي شهاداتي عشان السفاره", "dialect": "saudi", "expect": "pro:translator"}
+{"msg": "اقرب مكتب تعقيب", "dialect": "saudi", "expect": "other:document_clearance_office:مكتب تعقيب معاملات"}
+{"msg": "محتاج معقب يخلص لي معامله في البلديه ضروري", "dialect": "saudi", "expect": "other:document_clearance_office:مكتب تعقيب معاملات"}
+{"msg": "وين مكتب استقدام قريب ابي اجيب عامله منزليه", "dialect": "saudi", "expect": "other:recruitment_office:مكتب استقدام"}
+{"msg": "ابي محامي شاطر في القضايا العماليه", "dialect": "saudi", "expect": "place:lawyer"}
+{"msg": "اقرب كتابة عدل", "dialect": "saudi", "expect": "other:notary:كاتب عدل"}
+{"msg": "وين المحكمه العامه", "dialect": "saudi", "expect": "other:courthouse:محكمة"}
+{"msg": "ابي فرع المرور ابغى اجدد الرخصه", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "وين الفحص الدوري اقرب واحد لي", "dialect": "saudi", "expect": "other:vehicle_inspection:فحص دوري"}
+{"msg": "كيف اجدد الجواز من ابشر؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابغى شقه للايجار في حي النرجس عوائل", "dialect": "saudi", "expect": "place:real_estate"}
+{"msg": "مكتب عقار قريب", "dialect": "saudi", "expect": "place:real_estate"}
+{"msg": "ارخص تامين سيارات قريب مني", "dialect": "saudi", "expect": "place:insurance"}
+{"msg": "ابي محاسب يسوي لي الاقرار الزكوي للمؤسسه", "dialect": "saudi", "expect": "pro:accountant"}
+{"msg": "وين مكتب البريد السعودي سبل", "dialect": "saudi", "expect": "place:post_office"}
+{"msg": "ابغى ارسل شحنه ارامكس وين اقرب فرع", "dialect": "saudi", "expect": "other:courier:شركة شحن"}
+{"msg": "اقرب مطبعه تطبع كروت شخصيه", "dialect": "saudi", "expect": "other:print_shop:مطبعة"}
+{"msg": "ابي اصور اوراق ضروري وين فيه تصوير قريب", "dialect": "saudi", "expect": "other:print_shop:تصوير مستندات"}
+{"msg": "مكتبه قرطاسيه قريبه", "dialect": "saudi", "expect": "place:bookstore"}
+{"msg": "وين موقف التكاسي", "dialect": "saudi", "expect": "other:taxi_stand:موقف تكاسي"}
+{"msg": "ابغى سواق خاص يوديني المطار الفجر", "dialect": "saudi", "expect": "pro:driver"}
+{"msg": "ابي استاجر سياره رخيصه لمدة اسبوع", "dialect": "saudi", "expect": "place:car_rental"}
+{"msg": "وين اقرب مواقف سيارات بالعليا", "dialect": "saudi", "expect": "place:parking"}
+{"msg": "اقرب مركز شرطه", "dialect": "saudi", "expect": "place:police"}
+{"msg": "الدفاع المدني وين", "dialect": "saudi", "expect": "other:fire_station:دفاع مدني"}
+{"msg": "ابي شريحه سوا وين اقرب فرع STC", "dialect": "saudi", "expect": "other:telecom_store:محل اتصالات"}
+{"msg": "مكتب العمل وين مكانه", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "التامينات الاجتماعيه اقرب فرع", "dialect": "saudi", "expect": "place:government_office"}
+{"msg": "وين السفاره الاردنيه بالرياض", "dialect": "saudi", "expect": "other:embassy:سفارة"}
+{"msg": "ابي محطة باصات سابتكو", "dialect": "saudi", "expect": "other:bus_station:محطة باصات"}
+{"msg": "كم يبعد المطار عني", "dialect": "saudi", "expect": "other:airport:مطار"}
+{"msg": "ابي احول فلوس لاهلي برا وين اقرب ويسترن يونيون", "dialect": "saudi", "expect": "place:money_exchange"}
+{"msg": "مكتب سفريات ابي احجز تذاكر للقاهره", "dialect": "saudi", "expect": "place:travel_agency"}
+{"msg": "ابي صراف وبعدين مطبعه اطبع اوراق", "dialect": "saudi", "expect": "place:atm + other:print_shop:مطبعة"}
+{"msg": "وين اقرب جوازات ومكتب تصوير جنبه", "dialect": "saudi", "expect": "place:government_office + other:print_shop:تصوير مستندات"}
+{"msg": "ابغى بنك الراجحي وصرافه احول دولار", "dialect": "saudi", "expect": "place:bank + place:money_exchange"}
+{"msg": "ابي محامي ومترجم معتمد لقضيه عندي", "dialect": "saudi", "expect": "place:lawyer + pro:translator"}
+{"msg": "اقرب بريد ومكتبه قرطاسيه", "dialect": "saudi", "expect": "place:post_office + place:bookstore"}
+{"msg": "السلام عليكم", "dialect": "saudi", "expect": "chat"}
+{"msg": "وش الاوراق المطلوبه لتجديد الاقامه", "dialect": "saudi", "expect": "chat"}
+{"msg": "تقدر تحجز لي موعد بالاحوال؟", "dialect": "saudi", "expect": "chat"}
+{"msg": "فيه عروض على تاجير السيارات هالاسبوع؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "ابي اطلب من مكتبة جرير حبر طابعه وورق A4", "dialect": "saudi", "expect": "order"}
+{"msg": "السلام عليكم ياخي انا جديد بالرياض ووصلت امس وابغى افتح حساب بنكي، وين اقرب بنك مفتوح الحين؟", "dialect": "saudi", "expect": "place:bank"}
+{"msg": "وين اقرب دائرة احوال مدنيه", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "بدي اروح عالجوزات وين اقربها", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "وين ترخيص السيارات بالمنطقة", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "صراف الي", "dialect": "jordanian", "expect": "place:atm"}
+{"msg": "في صراف قريب؟", "dialect": "jordanian", "expect": "place:atm"}
+{"msg": "بدي بنك الاسكان مفتوح هلأ", "dialect": "jordanian", "expect": "place:bank"}
+{"msg": "وين في صرافة بدي اصرف دولار", "dialect": "jordanian", "expect": "place:money_exchange"}
+{"msg": "بدي ابعت مصاري لبرا وين في ويسترن يونيون", "dialect": "jordanian", "expect": "place:money_exchange"}
+{"msg": "وين اقرب مكتب بريد", "dialect": "jordanian", "expect": "place:post_office"}
+{"msg": "بدي ابعت طرد لاربد بأرامكس", "dialect": "jordanian", "expect": "other:courier:شركة شحن"}
+{"msg": "وين في مكتب ترجمة قانونية", "dialect": "jordanian", "expect": "other:translation_office:مكتب ترجمة"}
+{"msg": "بدي مترجم يترجملي عقد للانجليزي", "dialect": "jordanian", "expect": "pro:translator"}
+{"msg": "دلني على مكتب خدمات بخلص معاملات", "dialect": "jordanian", "expect": "other:document_clearance_office:مكتب تعقيب معاملات"}
+{"msg": "امانة عمان اقرب مبنى الها", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "الضمان الاجتماعي وين فرعه", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "بدي مركز امني قريب", "dialect": "jordanian", "expect": "place:police"}
+{"msg": "وين اقرب دفاع مدني", "dialect": "jordanian", "expect": "other:fire_station:دفاع مدني"}
+{"msg": "بدي اجار شقة مفروشة بالجبيهة", "dialect": "jordanian", "expect": "place:real_estate"}
+{"msg": "مكتب عقارات بخلدا", "dialect": "jordanian", "expect": "place:real_estate"}
+{"msg": "بدي تامين شامل لسيارتي ارخص شركة", "dialect": "jordanian", "expect": "place:insurance"}
+{"msg": "محامي احوال شخصية بعمان", "dialect": "jordanian", "expect": "place:lawyer"}
+{"msg": "بدي محاسب قانوني لشركتي", "dialect": "jordanian", "expect": "pro:accountant"}
+{"msg": "وين مطبعة بتطبع بانرات", "dialect": "jordanian", "expect": "other:print_shop:مطبعة"}
+{"msg": "بدي اصور هويتي وين في تصوير اوراق", "dialect": "jordanian", "expect": "other:print_shop:تصوير مستندات"}
+{"msg": "مكتبه قريبه بدي قرطاسية للمدرسة", "dialect": "jordanian", "expect": "place:bookstore"}
+{"msg": "وين مجمع الباصات الشمالي", "dialect": "jordanian", "expect": "other:bus_station:محطة باصات"}
+{"msg": "بدي اروح عالمطار، بدي سواق", "dialect": "jordanian", "expect": "pro:driver"}
+{"msg": "بدي استاجر سيارة يوم واحد بس", "dialect": "jordanian", "expect": "place:car_rental"}
+{"msg": "وين في باركينج قريب من البلد", "dialect": "jordanian", "expect": "place:parking"}
+{"msg": "وين اقرب محل زين بدي شريحة", "dialect": "jordanian", "expect": "other:telecom_store:محل اتصالات"}
+{"msg": "اورنج وين فرعهم", "dialect": "jordanian", "expect": "other:telecom_store:محل اتصالات"}
+{"msg": "وين بدفع فاتورة المي", "dialect": "jordanian", "expect": "other:bill_payment:مركز دفع فواتير"}
+{"msg": "السفارة الامريكية وين", "dialect": "jordanian", "expect": "other:embassy:سفارة"}
+{"msg": "القنصلية المصرية بعمان", "dialect": "jordanian", "expect": "other:embassy:قنصلية"}
+{"msg": "قصر العدل وين", "dialect": "jordanian", "expect": "other:courthouse:محكمة"}
+{"msg": "وين كاتب العدل", "dialect": "jordanian", "expect": "other:notary:كاتب عدل"}
+{"msg": "بدي مكتب استقدام عاملات", "dialect": "jordanian", "expect": "other:recruitment_office:مكتب استقدام"}
+{"msg": "مكتب سياحة وسفر بدي احجز عمرة", "dialect": "jordanian", "expect": "place:travel_agency"}
+{"msg": "وزارة العمل وين", "dialect": "jordanian", "expect": "place:government_office"}
+{"msg": "كيف بطلع شهادة عدم محكومية؟", "dialect": "jordanian", "expect": "chat"}
+{"msg": "مرحبا كيفك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شكرا الك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو بتعرف تعمل انت", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بدي صراف وصرافة بنفس المنطقة", "dialect": "jordanian", "expect": "place:atm + place:money_exchange"}
+{"msg": "وين البريد ومكتب ترجمة قريب منه", "dialect": "jordanian", "expect": "place:post_office + other:translation_office:مكتب ترجمة"}
+{"msg": "بدي محامي ومحاسب لشركة جديدة", "dialect": "jordanian", "expect": "place:lawyer + pro:accountant"}
+{"msg": "بدي اجار سيارة وكمان باركينج بالمطار", "dialect": "jordanian", "expect": "place:car_rental + place:parking"}
+{"msg": "وين دائرة الترخيص وكمان بدي مكتب تامين قريب", "dialect": "jordanian", "expect": "place:government_office + place:insurance"}
+{"msg": "في عروض على شرايح زين؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "بدي اطلب من المكتبة دفاتر واقلام توصيل للبيت", "dialect": "jordanian", "expect": "order"}
+{"msg": "مرحبا، انا مغترب ونازل عالاردن الاسبوع الجاي ولازم اجدد جوازي واصرف مصاري، وين اقرب جوازات وصرافة من الدوار السابع؟", "dialect": "jordanian", "expect": "place:government_office + place:money_exchange"}

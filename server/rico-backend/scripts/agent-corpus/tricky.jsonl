@@ -1,0 +1,105 @@
+{"msg": "abgha 9aydaliya garibah", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "bade ma63am qareeb mni", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "wen a2rab kofi", "dialect": "jordanian", "expect": "place:cafe"}
+{"msg": "fe 7ad bbee3 benzeen 2areeb? el sayyara 3al fadi", "dialect": "jordanian", "expect": "place:fuel"}
+{"msg": "abi 7alla2 rjali", "dialect": "saudi", "expect": "place:hairdresser"}
+{"msg": "bdi sabbak dagheel el mai btnazel mn el sa2f", "dialect": "jordanian", "expect": "pro:plumber"}
+{"msg": "wein a2rab ATM", "dialect": "jordanian", "expect": "place:atm"}
+{"msg": "abgha mughsala lil sayyara", "dialect": "saudi", "expect": "place:car_wash"}
+{"msg": "fi gym 2areeb 3alay?", "dialect": "jordanian", "expect": "place:fitness_centre"}
+{"msg": "abgha fanni takyeef el mukayyef ma ybarrid", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "bdi kahraba2i daroori el kahraba ma2tou3a", "dialect": "jordanian", "expect": "pro:electrician"}
+{"msg": "ana ta3ban kteer bdi mostashfa", "dialect": "jordanian", "expect": "place:hospital"}
+{"msg": "3ndkom 3orood elyom?", "dialect": "saudi", "expect": "deals"}
+{"msg": "nearest pharmacy", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "I need a plumber asap, kitchen sink is leaking", "dialect": "saudi", "expect": "pro:plumber"}
+{"msg": "any good burger place near me?", "dialect": "jordanian", "expect": "place:restaurant"}
+{"msg": "where can I exchange dollars", "dialect": "jordanian", "expect": "place:money_exchange"}
+{"msg": "looking for a hotel for tonight", "dialect": "saudi", "expect": "place:hotel"}
+{"msg": "wedding hall for 300 guests", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "gas station", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "my car won't start, need a mechanic to come to me", "dialect": "saudi", "expect": "pro:car_mechanic"}
+{"msg": "ابي coffee shop هادي اذاكر فيه", "dialect": "saudi", "expect": "place:cafe"}
+{"msg": "وين أقرب supermarket مفتوح الحين", "dialect": "saudi", "expect": "place:supermarket"}
+{"msg": "بدي اعمل oil change للسيارة", "dialect": "jordanian", "expect": "place:oil_change"}
+{"msg": "محتاج technician للـ AC ضروري", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "ابغا صيدليه قريبه مني", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "وين اقرب مستشفي", "dialect": "saudi", "expect": "place:hospital"}
+{"msg": "بدي مخبزه فيها كعك", "dialect": "jordanian", "expect": "place:bakery"}
+{"msg": "وين محطه بنزبن", "dialect": "jordanian", "expect": "place:fuel"}
+{"msg": "ابغى مغسله ملابس", "dialect": "saudi", "expect": "place:laundry"}
+{"msg": "ابي سباك ضروري المويه طايفه بالحمام", "dialect": "saudi", "expect": "pro:plumber"}
+{"msg": "بدي صالون نسائى قريب", "dialect": "jordanian", "expect": "place:beauty"}
+{"msg": "ابي دكتور اسنااان ضرسي يوجعني", "dialect": "saudi", "expect": "place:dentist"}
+{"msg": "ابغي كهربائى يركب لي نجفه", "dialect": "saudi", "expect": "pro:electrician"}
+{"msg": "عندي ضرف مستعجل ابي سطحه السياره خربانه بالطريق", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "ابي فني تكيبف", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "يا ريكو الله يخليك بدي اعرف وين في صيدلية مناوبة هلأ", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "ريكو ريكو اسمعني ابي اروح مطعم بخاري حلو وقريب يعني مو بعيد", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "اممم شوف لي يعني اذا في مكان اصلح فيه الجوال الشاشة انكسرت", "dialect": "saudi", "expect": "place:phone_repair"}
+{"msg": "مرحبا ريكو كيفك بدي بليز سوبرماركت قريب عشان اجيب غراض", "dialect": "jordanian", "expect": "place:supermarket"}
+{"msg": "انا عالطريق والكفر نام بدي حدا يجي يغيرلي اياه", "dialect": "jordanian", "expect": "pro:tire_service"}
+{"msg": "عايز صيدلية قريبة", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "فين أقرب كافيه هنا", "dialect": "saudi", "expect": "place:cafe"}
+{"msg": "عايز سباك يجيلي البيت النهارده", "dialect": "saudi", "expect": "pro:plumber"}
+{"msg": "أبا مطعم سمك زين", "dialect": "saudi", "expect": "place:restaurant"}
+{"msg": "وين أحصل محل ورد", "dialect": "saudi", "expect": "place:florist"}
+{"msg": "أبي حد ينظف لي الكنب", "dialect": "saudi", "expect": "pro:sofa_cleaning"}
+{"msg": "اكو صراف آلي قريب؟", "dialect": "jordanian", "expect": "place:atm"}
+{"msg": "اريد اسطة يصلح المبردة", "dialect": "jordanian", "expect": "pro:ac_technician"}
+{"msg": "بدي حدا يدهنلي البيت", "dialect": "jordanian", "expect": "pro:painter"}
+{"msg": "وين في فرن مناقيش قريب", "dialect": "jordanian", "expect": "place:bakery"}
+{"msg": "بغيت شي فرمسيان قريب", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "فين كاين شي حانوت قريب", "dialect": "jordanian", "expect": "place:supermarket"}
+{"msg": "بغيت نصرف الأورو", "dialect": "jordanian", "expect": "place:money_exchange"}
+{"msg": "بنزين", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "صراف", "dialect": "saudi", "expect": "place:atm"}
+{"msg": "حلاق", "dialect": "jordanian", "expect": "place:hairdresser"}
+{"msg": "قاعه", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "سباك", "dialect": "saudi", "expect": "pro:plumber"}
+{"msg": "مسجد", "dialect": "saudi", "expect": "place:mosque"}
+{"msg": "جيم", "dialect": "jordanian", "expect": "place:fitness_centre"}
+{"msg": "عروض", "dialect": "saudi", "expect": "deals"}
+{"msg": "السيارة خلصت بنزين", "dialect": "saudi", "expect": "place:fuel"}
+{"msg": "شعري طويل مره", "dialect": "saudi", "expect": "place:hairdresser"}
+{"msg": "ملابسي وسخة وما عندي غسالة", "dialect": "jordanian", "expect": "place:laundry"}
+{"msg": "جوالي انكسر", "dialect": "saudi", "expect": "place:phone_repair"}
+{"msg": "ابني عيد ميلاده بكرة بدي كيكة", "dialect": "jordanian", "expect": "place:sweets"}
+{"msg": "بدي اتزوج الشهر الجاي", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح"}
+{"msg": "المكيف يطلع موية وما يبرد", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "ضرسي يوجعني ما نمت طول الليل", "dialect": "saudi", "expect": "place:dentist"}
+{"msg": "الكلب تبعي مريض", "dialect": "jordanian", "expect": "place:veterinary"}
+{"msg": "البيت مليان صراصير", "dialect": "saudi", "expect": "pro:pest_control"}
+{"msg": "راسي يوجعني وخلص البنادول", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "المجاري طافحة بالحمام", "dialect": "saudi", "expect": "pro:drain_cleaning"}
+{"msg": "رح انقل على شقة جديدة الأسبوع الجاي", "dialect": "jordanian", "expect": "pro:mover"}
+{"msg": "ثوبي طويل ابي اقصره", "dialect": "saudi", "expect": "place:tailor"}
+{"msg": "هلا والله", "dialect": "saudi", "expect": "chat"}
+{"msg": "شكرا ريكو ما قصرت", "dialect": "saudi", "expect": "chat"}
+{"msg": "مين انت", "dialect": "jordanian", "expect": "chat"}
+{"msg": "شو بتعرف تسوي", "dialect": "jordanian", "expect": "chat"}
+{"msg": "قول نكتة", "dialect": "saudi", "expect": "chat"}
+{"msg": "مين رح يفوز الهلال ولا النصر", "dialect": "saudi", "expect": "chat"}
+{"msg": "كيف الطقس بكرة", "dialect": "jordanian", "expect": "chat"}
+{"msg": "متى أذان العصر", "dialect": "saudi", "expect": "chat"}
+{"msg": "انا زعلان", "dialect": "jordanian", "expect": "chat"}
+{"msg": "كم الساعة", "dialect": "saudi", "expect": "chat"}
+{"msg": "thx bro", "dialect": "jordanian", "expect": "chat"}
+{"msg": "ent bot wala insan?", "dialect": "saudi", "expect": "chat"}
+{"msg": "تدلل شو يعني اسمك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "صباح الخير", "dialect": "saudi", "expect": "chat"}
+{"msg": "hala ya rico shlonak", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي صيدلية وبعدها محطة بنزين", "dialect": "saudi", "expect": "place:pharmacy + place:fuel"}
+{"msg": "bade ma63am w ba3den kofi", "dialect": "jordanian", "expect": "place:restaurant + place:cafe"}
+{"msg": "need an ATM and a supermarket nearby", "dialect": "saudi", "expect": "place:atm + place:supermarket"}
+{"msg": "بدي كهربائي وسباك للبيت الجديد", "dialect": "jordanian", "expect": "pro:electrician + pro:plumber"}
+{"msg": "وين اقرب مغسلة سيارات و تغيير زيت", "dialect": "saudi", "expect": "place:car_wash + place:oil_change"}
+{"msg": "عايز فندق ومطعم قريب منه", "dialect": "saudi", "expect": "place:hotel + place:restaurant"}
+{"msg": "بدي قاعة عرس ومصور وحنّاية", "dialect": "jordanian", "expect": "other:wedding_hall:قاعة أفراح + pro:photographer + pro:henna_artist"}
+{"msg": "ابي حلاق وبعدين محل ملابس رجالي، وفيه عروض؟", "dialect": "saudi", "expect": "place:hairdresser + place:clothes + deals"}
+{"msg": "ابي اطلب ٢ شاورما دجاج من اقرب مطعم", "dialect": "saudi", "expect": "order"}
+{"msg": "bade a6lob pizza large w pepsi", "dialect": "jordanian", "expect": "order"}
+{"msg": "اطلب لي من الصيدلية بنادول وفيتامين سي", "dialect": "saudi", "expect": "order"}
+{"msg": "I want to order the burger meal from that place you showed", "dialect": "jordanian", "expect": "order"}
+{"msg": "عايز اطلب كيلو كنافة من محل الحلويات اللي فوق", "dialect": "saudi", "expect": "order"}
+{"msg": "ابغى اطلب ٣ قهوة لاتيه من الكوفي الاول", "dialect": "saudi", "expect": "order"}

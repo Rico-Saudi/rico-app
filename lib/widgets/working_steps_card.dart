@@ -26,7 +26,7 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
     'حدّدت موقعك',
     'أفحص ${widget.searchLabel} القريبة',
     'أقارن الأسعار والتقييمات',
-    'أجهّز لك أفضل الخيارات',
+    'بجهّزلك أحسن الخيارات',
   ];
 
   @override

@@ -1,0 +1,116 @@
+{"msg": "المكيف ما يبرد ابي احد يشوفه اليوم", "dialect": "saudi", "expect": "pro:ac_technician"}
+{"msg": "الحمام مسدود والموية راجعه من البلاعه", "dialect": "saudi", "expect": "pro:drain_cleaning"}
+{"msg": "الكهربا طافيه بنص البيت والقاطع كل شوي يفصل", "dialect": "saudi", "expect": "pro:electrician"}
+{"msg": "ابغى شركه نقل عفش من الرياض لجده", "dialect": "saudi", "expect": "pro:mover"}
+{"msg": "وين اقرب محل مراتب", "dialect": "saudi", "expect": "place:furniture_store"}
+{"msg": "ابي محل سجاد زين وسعره معقول", "dialect": "saudi", "expect": "other:carpet_store:محل سجاد"}
+{"msg": "محتاج احد يركب لي ستاير بالمجلس", "dialect": "saudi", "expect": "pro:curtain_installer"}
+{"msg": "وين القى محل بويات جوتن", "dialect": "saudi", "expect": "other:paint_store:محل بويات"}
+{"msg": "اقرب محل ادوات صحيه", "dialect": "saudi", "expect": "other:plumbing_supply:محل أدوات صحية"}
+{"msg": "فيه مشتل قريب ابي شتلات ونخل صغير", "dialect": "saudi", "expect": "other:plant_nursery:مشتل"}
+{"msg": "السياره تصفر لما ادعس فرامل", "dialect": "saudi", "expect": "place:car_repair"}
+{"msg": "ابي اغير زيت السياره وين اروح", "dialect": "saudi", "expect": "place:oil_change"}
+{"msg": "وين احسن مغسله سيارات بالحي", "dialect": "saudi", "expect": "place:car_wash"}
+{"msg": "ابغى تظليل للسياره عازل حراري", "dialect": "saudi", "expect": "other:car_tinting:محل تظليل"}
+{"msg": "دلني على تشليح قريب", "dialect": "saudi", "expect": "other:scrapyard:تشليح"}
+{"msg": "قطع غيار كامري 2015 اصليه", "dialect": "saudi", "expect": "place:auto_parts"}
+{"msg": "ابي سطحه سيارتي خربت عند مخرج 5", "dialect": "saudi", "expect": "pro:tow_truck"}
+{"msg": "البطاريه نايمه والسياره ما تشتغل ابي احد يجيني", "dialect": "saudi", "expect": "pro:auto_electrician"}
+{"msg": "وين الفحص الدوري", "dialect": "saudi", "expect": "other:vehicle_inspection:فحص دوري"}
+{"msg": "ابي استاجر سياره يومي رخيصه", "dialect": "saudi", "expect": "place:car_rental"}
+{"msg": "معارض سيارات جديده بالرياض", "dialect": "saudi", "expect": "place:car_dealer"}
+{"msg": "ابغى جوال جديد ايفون", "dialect": "saudi", "expect": "place:mobile_phone"}
+{"msg": "شاشة جوالي انكسرت ابي اصلحها", "dialect": "saudi", "expect": "place:phone_repair"}
+{"msg": "لابتوب للجامعه وين اشتري", "dialect": "saudi", "expect": "other:computer_store:محل كمبيوتر"}
+{"msg": "محل بلايستيشن يبيع اشرطه", "dialect": "saudi", "expect": "other:video_game_store:محل بلايستيشن"}
+{"msg": "ابي عود ودهن عود اصلي", "dialect": "saudi", "expect": "other:perfume_shop:محل عطور"}
+{"msg": "وين القى بخور ومعمول زين", "dialect": "saudi", "expect": "other:perfume_shop:محل عطور"}
+{"msg": "ابغى عبايه سوداء ساده", "dialect": "saudi", "expect": "place:clothes"}
+{"msg": "ابي شماغ وثوب جاهز للعيد", "dialect": "saudi", "expect": "place:clothes"}
+{"msg": "ابي افصل ثوب", "dialect": "saudi", "expect": "place:tailor"}
+{"msg": "وين محلات الذهب", "dialect": "saudi", "expect": "place:jewelry_store"}
+{"msg": "ساعه رجالي ماركه وين احصل", "dialect": "saudi", "expect": "other:watch_store:محل ساعات"}
+{"msg": "ابي جزمه رياضيه", "dialect": "saudi", "expect": "place:shoe_store"}
+{"msg": "شنطه نسائيه ماركه", "dialect": "saudi", "expect": "other:bag_store:محل شنط"}
+{"msg": "العاب اطفال قريب", "dialect": "saudi", "expect": "place:toy_store"}
+{"msg": "اكل قطط ورمل", "dialect": "saudi", "expect": "place:pet_store"}
+{"msg": "قرطاسيه قريبه ابي دفاتر للمدرسه", "dialect": "saudi", "expect": "other:stationery_store:قرطاسية"}
+{"msg": "محل اواني ومواعين", "dialect": "saudi", "expect": "other:kitchenware_store:محل أواني"}
+{"msg": "وين الحراج", "dialect": "saudi", "expect": "other:second_hand_market:حراج"}
+{"msg": "انقفلت السياره والمفتاح داخلها", "dialect": "saudi", "expect": "other:locksmith:محل مفاتيح"}
+{"msg": "ابي احد يسوي لي شباك المنيوم", "dialect": "saudi", "expect": "pro:aluminum_glass"}
+{"msg": "موية صحه توصيل للبيت", "dialect": "saudi", "expect": "other:water_delivery:توصيل مياه"}
+{"msg": "جرة الغاز خلصت وين اعبيها", "dialect": "saudi", "expect": "other:gas_cylinders:محل غاز"}
+{"msg": "صراصير بالمطبخ مو طبيعي", "dialect": "saudi", "expect": "pro:pest_control"}
+{"msg": "ابي شركه تنظيف للفله قبل العيد", "dialect": "saudi", "expect": "pro:cleaner"}
+{"msg": "حديد واسمنت وبلك وين ارخص مكان", "dialect": "saudi", "expect": "other:building_materials:مواد بناء"}
+{"msg": "الغساله ما تعصر", "dialect": "saudi", "expect": "pro:appliance_repair"}
+{"msg": "الثلاجه ما تبرد والفريزر شغال", "dialect": "saudi", "expect": "pro:refrigeration"}
+{"msg": "ابي كهربائي سيارات شاطر", "dialect": "saudi", "expect": "pro:auto_electrician"}
+{"msg": "فيه عروض على المكيفات؟", "dialect": "saudi", "expect": "deals"}
+{"msg": "وش افضل نوع مكيف سبليت", "dialect": "saudi", "expect": "chat"}
+{"msg": "ابي سباك وكهربائي", "dialect": "saudi", "expect": "pro:plumber + pro:electrician"}
+{"msg": "وين بنشر واقرب محطه بنزين", "dialect": "saudi", "expect": "other:tire_shop:بنشر + place:fuel"}
+{"msg": "ابغى مغسله سيارات وبعدها محل قطع غيار", "dialect": "saudi", "expect": "place:car_wash + place:auto_parts"}
+{"msg": "ابي شركه نقل عفش وعامل تنظيف للشقه الجديده", "dialect": "saudi", "expect": "pro:mover + pro:cleaner"}
+{"msg": "المكيف يقطر موية والمغسله مسدوده", "dialect": "saudi", "expect": "pro:ac_technician + pro:drain_cleaning"}
+{"msg": "ابي اطلب جرتين غاز من محل الغاز اللي جنبي", "dialect": "saudi", "expect": "order"}
+{"msg": "اطلب لي ٣ كراتين موية من البقاله", "dialect": "saudi", "expect": "order"}
+{"msg": "اطلبلي من محل العطور تولة عود كمبودي", "dialect": "saudi", "expect": "order"}
+{"msg": "البويلر خربان وما في مي سخنة", "dialect": "jordanian", "expect": "pro:plumber"}
+{"msg": "بدي بويلرجي ضروري", "dialect": "jordanian", "expect": "pro:plumber"}
+{"msg": "بدي ستلايتجي الدش مش ملقط", "dialect": "jordanian", "expect": "pro:satellite_technician"}
+{"msg": "وين في بنشر قريب الكوشوك نايم", "dialect": "jordanian", "expect": "other:tire_shop:بنشر"}
+{"msg": "الكوشوك مفشوش وانا عالطريق الصحراوي", "dialect": "jordanian", "expect": "pro:tire_service"}
+{"msg": "بدي ونش السيارة طفت عالدوار السابع", "dialect": "jordanian", "expect": "pro:tow_truck"}
+{"msg": "المجلى مسكر والمي مش نازلة", "dialect": "jordanian", "expect": "pro:drain_cleaning"}
+{"msg": "الحنفية بتنقط من مبارح", "dialect": "jordanian", "expect": "pro:plumber"}
+{"msg": "الكهربا قاطعة عندي بس الجيران عندهم", "dialect": "jordanian", "expect": "pro:electrician"}
+{"msg": "بدي دهين يدهنلي الصالون", "dialect": "jordanian", "expect": "pro:painter"}
+{"msg": "بدي نجار يصلح باب الخزانة", "dialect": "jordanian", "expect": "pro:carpenter"}
+{"msg": "بدي منجد للكنب", "dialect": "jordanian", "expect": "pro:upholsterer"}
+{"msg": "بدي حدا ينظف الكنب والسجاد", "dialect": "jordanian", "expect": "pro:sofa_cleaning"}
+{"msg": "بدي شركة نقل اثاث من عمان لاربد", "dialect": "jordanian", "expect": "pro:mover"}
+{"msg": "وين في محل كهربائيات بالجبيهة", "dialect": "jordanian", "expect": "other:electrical_supplies:محل كهربائيات"}
+{"msg": "بدي محل عدة وبراغي", "dialect": "jordanian", "expect": "place:hardware_store"}
+{"msg": "وين اقرب مخزن مواد بنا", "dialect": "jordanian", "expect": "other:building_materials:مواد بناء"}
+{"msg": "بدي بلاط للحمام وين في معارض", "dialect": "jordanian", "expect": "other:tile_store:محل بلاط وسيراميك"}
+{"msg": "بدي مشتل بعمان الغربية", "dialect": "jordanian", "expect": "other:plant_nursery:مشتل"}
+{"msg": "السيارة مش راضية تدور بدي ميكانيكي يجي عالبيت", "dialect": "jordanian", "expect": "pro:car_mechanic"}
+{"msg": "وين في كراج منيح لصيانة السيارات", "dialect": "jordanian", "expect": "place:car_repair"}
+{"msg": "بدي اغير زيت وفلتر", "dialect": "jordanian", "expect": "place:oil_change"}
+{"msg": "بدي سمكري للصدام", "dialect": "jordanian", "expect": "pro:car_body"}
+{"msg": "قطع غيار هونداي سيفيك", "dialect": "jordanian", "expect": "place:auto_parts"}
+{"msg": "بدي قطعة مستعملة من السكراب", "dialect": "jordanian", "expect": "other:scrapyard:سكراب"}
+{"msg": "بدي افحص سيارة قبل ما اشتريها", "dialect": "jordanian", "expect": "other:vehicle_inspection:فحص سيارات"}
+{"msg": "تأجير سيارات بالعقبة", "dialect": "jordanian", "expect": "place:car_rental"}
+{"msg": "معرض سيارات مستعمل بالزرقاء", "dialect": "jordanian", "expect": "place:car_dealer"}
+{"msg": "كفر للموبايل وشاحن", "dialect": "jordanian", "expect": "place:mobile_phone"}
+{"msg": "وين بلاقي محل بيع لابتوبات", "dialect": "jordanian", "expect": "other:computer_store:محل كمبيوتر"}
+{"msg": "بدي سيدي فيفا لبلايستيشن 5", "dialect": "jordanian", "expect": "other:video_game_store:محل بلايستيشن"}
+{"msg": "وين احسن محل عطور بعمان", "dialect": "jordanian", "expect": "other:perfume_shop:محل عطور"}
+{"msg": "بدي شماغ احمر", "dialect": "jordanian", "expect": "place:clothes"}
+{"msg": "محل احذية رجالي", "dialect": "jordanian", "expect": "place:shoe_store"}
+{"msg": "محل ذهب بوسط البلد", "dialect": "jordanian", "expect": "place:jewelry_store"}
+{"msg": "بدي عصفور كناري وقفص", "dialect": "jordanian", "expect": "place:pet_store"}
+{"msg": "مكتبة قرطاسية للمدارس", "dialect": "jordanian", "expect": "other:stationery_store:قرطاسية"}
+{"msg": "قفلت الباب والمفتاح جوا", "dialect": "jordanian", "expect": "other:locksmith:محل مفاتيح"}
+{"msg": "الغسالة بتطلع صوت عالي", "dialect": "jordanian", "expect": "pro:appliance_repair"}
+{"msg": "البراد مش عم يبرد", "dialect": "jordanian", "expect": "pro:refrigeration"}
+{"msg": "المكيف بنقط مي جوا الغرفة", "dialect": "jordanian", "expect": "pro:ac_technician"}
+{"msg": "بدي محل يصلح صوبة غاز", "dialect": "jordanian", "expect": "place:appliance_repair"}
+{"msg": "بدي كاميرات مراقبة للمحل", "dialect": "jordanian", "expect": "pro:cctv"}
+{"msg": "خزان المي بدو تنظيف", "dialect": "jordanian", "expect": "pro:water_tank_cleaning"}
+{"msg": "بدي تنك مي للبيت", "dialect": "jordanian", "expect": "other:water_tanker:صهريج مياه"}
+{"msg": "زجاج السيارة الامامي مكسور", "dialect": "jordanian", "expect": "other:auto_glass:زجاج سيارات"}
+{"msg": "وين في محل زينة سيارات", "dialect": "jordanian", "expect": "other:car_accessories:زينة سيارات"}
+{"msg": "ارخص تظليل بعمان", "dialect": "jordanian", "expect": "other:car_tinting:محل تظليل"}
+{"msg": "في عروض على الكوشوك؟", "dialect": "jordanian", "expect": "deals"}
+{"msg": "شو الفرق بين زيت 5w30 و 10w40", "dialect": "jordanian", "expect": "chat"}
+{"msg": "بدي سباك وكهربجي بنفس اليوم", "dialect": "jordanian", "expect": "pro:plumber + pro:electrician"}
+{"msg": "بدي بنشر وغسيل سيارات قراب", "dialect": "jordanian", "expect": "other:tire_shop:بنشر + place:car_wash"}
+{"msg": "بدي دهين وحدا يبلط المطبخ", "dialect": "jordanian", "expect": "pro:painter + pro:tiler"}
+{"msg": "وين محل جرار غاز ومحل عدة", "dialect": "jordanian", "expect": "other:gas_cylinders:محل غاز + place:hardware_store"}
+{"msg": "بدي نقل عفش ونجار يفك ويركب الخزاين", "dialect": "jordanian", "expect": "pro:mover + pro:furniture_assembly"}
+{"msg": "بدي اطلب جرة غاز من محل الغاز اللي بالحارة", "dialect": "jordanian", "expect": "order"}
+{"msg": "اطلبلي من المشتل شتلتين ياسمين", "dialect": "jordanian", "expect": "order"}

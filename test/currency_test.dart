@@ -20,8 +20,29 @@ void main() {
     });
   });
 
+  group('formatAmount', () {
+    // الدينار ألف فلس: تقريب ٠٫٧٥ لأقرب دينار كان يعرض قهوة بـ«1 دينار».
+    test('يحفظ الفلوس حتى ثلاث خانات بلا أصفار زائدة', () {
+      expect(formatAmount(0.75), '0.75');
+      expect(formatAmount(0.350), '0.35');
+      expect(formatAmount(0.125), '0.125');
+      expect(formatAmount(2.5), '2.5');
+    });
+
+    test('المبلغ الصحيح بلا كسور', () {
+      expect(formatAmount(12), '12');
+      expect(formatAmount(10.0), '10');
+      expect(formatAmount(0), '0');
+    });
+
+    test('يمحو ضجيج الفاصلة العائمة', () {
+      expect(formatAmount(0.1 + 0.2), '0.3');
+      expect(formatPrice(1.1 * 3), '3.3 دينار');
+    });
+  });
+
   group('CatalogProduct', () {
-    // الخطأ الأصلي: السعر كان يُصاغ بـ"ر.س" مكتوبة يدوياً، فيظهر الريال
+    // الخطأ الأصلي: السعر كان يُصاغ بـ"دينار" مكتوبة يدوياً، فيظهر الريال
     // السعودي في إصدار الأردن مهما أرسل الخادم.
     test('يصوغ السعر بعملة السجل لا بعملة مكتوبة مسبقاً', () {
       final product = CatalogProduct.fromJson({
@@ -36,14 +57,14 @@ void main() {
       expect(product.hasDiscount, isTrue);
     });
 
-    test('سجل قديم بلا حقل عملة يُقرأ كدينار', () {
+    test('سجل قديم بلا حقل عملة يُقرأ كدينار، بكسوره لا مقرّباً', () {
       final product = CatalogProduct.fromJson({
         'id': 'p2',
         'name': 'شاورما',
         'price': 1.5,
         'finalPrice': 1.5,
       });
-      expect(product.priceLabel, '2 دينار');
+      expect(product.priceLabel, '1.5 دينار');
     });
 
     test('منتج سعودي في نفس قاعدة البيانات يحتفظ بريّاله', () {

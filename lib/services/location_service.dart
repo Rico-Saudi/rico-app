@@ -18,7 +18,7 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw LocationException(
-        'خدمة الموقع مو مفعّلة في جهازك. فعّلها من الإعدادات وحاول مرة ثانية.',
+        'خدمة الموقع مش مفعّلة على جهازك. فعّلها من الإعدادات وجرّب مرة تانية.',
         type: LocationErrorType.serviceDisabled,
       );
     }
@@ -44,6 +44,19 @@ class LocationService {
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
+  }
+
+  /// هل الموقع متاح الآن بلا أي نافذة إذن؟
+  ///
+  /// موجودة لأجل الاستخدامات الاختيارية مثل اقتراح الجو: تستدعي
+  /// [Geolocator.checkPermission] التي تقرأ الحالة ولا تطلب شيئاً، بعكس
+  /// [getCurrentLocation] التي تطلب الإذن عند الحاجة. نافذة إذن تظهر بسبب
+  /// بطاقة جو — قبل أن يطلب المستخدم أي شيء — تُقرأ كتطفّل، والإذن يُطلب حين
+  /// يبحث فعلاً فيكون سببه ظاهراً له.
+  Future<bool> hasPermission() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return false;
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.always || permission == LocationPermission.whileInUse;
   }
 
   double distanceInMeters(

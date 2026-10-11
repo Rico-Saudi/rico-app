@@ -31,7 +31,7 @@ class DealsService {
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 6));
     } catch (_) {
-      throw DealsException('ما قدرت أتصل بخدمة العروض حالياً، حاول مرة ثانية.');
+      throw DealsException('ما قدرت أتصل بخدمة العروض حالياً، جرّب مرة تانية.');
     }
 
     if (response.statusCode != 200) {

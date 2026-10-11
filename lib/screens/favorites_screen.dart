@@ -80,7 +80,7 @@ class _EmptyFavorites extends StatelessWidget {
               child: const Icon(Icons.bookmark_border_rounded, size: 30, color: RicoColors.primary),
             ),
             const SizedBox(height: 16),
-            const Text('ما فيه أماكن محفوظة', style: RicoText.title),
+            const Text('ما في أماكن محفوظة', style: RicoText.title),
             const SizedBox(height: 6),
             Text(
               'اضغط أيقونة الحفظ على أي نتيجة في المحادثة\nوتلقاها هنا في أي وقت.',

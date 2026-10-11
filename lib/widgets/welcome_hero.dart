@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/weather_info.dart';
 import '../theme/app_theme.dart';
+import 'chat_pill_chip.dart';
 import 'rico_surfaces.dart';
 
 /// شاشة البداية داخل المحادثة — تُعرض بدل قائمة الرسائل حين تكون المحادثة
@@ -9,7 +11,12 @@ class WelcomeHero extends StatelessWidget {
   /// يُستدعى بنص الاقتراح كما لو كتبه المستخدم بنفسه — لا فلترة وهمية.
   final void Function(String prompt) onPickSuggestion;
 
-  const WelcomeHero({super.key, required this.onPickSuggestion});
+  /// حالة الجو إن وصلت. null معناها ما توفّرت (بلا مفتاح، أو فشل الجلب، أو
+  /// جو عادي ما يقترح شيئاً) — والشاشة تظهر كما كانت تماماً بدونها، فما فيه
+  /// مكان فاضي محجوز لبطاقة قد لا تجي.
+  final WeatherInfo? weather;
+
+  const WelcomeHero({super.key, required this.onPickSuggestion, this.weather});
 
   static const List<({IconData icon, String title, String prompt})> _suggestions = [
     (icon: Icons.restaurant_rounded, title: 'أقرب مطعم', prompt: 'أقرب مطعم'),
@@ -36,6 +43,10 @@ class WelcomeHero extends StatelessWidget {
           const SizedBox(height: 22),
           const _GoldRule(),
           const SizedBox(height: 22),
+          if (weather?.suggestion != null) ...[
+            _WeatherBanner(weather: weather!, onPick: onPickSuggestion),
+            const SizedBox(height: 20),
+          ],
           const Align(
             alignment: AlignmentDirectional.centerStart,
             child: Text('جرّب تسألني', style: RicoText.labelStrong),
@@ -151,6 +162,73 @@ class _SuggestionTile extends StatelessWidget {
               style: RicoText.label.copyWith(fontWeight: FontWeight.w600, color: RicoColors.ink),
               maxLines: 2,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// بطاقة الجو أعلى الاقتراحات — سطر واحد عن الحالة، وحبّات تقترح ما يناسبها.
+///
+/// حبّاتها تسبق شبكة الاقتراحات الثابتة لأنها أنسب للحظة: «قهوة مثلجة» في
+/// يوم بأربعين درجة أقرب لما يبي المستخدم من «أقرب مطعم» المعروضة دايماً.
+class _WeatherBanner extends StatelessWidget {
+  final WeatherInfo weather;
+  final void Function(String prompt) onPick;
+
+  const _WeatherBanner({required this.weather, required this.onPick});
+
+  static const Map<String, IconData> _icons = {
+    'hot': Icons.wb_sunny_rounded,
+    'cold': Icons.ac_unit_rounded,
+    'rain': Icons.water_drop_rounded,
+    'sandstorm': Icons.blur_on_rounded,
+    'pleasant': Icons.wb_twilight_rounded,
+    'mild': Icons.thermostat_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestion = weather.suggestion!;
+
+    return RicoCard(
+      padding: const EdgeInsets.all(14),
+      accentBorder: RicoColors.primaryTintStrong,
+      shadow: RicoShadows.subtle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: RicoColors.primaryTint, shape: BoxShape.circle),
+                child: Icon(_icons[weather.bucket] ?? Icons.thermostat_rounded, size: 18, color: RicoColors.primaryDeep),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(suggestion.line, style: RicoText.label.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text('${weather.tempC}°', style: RicoText.caption),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final chip in suggestion.chips)
+                ChatPillChip(label: chip.label, onTap: () => onPick(chip.prompt)),
+            ],
           ),
         ],
       ),

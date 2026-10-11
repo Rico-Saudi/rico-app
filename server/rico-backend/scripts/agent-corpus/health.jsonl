@@ -1,0 +1,87 @@
+{"msg": "مختبر", "dialect": "jordanian", "expect": "other:medical_lab:مختبر تحاليل"}
+{"msg": "وين اقرب مختبر تحاليل مفتوح هسا", "dialect": "jordanian", "expect": "other:medical_lab:مختبر تحاليل"}
+{"msg": "ابغى اسوي تحليل دم شامل وين اروح", "dialect": "saudi", "expect": "other:medical_lab:مختبر تحاليل"}
+{"msg": "ضرسي يوجعني من امس مو قادر انام", "dialect": "saudi", "expect": "place:dentist"}
+{"msg": "بدي دكتور اسنان شاطر ورخيص بعمان", "dialect": "jordanian", "expect": "place:dentist"}
+{"msg": "ابني حرارته عالية وش اسوي وين اوديه", "dialect": "saudi", "expect": "place:hospital"}
+{"msg": "بنتي سخنة كتير بدي دكتور اطفال هلا", "dialect": "jordanian", "expect": "place:clinic"}
+{"msg": "دكتور اطفال قريب", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "اقرب طوارئ", "dialect": "saudi", "expect": "place:hospital"}
+{"msg": "في حدا تعب كتير وين اقرب مستشفى فيها طوارئ", "dialect": "jordanian", "expect": "place:hospital"}
+{"msg": "مستشفى", "dialect": "jordanian", "expect": "place:hospital"}
+{"msg": "ابي مستشفى حكومي قريب مني", "dialect": "saudi", "expect": "place:hospital"}
+{"msg": "صيدليه مناوبه الحين", "dialect": "saudi", "expect": "place:pharmacy"}
+{"msg": "وين في صيدلية فاتحة 24 ساعة", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "اقرب صيدليه", "dialect": "jordanian", "expect": "place:pharmacy"}
+{"msg": "محتاجه دكتورة نسائية وولادة ست مش رجال", "dialect": "jordanian", "expect": "place:clinic"}
+{"msg": "ابغى عيادة نساء وولاده زينه", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "عيوني محمرة وتحكني بدي دكتور عيون", "dialect": "jordanian", "expect": "place:clinic"}
+{"msg": "دكتور جلدية للحبوب اللي بوجهي", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "ركبتي توجعني لما امشي ابي دكتور عظام", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "اذني مسكرة ومش سامع منيح", "dialect": "jordanian", "expect": "place:clinic"}
+{"msg": "دكتور انف واذن وحنجرة قريب", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "بطني يوجعني كل ما اكل محتاج دكتور باطنية", "dialect": "jordanian", "expect": "place:clinic"}
+{"msg": "ابغى دكتور نفسي احس اني متضايق مره ومو قادر اتكلم مع احد", "dialect": "saudi", "expect": "place:clinic"}
+{"msg": "وين اعمل صورة اشعة لايدي", "dialect": "jordanian", "expect": "other:radiology_center:مركز أشعة"}
+{"msg": "مركز اشعه رنين مغناطيسي", "dialect": "saudi", "expect": "other:radiology_center:مركز أشعة"}
+{"msg": "نظاراتي انكسرت ابغى محل نظارات", "dialect": "saudi", "expect": "place:optician"}
+{"msg": "بدي عدسات ملونة وين بلاقي", "dialect": "jordanian", "expect": "place:optician"}
+{"msg": "اقرب نظاراتي", "dialect": "jordanian", "expect": "place:optician"}
+{"msg": "ابوي سمعه ضعيف نبي سماعة اذن طبية", "dialect": "saudi", "expect": "other:hearing_aid_center:مركز سماعات طبية"}
+{"msg": "مركز علاج طبيعي لظهري", "dialect": "jordanian", "expect": "other:physiotherapy_center:مركز علاج طبيعي"}
+{"msg": "ابي اخصائي علاج طبيعي يجي البيت لامي بعد العملية", "dialect": "saudi", "expect": "pro:physiotherapist"}
+{"msg": "قطتي مريضة ومش عم تاكل", "dialect": "jordanian", "expect": "place:veterinary"}
+{"msg": "بيطري قريب الحين", "dialect": "saudi", "expect": "place:veterinary"}
+{"msg": "ابغى نادي رياضي رخيص", "dialect": "saudi", "expect": "place:fitness_centre"}
+{"msg": "جيم", "dialect": "jordanian", "expect": "place:fitness_centre"}
+{"msg": "بدي نادي نسائي فيه مدربات", "dialect": "jordanian", "expect": "place:fitness_centre"}
+{"msg": "ابي مدرب شخصي يجيني البيت", "dialect": "saudi", "expect": "pro:personal_trainer"}
+{"msg": "فيه مسبح عام قريب نسبح فيه مع العيال", "dialect": "saudi", "expect": "other:swimming_pool:مسبح"}
+{"msg": "وين في مسبح داخلي مدفأ", "dialect": "jordanian", "expect": "other:swimming_pool:مسبح"}
+{"msg": "بدي اسجل يوغا", "dialect": "jordanian", "expect": "other:yoga_studio:استوديو يوغا"}
+{"msg": "سبا", "dialect": "saudi", "expect": "other:spa:سبا"}
+{"msg": "ابغى مساج وحمام مغربي", "dialect": "saudi", "expect": "other:spa:سبا"}
+{"msg": "حمام تركي بعمان", "dialect": "jordanian", "expect": "other:turkish_bath:حمام تركي"}
+{"msg": "بدي حدا يعمل مساج بالبيت ظهري مشدود", "dialect": "jordanian", "expect": "pro:massage_therapist"}
+{"msg": "حلاق", "dialect": "saudi", "expect": "place:hairdresser"}
+{"msg": "ابي حلاق رجالي مفتوح الحين", "dialect": "saudi", "expect": "place:hairdresser"}
+{"msg": "بدي حلاق ييجي عالبيت لابوي كبير بالعمر", "dialect": "jordanian", "expect": "pro:home_barber"}
+{"msg": "مشغل نسائي قريب", "dialect": "saudi", "expect": "place:beauty"}
+{"msg": "بدي صالون تجميل اعمل شعري لعرس اختي", "dialect": "jordanian", "expect": "place:beauty"}
+{"msg": "ابغى وحده تسوي مكياج بالبيت", "dialect": "saudi", "expect": "pro:home_beautician"}
+{"msg": "وين احسن محل اظافر", "dialect": "jordanian", "expect": "other:nail_salon:صالون أظافر"}
+{"msg": "ليزر ازالة شعر بسعر حلو", "dialect": "saudi", "expect": "other:laser_clinic:مركز ليزر"}
+{"msg": "بدي محل مكياج وكريمات", "dialect": "jordanian", "expect": "place:cosmetics"}
+{"msg": "محل عطور", "dialect": "saudi", "expect": "other:perfume_store:محل عطور"}
+{"msg": "عطار", "dialect": "saudi", "expect": "other:herbalist:عطارة"}
+{"msg": "بدي عطارة فيها اعشاب للمعدة", "dialect": "jordanian", "expect": "other:herbalist:عطارة"}
+{"msg": "وين القى محل اكل صحي واورجانيك", "dialect": "saudi", "expect": "other:health_food_store:متجر أغذية صحية"}
+{"msg": "بدي اخصائية تغذية تعملي رجيم", "dialect": "jordanian", "expect": "other:nutrition_clinic:عيادة تغذية"}
+{"msg": "ابي احتجم وين فيه مركز حجامه", "dialect": "saudi", "expect": "other:cupping_center:مركز حجامة"}
+{"msg": "محتاج ممرض يجي البيت يركب مغذي", "dialect": "jordanian", "expect": "pro:home_nurse"}
+{"msg": "ابغى ممرضه منزليه لجدتي", "dialect": "saudi", "expect": "pro:home_nurse"}
+{"msg": "بدي مرافق لابوي كبير بالسن", "dialect": "jordanian", "expect": "pro:elderly_care"}
+{"msg": "حفاضات اطفال وحليب", "dialect": "jordanian", "expect": "other:baby_store:محل مستلزمات أطفال"}
+{"msg": "محل مستلزمات مواليد", "dialect": "saudi", "expect": "other:baby_store:محل مستلزمات أطفال"}
+{"msg": "شو احسن دوا للصداع", "dialect": "jordanian", "expect": "chat"}
+{"msg": "وش اسوي اذا عندي زكام", "dialect": "saudi", "expect": "chat"}
+{"msg": "هل البندول يتعارض مع المضاد الحيوي", "dialect": "saudi", "expect": "chat"}
+{"msg": "السلام عليكم كيفك", "dialect": "jordanian", "expect": "chat"}
+{"msg": "في عروض على العطور او الكريمات", "dialect": "jordanian", "expect": "deals"}
+{"msg": "فيه خصومات على النوادي الرياضيه", "dialect": "saudi", "expect": "deals"}
+{"msg": "اطلب لي من صيدلية النهدي بنادول", "dialect": "saudi", "expect": "order"}
+{"msg": "ابغى اطلب حليب نان رقم 2 من الصيدلية", "dialect": "saudi", "expect": "order"}
+{"msg": "بدي اطلب من صيدلية فارمسي ون فيتامين د وكمامات", "dialect": "jordanian", "expect": "order"}
+{"msg": "اطلبلي من العطار عسل سدر", "dialect": "jordanian", "expect": "order"}
+{"msg": "وصلولي حفاضات بامبرز مقاس 4", "dialect": "jordanian", "expect": "order"}
+{"msg": "بدي صيدلية ومختبر قراب من بعض", "dialect": "jordanian", "expect": "place:pharmacy + other:medical_lab:مختبر تحاليل"}
+{"msg": "ابغى حلاق وبعدين جيم", "dialect": "saudi", "expect": "place:hairdresser + place:fitness_centre"}
+{"msg": "دكتور اسنان وصيدليه مناوبه", "dialect": "saudi", "expect": "place:dentist + place:pharmacy"}
+{"msg": "بدي مشغل لاختي وحلاق الي", "dialect": "jordanian", "expect": "place:beauty + place:hairdresser"}
+{"msg": "ابني طاح وانجرحت ايده ابي طوارئ وبعدها صيدليه", "dialect": "saudi", "expect": "place:hospital + place:pharmacy"}
+{"msg": "وين اقرب محل نظارات ومستشفى عيون", "dialect": "jordanian", "expect": "place:optician + place:hospital"}
+{"msg": "ابي سبا ومحل عطور بنفس المول", "dialect": "saudi", "expect": "other:spa:سبا + other:perfume_store:محل عطور"}
+{"msg": "بدي نادي رياضي ومحل مكملات غذائية", "dialect": "jordanian", "expect": "place:fitness_centre + other:supplements_store:محل مكملات غذائية"}
+{"msg": "ابي ممرض منزلي واخصائي علاج طبيعي لابوي", "dialect": "saudi", "expect": "pro:home_nurse + pro:physiotherapist"}
+{"msg": "كلبي مجروح بدي بيطري وبعدين محل اكل حيوانات", "dialect": "jordanian", "expect": "place:veterinary + place:pet_store"}
+{"msg": "اطلب لي بنادول من الصيدليه وفيه عروض عالمكياج", "dialect": "saudi", "expect": "order + deals"}

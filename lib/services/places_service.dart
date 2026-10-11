@@ -54,7 +54,7 @@ class PlacesService {
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 8));
     } catch (_) {
-      throw PlacesException('ما قدرت أتصل بالإنترنت، تأكد من اتصالك وحاول مرة ثانية.');
+      throw PlacesException('ما قدرت أتصل بالإنترنت، تأكد من اتصالك وجرّب مرة تانية.');
     }
 
     if (response.statusCode != 200) {
@@ -63,6 +63,6 @@ class PlacesService {
 
     final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     final places = (data['places'] as List?) ?? [];
-    return places.map((p) => PlaceResult.fromRicoApiJson(p as Map<String, dynamic>)).toList();
+    return places.map((p) => PlaceResult.fromRicoApiJson(p as Map<String, dynamic>, baseUrl: _ricoApiBaseUrl)).toList();
   }
 }

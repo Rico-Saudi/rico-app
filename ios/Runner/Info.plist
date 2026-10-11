@@ -4,6 +4,10 @@
 	<dict>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>تدلل يحتاج المايكروفون عشان تقدر ترسل طلبك بصوتك بدل ما تكتبه.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>تدلل يحتاج الكاميرا عشان تصوّر سيرتك الذاتية وترفقها ببطاقتك المهنية.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>تدلل يحتاج صورك عشان ترفق صورة سيرتك الذاتية ببطاقتك المهنية.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>تدلل يحتاج موقعك عشان يدلّك على أقرب مكان وأفضل عرض حولك.</string>
 		<key>CADisableMinimumFrameDurationOnPhone</key>

@@ -1,10 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/business_catalog.dart';
+import '../models/cart.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
+import '../models/place_section.dart';
+import '../models/professional.dart';
+import '../models/professional_flow.dart';
+import '../models/weather_info.dart';
 import '../models/request_flow.dart';
+import '../services/auth_store.dart';
 import '../services/backend_warmup.dart';
 import '../services/catalog_service.dart';
 import '../services/compose_service.dart';
@@ -14,12 +21,21 @@ import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
 import '../services/location_service.dart';
 import '../services/places_service.dart';
+import '../services/professionals_service.dart';
 import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
+import '../models/customer_mood.dart';
+import '../models/order_reply.dart';
+import '../models/shown_shop.dart';
+import '../utils/dialer.dart';
+import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
+import '../services/weather_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/auth/account_sheet.dart';
+import '../widgets/auth/auth_sheet.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_header.dart';
 import '../widgets/message_bubble.dart';
@@ -33,7 +49,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -47,11 +63,24 @@ class _ChatScreenState extends State<ChatScreen> {
   final CatalogService _catalogService = CatalogService();
   final RequestService _requestService = RequestService();
   final TranscribeService _transcribeService = TranscribeService();
+  final ProfessionalsService _professionalsService = ProfessionalsService();
+  final WeatherService _weatherService = WeatherService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
   Position? _cachedPosition;
   bool _sending = false;
+
+  /// حالة الجو المعروضة في شاشة الترحيب، و null قبل وصولها أو إذا تعذّرت.
+  WeatherInfo? _weather;
+
+  /// متى جُلبت آخر قراءة — نعيد الجلب عند العودة للتطبيق فقط إذا قدمت.
+  /// بلا هذا كان كل تنقّل بين التطبيقات يصرف نداءً على قراءة ما تغيّرت.
+  DateTime? _weatherFetchedAt;
+
+  /// الجو ما يتغيّر أسرع من هذا، ومصدره نفسه يحدّث كل ١٠ دقائق تقريباً —
+  /// وأي تكرار أسرع يرجع نفس البايتات على حساب بطارية المستخدم وباقته.
+  static const Duration _weatherStaleAfter = Duration(minutes: 20);
 
   /// جارٍ تحويل مقطع صوتي إلى نص — يُعطّل المؤلّف كما يفعل [_sending]، لكنه
   /// حالة مستقلة عنه لأنه يسبق الإرسال ولا يضيف فقاعة للمحادثة.
@@ -59,6 +88,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// هل نزل المستخدم عن أعلى المحادثة؟ يفعّل ظل الترويسة فقط عند الحاجة.
   bool _headerElevated = false;
+
+  /// قياسات آخر تسجيل صوتي، تنتظر إرسالها مع نص التحويل — تُستهلك مرة
+  /// وحدة وتُصفّر، عشان رسالة مكتوبة بعدها ما ترث نبرة تسجيل قديم.
+  VoiceSignals? _pendingVoice;
+
+  /// حالة العميل بالرسالة الجاري الرد عليها — تُقرأ من رد المصنّف وتُمرّر
+  /// لكل من يصوغ أو يعرض الرد. تُصفّر لـ[CustomerMood.neutral] مع كل رسالة
+  /// جديدة: المزاج صفة الرسالة، لا صفة ثابتة بالمستخدم.
+  CustomerMood _mood = CustomerMood.neutral;
+
+  /// رسالة المستخدم الجاري تعديلها — نمسك الكائن نفسه لا موضعه، لأن الموضع
+  /// يصير قديماً لو أُضيفت فقاعات وشريط التعديل مفتوح.
+  ///
+  /// التعديل لا يمسّ المحادثة إلا لحظة الإرسال: قبلها الرسالة القديمة وردها
+  /// باقيان كما هما، فضغطة «تعديل» بالغلط ما تخسّر المستخدم شيئاً.
+  ChatMessage? _editingMessage;
 
   @override
   void initState() {
@@ -69,11 +114,21 @@ class _ChatScreenState extends State<ChatScreen> {
     // المفتاحية. انظر [BackendWarmup].
     BackendWarmup.ping();
     _controller.addListener(BackendWarmup.ping);
+    WidgetsBinding.instance.addObserver(this);
     _restoreConversation();
+    _refreshWeather();
+  }
+
+  /// يُعاد الجلب عند العودة من الخلفية لا بمؤقّت: المستخدم اللي يفتح ريكو بعد
+  /// ساعات يستاهل قراءة جديدة، واللي تاركه مفتوح ما يستفيد من واحدة كل دقيقة.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshWeather();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScroll);
     _controller.removeListener(BackendWarmup.ping);
     _scrollController.dispose();
@@ -94,6 +149,29 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || restored.isEmpty) return;
     setState(() => _messages.addAll(restored));
     _scrollToBottom();
+  }
+
+  /// يجلب حالة الجو لموقع المستخدم بهدوء تام: بلا مؤشر تحميل وبلا رسالة خطأ،
+  /// وبلا طلب إذن موقع من أجله وحده — إذا ما كان الموقع متاحاً أصلاً نتخطاه،
+  /// لأن نافذة إذن تظهر بسبب اقتراح جو تُقرأ كتطفّل لا كخدمة.
+  Future<void> _refreshWeather() async {
+    final fetchedAt = _weatherFetchedAt;
+    if (fetchedAt != null && DateTime.now().difference(fetchedAt) < _weatherStaleAfter) return;
+
+    final position = _cachedPosition;
+    if (position == null && !await _locationService.hasPermission()) return;
+
+    try {
+      final origin = position ?? await _getPosition();
+      final weather = await _weatherService.fetch(lat: origin.latitude, lng: origin.longitude);
+      if (!mounted || weather == null) return;
+      setState(() {
+        _weather = weather;
+        _weatherFetchedAt = DateTime.now();
+      });
+    } catch (_) {
+      // الموقع غير متاح أو فشل الجلب — الشاشة تظهر بلا بطاقة جو، وهذا كل شي.
+    }
   }
 
   Future<Position> _getPosition() async {
@@ -121,8 +199,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// الرسائل القابلة للحفظ/الإرسال كسياق: نصية فقط، غير قيد التحميل، وبلا
   /// تدفّق طلب مرتبط (لا معنى لاستعادة أزرار/حالات تفاعلية من محادثة سابقة).
-  List<ChatMessage> get _persistableMessages =>
-      _messages.where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null).toList();
+  List<ChatMessage> get _persistableMessages => _messages
+      .where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null && m.professionalFlow == null)
+      .toList();
 
   /// يبني آخر رسائل المحادثة كسياق للتصنيف عبر LLM، لدعم الاستكمالات مثل
   /// "بس أبعد شوي" بدل معاملة كل رسالة بمعزل عمّا سبقها.
@@ -186,7 +265,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// (السعر/التقييم/المصدر) كما هي بدل المجازفة بإعادة بحث بالاسم قد يُرجع
   /// نسخة مختلفة (مصدرها OSM لا ريكو) لنفس المكان. يرجع null إذا لم يعد
   /// الترتيب المطلوب موجوداً (تغيّرت القائمة)، فيعامل الطلب كبحث عادي.
-  Future<ChatMessage?> _resolveReferencedMessage(String text, QueryIntent intent, int position) async {
+  Future<ChatMessage?> _resolveReferencedMessage(
+    String text,
+    QueryIntent intent,
+    int position,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
     final last = _findLastShown();
     final lastPlaces = last?.places;
     final lastDeals = last?.deals;
@@ -219,6 +303,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
       truncated: false,
       history: _buildHistory(),
+      lat: origin.lat,
+      lng: origin.lng,
     );
 
     return ChatMessage(
@@ -232,14 +318,128 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// يحل نية واحدة (مكان أو عروض) إلى رسالة رد جاهزة، مع عزل الأخطاء داخل
-  /// النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا يوقف البقية).
+  /// يحل نية واحدة (مكان أو عروض أو صاحب مهنة) إلى رسالة رد جاهزة، مع عزل
+  /// الأخطاء داخل النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا
+  /// يوقف البقية).
+  ///
+  /// [index] هو موضع فقاعة التحميل التي ستُستبدل بهذي الرسالة — تحتاجه نتائج
+  /// أصحاب المهن وحدها، لأن أزرارها تعدّل حالة نفس الرسالة لاحقاً (اختيار ثم
+  /// تأكيد)، فلازم تعرف موضعها. لا يصح استنتاجه من [_messages.length] وقت
+  /// الحل: الفقاعة موجودة أصلاً في القائمة، وقد تكون معها فقاعات نوايا أخرى
+  /// من نفس الرسالة تُحل بالتوازي.
+  /// نية واحدة → رسالتها، مع مسار "الإشارة لنتيجة سابقة" قبل البحث الشبكي.
+  ///
+  /// إشارة لعنصر محدد من آخر نتائج (مثل "الثاني") تُحل من الذاكرة المحلية
+  /// أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت القائمة) نسقط
+  /// تلقائياً لمسار البحث العادي.
+  Future<ChatMessage> _resolveOne(
+    String text,
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    bool usedFallback,
+    int index,
+  ) async {
+    // الطلب والاتصال يستخدمان الرقم ليعرفا أي محل، لا ليعرضاه من جديد —
+    // يحلّه [_resolveOrderMessage] و[_resolveCallMessage] بنفسيهما.
+    final referencedPosition = intent.referencedPosition;
+    if (referencedPosition != null && intent.kind != IntentKind.order && intent.kind != IntentKind.call) {
+      final message = await _resolveReferencedMessage(text, intent, referencedPosition, origin);
+      if (message != null) return message;
+    }
+    return _resolveIntentMessage(text, intent, origin, usedFallback, index);
+  }
+
+  /// يسقط النوايا المكررة حرفياً من رسالة واحدة.
+  ///
+  /// المصنّف أحياناً يرجّع نفس الطلب مرتين لما يتكرر بالجملة ("أبي مطعم
+  /// وأبي مطعم") — تنفيذها مرتين بحثان مدفوعان لنفس الجواب بالضبط. أما
+  /// اختلاف المعيار (أقرب/أرخص) فليس تكراراً: هو طلبان فعلاً، ولكل واحد
+  /// جوابه.
+  static List<QueryIntent> _dedupeIntents(List<QueryIntent> intents) {
+    final seen = <String>{};
+    return [
+      for (final i in intents)
+        if (seen.add([
+          i.kind.name,
+          i.slug ?? '',
+          i.label,
+          i.rank.name,
+          i.brandHint ?? '',
+          i.profession ?? '',
+          i.placeName ?? '',
+          i.referencedPosition?.toString() ?? '',
+        ].join('|')))
+          i,
+    ];
+  }
+
+  /// يدمج ردود عدة نوايا أماكن بفقاعة واحدة ذات مقاطع مسمّاة.
+  ///
+  /// كل نية تبقى ببحثها الخاص عمداً: الخادم يرجّع **صفوفاً مختلفة** لا
+  /// ترتيباً مختلفاً — "الأقرب" استعلام ‎$near بحد ٨، و"الأرخص" استعلام
+  /// ‎$geoWithin على النطاق كله ثم فرز بالسعر — فإعادة فرز نتيجة "الأقرب"
+  /// محلياً تعطي "أرخص الثمانية الأقرب"، وهذا جواب ثانٍ غير اللي انطلب.
+  ChatMessage _mergePlaceMessages(List<QueryIntent> intents, List<ChatMessage> messages) {
+    final sections = <PlaceSection>[];
+    for (var i = 0; i < intents.length; i++) {
+      final places = messages[i].places ?? const <PlaceResult>[];
+      sections.add(PlaceSection(
+        intent: intents[i],
+        places: places,
+        emptyNote: places.isEmpty ? messages[i].text : null,
+      ));
+    }
+
+    // القائمة المسطّحة بلا تكرار: عليها تعتمد الإشارة لنتيجة سابقة
+    // ("الثاني")، ونفس المحل قد يطلع بمقطعين (الأقرب والأرخص معاً).
+    final flat = <PlaceResult>[];
+    final seen = <String>{};
+    for (final section in sections) {
+      for (final place in section.places) {
+        if (seen.add(place.osmId)) flat.add(place);
+      }
+    }
+
+    final withResults = sections.where((s) => !s.isEmpty).length;
+    final lead = withResults == 0
+        ? 'ما لقيتلك ولا وحدة منها قريبة هلأ 😕'
+        : withResults == sections.length
+            ? 'لقيتلك اللي طلبته 👌'
+            : 'لقيتلك جزء من طلبك 👌';
+
+    final withOrder = messages.firstWhere((m) => m.onOrder != null, orElse: () => messages.first);
+    final withQuickReply = messages.firstWhere((m) => m.onQuickReply != null, orElse: () => messages.first);
+
+    return ChatMessage(
+      text: lead,
+      sender: MessageSender.bot,
+      places: flat.isEmpty ? null : flat,
+      placeSections: sections,
+      understandingIntent: intents.first,
+      onOrder: withOrder.onOrder,
+      onQuickReply: withQuickReply.onQuickReply,
+    );
+  }
+
   Future<ChatMessage> _resolveIntentMessage(
     String text,
     QueryIntent intent,
     ({double lat, double lng, bool offerSaveHome}) origin,
     bool usedFallback,
+    int index,
   ) async {
+    if (intent.kind == IntentKind.professional) {
+      return _resolveProfessionalMessage(text, intent, origin, index);
+    }
+
+    if (intent.kind == IntentKind.order) {
+      return _resolveOrderMessage(intent, origin, index);
+    }
+
+    if (intent.kind == IntentKind.call) {
+      return _resolveCallMessage(intent, origin);
+    }
+
     if (intent.kind == IntentKind.deals) {
       try {
         final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
@@ -254,6 +454,7 @@ class _ChatScreenState extends State<ChatScreen> {
           intentKind: 'deals',
           intentLabel: intent.label,
           rank: 'nearest',
+          mood: _mood,
           items: deals
               .map((d) => {
                     'name': d.placeName,
@@ -263,6 +464,8 @@ class _ChatScreenState extends State<ChatScreen> {
               .toList(),
           truncated: false,
           history: _buildHistory(),
+          lat: _mood.allowsWeatherLine ? origin.lat : null,
+          lng: _mood.allowsWeatherLine ? origin.lng : null,
         );
         return ChatMessage(
           text: composedReply ?? 'هاي أقرب العروض المتوفرة إلك:',
@@ -285,9 +488,11 @@ class _ChatScreenState extends State<ChatScreen> {
         bestRated: intent.rank == RankMode.bestRated,
         brandHint: intent.brandHint,
         categorySlug: intent.slug,
-        // للفئات الحرة ("other") ما فيه slug ثابت — الاسم العربي هو نص البحث
-        // الوحيد المتاح، والخادم يمرره لـGoogle Text Search.
-        label: intent.slug == null ? intent.label : null,
+        // للفئات الحرة ("other") الـslug وسم إنجليزي (wedding_hall) لا فئة
+        // ثابتة — الاسم العربي ("قاعة أفراح") هو نص البحث الصحيح، والخادم
+        // يمرره لـGoogle Text Search. الفئات الثابتة لها نوع Google خاص فما
+        // تحتاجه.
+        label: intent.slug == null || IntentService.byCategorySlug(intent.slug!) == null ? intent.label : null,
       );
 
       if (places.isEmpty) {
@@ -317,12 +522,18 @@ class _ChatScreenState extends State<ChatScreen> {
         RankMode.nearest => 'nearest',
       };
 
+      // المستعجل يشوف وحدة والمتردد يشوف أكثر — نفس البحث ونفس النتائج،
+      // بس عرضٌ يناسب وقت صاحبه. انظر [CustomerMood.placeLimit].
+      final limit = _mood.placeLimit;
+      final shown = limit == null ? places : places.take(limit).toList();
+
       final composedReply = await ComposeService.composeReply(
         message: text,
         intentKind: 'place',
         intentLabel: intent.label,
         rank: rankStr,
-        items: places
+        mood: _mood,
+        items: shown
             .take(5)
             .map((p) => {
                   'name': p.name,
@@ -333,8 +544,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (p.isOpenNow != null) 'openNow': p.isOpenNow,
                 })
             .toList(),
-        truncated: places.length > 5,
+        truncated: places.length > shown.length || shown.length > 5,
         history: _buildHistory(),
+        // بلا موقع = بلا سطر جو. نمنعه من المصدر بدل ما نعتمد على التزام
+        // النموذج بتعليمة «لا تذكر الجو» وهو مستعجل.
+        lat: _mood.allowsWeatherLine ? origin.lat : null,
+        lng: _mood.allowsWeatherLine ? origin.lng : null,
       );
 
       // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
@@ -375,10 +590,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return ChatMessage(
         text: introText,
         sender: MessageSender.bot,
-        places: places,
+        places: shown,
         understandingIntent: intent,
         onOrder: _openCatalog,
-        onQuickReply: _sendQuickReply,
+        onQuickReply: _mood.showsQuickReplyChips ? _sendQuickReply : null,
       );
     } on PlacesException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
@@ -387,14 +602,260 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// يحل نية "أقرب صاحب مهنة" إلى رسالة فيها قائمة أشخاص قابلة للاختيار.
+  ///
+  /// لا مسار احتياطي خارجي هنا بعكس الأماكن: أصحاب المهن كلهم مسجّلون عندنا
+  /// بأنفسهم، فما فيه Google ولا OSM يكمّل النقص — قائمة فارغة معناها فعلاً
+  /// ما فيه أحد سجّل هالمهنة بالمنطقة بعد، وهذي حالة متوقعة نقولها صراحة
+  /// بدل ما نعرض بديلاً غير مطلوب.
+  Future<ChatMessage> _resolveProfessionalMessage(
+    String text,
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    int index,
+  ) async {
+    final profession = intent.profession;
+    if (profession == null) {
+      return ChatMessage(text: 'ما فهمت أي مهنة بتقصد بالضبط 🤔 احكي لي المهنة متل «دهان» أو «كهربائي».', sender: MessageSender.bot);
+    }
+
+    try {
+      final professionals = await _professionalsService.search(
+        lat: origin.lat,
+        lng: origin.lng,
+        profession: profession,
+      );
+
+      if (professionals.isEmpty) {
+        return ChatMessage(
+          text: 'ما لقيت ${intent.label} مسجّل قريب منك هلأ 😕 إذا بتعرف حدا، احكيله يضيف مهنته من حسابه بالتطبيق.',
+          sender: MessageSender.bot,
+        );
+      }
+
+      // الحالة اللي هالميزة موجودة عشانها: واحد فوق تسريب مياه ما يتصفّح
+      // قائمة — نحط الأقرب جاهزاً للتأكيد، فيصير بينه وبين اتصال فعلي ضغطة
+      // وحدة. القائمة كاملة تبقى داخل التدفّق فزر الرجوع يشتغل عادي.
+      final rushed = _mood.wantsItShort;
+
+      final composedReply = await ComposeService.composeReply(
+        message: text,
+        intentKind: 'professional',
+        intentLabel: intent.label,
+        rank: 'nearest',
+        mood: _mood,
+        items: professionals
+            .take(rushed ? 1 : 5)
+            .map((p) => {
+                  'name': p.name,
+                  'professionLabel': p.professionLabel,
+                  'distanceMeters': p.distanceMeters,
+                })
+            .toList(),
+        truncated: professionals.length > (rushed ? 1 : 5),
+        history: _buildHistory(),
+        lat: _mood.allowsWeatherLine ? origin.lat : null,
+        lng: _mood.allowsWeatherLine ? origin.lng : null,
+      );
+
+      return ChatMessage(
+        text: composedReply ?? 'هاي أقرب ${intent.label} إلك:',
+        sender: MessageSender.bot,
+        understandingIntent: intent,
+        professionalFlow: ProfessionalFlow(
+          professionals: professionals,
+          stage: rushed ? ProfessionalFlowStage.confirming : ProfessionalFlowStage.browsing,
+          selected: rushed ? professionals.first : null,
+        ),
+        onSelectProfessional: (professional) => _selectProfessional(index, professional),
+        onConfirmProfessionalRequest: (note) => _confirmProfessionalRequest(index, note, origin),
+        onProfessionalRequestLogin: () => _signInThenSendProfessionalRequest(index, origin),
+        onCancelProfessionalSelection: () => _cancelProfessionalSelection(index),
+        onQuickReply: _mood.showsQuickReplyChips ? _sendQuickReply : null,
+      );
+    } on ProfessionalsException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أدوّر على ${intent.label} هلأ 😕', sender: MessageSender.bot);
+    }
+  }
+
+  void _selectProfessional(int index, Professional professional) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.confirming,
+          selected: professional,
+          clearError: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _cancelProfessionalSelection(int index) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.browsing,
+          clearSelection: true,
+          clearError: true,
+        ),
+      );
+    });
+  }
+
+  /// يفتح ورقة الدخول من داخل بطاقة الطلب ويكمل الإرسال تلقائياً — نفس منطق
+  /// [_signInThenConfirm] لطلبات الأنشطة التجارية.
+  Future<void> _signInThenSendProfessionalRequest(
+    int index,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final signedIn = await showAuthSheet(
+      context,
+      reason: 'سجّل دخولك عشان يوصله اسمك ورقمك ويقدر يتصل فيك.',
+    );
+    if (!mounted || !signedIn) return;
+    await _confirmProfessionalRequest(index, null, origin);
+  }
+
+  Future<void> _confirmProfessionalRequest(
+    int index,
+    String? note,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final flow = _professionalFlowAt(index);
+    final selected = flow?.selected;
+    if (flow == null || selected == null) return;
+
+    // حارس أخير: البطاقة تعرض زر الدخول للزائر أصلاً، لكن الجلسة قد تنتهي
+    // بين فتح البطاقة والضغط على "أكّد".
+    final token = AuthStore.instance.token;
+    if (token == null) {
+      await _signInThenSendProfessionalRequest(index, origin);
+      return;
+    }
+
+    setState(() {
+      _messages[index] = _messages[index].copyWith(
+        professionalFlow: flow.copyWith(
+          stage: ProfessionalFlowStage.submitting,
+          note: note,
+          clearError: true,
+        ),
+      );
+    });
+
+    try {
+      await _professionalsService.submitRequest(
+        professionalId: selected.id,
+        token: token,
+        note: note,
+        lat: origin.lat,
+        lng: origin.lng,
+      );
+      if (!mounted) return;
+      _updateProfessionalFlow(index, (f) => f.copyWith(stage: ProfessionalFlowStage.submitted));
+    } on ProfessionalsException catch (e) {
+      if (!mounted) return;
+      _updateProfessionalFlow(
+        index,
+        (f) => f.copyWith(stage: ProfessionalFlowStage.confirming, errorMessage: e.message),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _updateProfessionalFlow(
+        index,
+        (f) => f.copyWith(
+          stage: ProfessionalFlowStage.confirming,
+          errorMessage: 'ما قدرت أبعت طلبك هلأ، جرّب مرة تانية.',
+        ),
+      );
+    } finally {
+      _scrollToBottom();
+    }
+  }
+
+  /// التدفّق يُقرأ من [_messages] عند كل استخدام لا يُحتفظ به: الرسالة تُستبدل
+  /// بنسخة جديدة مع كل تغيّر حالة، فنسخة قديمة محفوظة تكتب فوق ما بعدها.
+  ProfessionalFlow? _professionalFlowAt(int index) {
+    if (index >= _messages.length) return null;
+    return _messages[index].professionalFlow;
+  }
+
+  void _updateProfessionalFlow(int index, ProfessionalFlow Function(ProfessionalFlow) update) {
+    final flow = _professionalFlowAt(index);
+    if (flow == null) return;
+    setState(() => _messages[index] = _messages[index].copyWith(professionalFlow: update(flow)));
+  }
+
+  /// يفتح تعديل رسالة مستخدم سابقة: نصها ينزل في حقل الكتابة ويظهر شريط
+  /// «تعديل رسالتك» فوقه. الحذف الفعلي مؤجّل للإرسال (انظر [_handleSend]).
+  void _beginEditMessage(ChatMessage message) {
+    if (_sending || _transcribing) return;
+    setState(() => _editingMessage = message);
+    _controller.text = message.text;
+    _controller.selection = TextSelection.collapsed(offset: message.text.length);
+  }
+
+  /// يتراجع عن التعديل ويرجّع الحقل فاضياً — المحادثة أصلاً ما تغيّرت.
+  void _cancelEditMessage() {
+    if (_editingMessage == null) return;
+    setState(() => _editingMessage = null);
+    _controller.clear();
+  }
+
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
+
+    // تعديل رسالة سابقة: نرمي الرسالة القديمة وكل ما تفرّع عنها، ثم نكمل
+    // بالمسار الطبيعي — فالنص المعدّل يمر بنفس التصنيف والبحث ويدخل نفس
+    // سياق [_buildHistory]، بدل ترقيع الرد القديم مكانه. الرد الملغى هو
+    // جواب سؤال ما عاد موجوداً، وتركه يخلّي ريكو يناقض نفسه بنفس الشاشة.
+    final editing = _editingMessage;
+    if (editing != null) {
+      final index = _messages.indexOf(editing);
+      setState(() {
+        _editingMessage = null;
+        if (index != -1) _messages.removeRange(index, _messages.length);
+      });
+    }
+
+    // سؤال عن الجو يُجاب من القراءة المحفوظة مباشرة: بلا تصنيف ولا بحث ولا
+    // انتظار خادم. كان ريكو يرد عليه بـ«ما أقدر أساعدك في هذي» وهو يعرف
+    // الجواب فعلاً — [IntentService.isWeatherQuestion] يتكفّل بألا تُلتقط
+    // رسالة فيها طلب مكان (مثل «الجو حار أبغى كافيه») على أنها سؤال جو.
+    if (IntentService.isWeatherQuestion(text)) {
+      await _answerWeatherQuestion(text);
+      return;
+    }
+
+    // كلام عن أذية النفس يُجاب محلياً قبل أي نداء للخادم. كان هذا الفحص
+    // يعمل فقط لما يفشل المصنّف، فإذا تجاوز الخادم حدّ الاستخدام وكانت
+    // الصيغة ما تطابق النمط المحلي القديم ("بدي موت؟")، وصل لإنسان بهذي
+    // الحالة رد «ما فهمتك». رد الأمان ما يستاهل يعتمد على شبكة ولا حدّ.
+    final distress = IntentService.distressReply(text, lastCategorySlug: await _sessionMemory.getLastCategorySlug());
+    if (distress != null) {
+      _answerLocally(text, distress);
+      return;
+    }
+
+    // القياسات تُستهلك هنا لا في [_handleRecorded]: بين التحويل والإرسال
+    // يقدر المستخدم يعدّل النص أو يكتب غيره، فالنبرة تتبع الرسالة اللي
+    // انبعثت فعلاً، ورسالة مكتوبة بعدها تنطلق بلا نبرة.
+    final voice = _pendingVoice;
+    _pendingVoice = null;
 
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(text: 'تدلل عم يدوّر إلك هلأ…', sender: MessageSender.bot, isLoading: true));
       _sending = true;
+      _mood = CustomerMood.neutral;
     });
     _controller.clear();
     _scrollToBottom();
@@ -404,7 +865,12 @@ class _ChatScreenState extends State<ChatScreen> {
         text,
         history: _buildHistory(),
         lastResults: _buildLastResultsPayload(),
+        voice: voice,
       );
+
+      // يُقرأ قبل أي تفرّع: حتى الرد خارج الموضوع (شكوى مثلاً) يستاهل
+      // يوصل بطول يناسب حالة صاحبه.
+      if (classification != null) _mood = classification.mood;
 
       if (classification != null && classification.isOffTopic) {
         setState(() {
@@ -426,11 +892,11 @@ class _ChatScreenState extends State<ChatScreen> {
         // بطيئة) — قبل التخمين المحلي بفئة، افحص إذا كانت الرسالة أصلاً
         // تحية/شكر/دردشة عامة بلا أي إشارة لمكان أو عروض. بدون هالفحص كانت
         // رسالة متل "هلا" ترجع بحث "مطعم" افتراضياً بدل رد بتحية طبيعية.
-        if (!IntentService.hasPlaceOrDealsSignal(text, lastCategorySlug: lastCategorySlug)) {
+        if (!IntentService.hasSearchSignal(text, lastCategorySlug: lastCategorySlug)) {
           final offTopicReply = IntentService.detectOffTopicReply(text);
           if (offTopicReply != null) {
             setState(() {
-              _messages.removeLast(); // إزالة رسالة "ريكو يدوّر لك الحين…"
+              _messages.removeLast(); // إزالة رسالة "تدلل عم يدوّر إلك هلأ…"
               _messages.add(ChatMessage(text: offTopicReply, sender: MessageSender.bot));
             });
             return;
@@ -439,19 +905,61 @@ class _ChatScreenState extends State<ChatScreen> {
         intents = IntentService.parseMulti(text, lastCategorySlug: lastCategorySlug);
       }
 
+      // لا مصنّف LLM ولا مطابقة محلية ولا نمط دردشة معروف: ما فهمنا الرسالة.
+      // كان [IntentService.parse] يرجع "مطعم" كافتراضي صامت بهذي الحالة، فأي
+      // سؤال غير مفهوم يُجاب ببحث عن مطاعم قريبة. طلب التوضيح أصدق.
+      if (intents.isEmpty) {
+        setState(() {
+          _messages.removeLast(); // إزالة رسالة "تدلل عم يدوّر إلك هلأ…"
+          _messages.add(ChatMessage(text: IntentService.clarifyReply(text), sender: MessageSender.bot));
+        });
+        return;
+      }
+
       final origin = await _resolveOrigin(text);
 
-      // نستبدل رسالة "يبحث..." الواحدة بفقاعة تحميل واحدة لكل نية مستقلة،
-      // بنفس ترتيب النوايا، ثم نملأ كل واحدة بمجرد جاهزيتها (بالتوازي، دون
-      // انتظار بعضها البعض) — هذا ما يجعل الرد على رسالة مركّبة (مثل "أقرب
-      // مطعم أو أرخص كافيه، وايش العروض المتوفرة؟") يظهر كفقاعات منفصلة.
+      intents = _dedupeIntents(intents);
+
+      // خانات العرض: كل خانة = فقاعة واحدة.
+      //
+      // نوايا الأماكن كلها تجتمع بخانة وحدة: المستخدم كتبها برسالة وحدة
+      // ("أقرب مطعم وأرخص مطعم") فيردّها رد واحد بمقاطع مسمّاة، بدل فقاعتين
+      // متطابقتي الشكل يصعب ربط كل وحدة بطلبها. وما عداها — العروض وأصحاب
+      // المهن والطلبات — يبقى كل واحد بفقاعته، لأن كل واحد منها تدفّق
+      // تفاعلي قائم بذاته (سلّة، اختيار صاحب مهنة) ما ينضم لغيره.
+      final slots = <List<QueryIntent>>[];
+      List<QueryIntent>? placeSlot;
+      for (final intent in intents) {
+        if (intent.kind == IntentKind.place) {
+          if (placeSlot == null) {
+            placeSlot = [intent];
+            slots.add(placeSlot);
+          } else {
+            placeSlot.add(intent);
+          }
+        } else {
+          slots.add([intent]);
+        }
+      }
+
+      // نستبدل رسالة "يبحث..." الواحدة بفقاعة تحميل واحدة لكل خانة، بنفس
+      // الترتيب، ثم نملأ كل وحدة بمجرد جاهزيتها (بالتوازي، دون انتظار بعضها
+      // البعض).
       final placeholders = [
-        for (final intent in intents)
+        for (final slot in slots)
           ChatMessage(
-            text: intent.kind == IntentKind.deals ? 'أشوف العروض القريبة…' : 'أدوّر على ${intent.label}…',
+            text: slot.length > 1
+                ? 'أدوّر على ${slot.map((i) => i.label).toSet().join(' و')}…'
+                : switch (slot.first.kind) {
+                    IntentKind.deals => 'أشوف العروض القريبة…',
+                    IntentKind.professional => 'بدوّرلك على أقرب ${slot.first.label}…',
+                    IntentKind.place => 'أدوّر على ${slot.first.label}…',
+                    IntentKind.order => 'بجهّز طلبك من ${slot.first.placeName ?? slot.first.label}…',
+                    IntentKind.call => 'أدوّر على رقم ${slot.first.placeName ?? slot.first.label}…',
+                  },
             sender: MessageSender.bot,
             isLoading: true,
-            understandingIntent: intent,
+            understandingIntent: slot.first,
           ),
       ];
 
@@ -463,17 +971,16 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
 
       final futures = <Future<void>>[];
-      for (var i = 0; i < intents.length; i++) {
+      for (var i = 0; i < slots.length; i++) {
         final index = startIndex + i;
-        final referencedPosition = intents[i].referencedPosition;
-        // إشارة لعنصر محدد من آخر نتائج (مثل "الثاني") تُحل من الذاكرة
-        // المحلية أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت
-        // القائمة) نسقط تلقائياً لمسار البحث العادي.
-        final resolveFuture = referencedPosition != null
-            ? _resolveReferencedMessage(text, intents[i], referencedPosition).then((message) async {
-                return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback);
-              })
-            : _resolveIntentMessage(text, intents[i], origin, usedFallback);
+        final slot = slots[i];
+        // كل نوايا الخانة تُحلّ بنفس الـindex عمداً: ردود النتيجة (فتح
+        // السلّة مثلاً) تستبدل فقاعتها بمكانها، وفقاعة الخانة واحدة مهما
+        // كان عدد نواياها.
+        final resolveFuture = slot.length > 1
+            ? Future.wait([for (final intent in slot) _resolveOne(text, intent, origin, usedFallback, index)])
+                .then((messages) => _mergePlaceMessages(slot, messages))
+            : _resolveOne(text, slot.first, origin, usedFallback, index);
         futures.add(
           resolveFuture.then((message) {
             if (!mounted) return;
@@ -543,12 +1050,56 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// يحوّل تسجيل المستخدم إلى نص ويحطه في حقل الكتابة — بلا إرسال تلقائي.
+  /// يرد على سؤال الجو من القراءة المحفوظة، ويضيف سطر الاقتراح إن وُجد —
+  /// فيصير الرد جواباً ودعوة لخطوة تالية بدل معلومة معلّقة.
+  /// يضيف رسالة المستخدم ورد ريكو معاً بلا تصنيف ولا بحث — للردود اللي
+  /// يعرفها التطبيق بنفسه ولا يحتاج فيها الخادم.
+  void _answerLocally(String text, String reply) {
+    setState(() {
+      _messages.add(ChatMessage(text: text, sender: MessageSender.user));
+      _messages.add(ChatMessage(text: reply, sender: MessageSender.bot));
+      _sending = false;
+    });
+    _controller.clear();
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+  }
+
+  Future<void> _answerWeatherQuestion(String text) async {
+    setState(() {
+      _messages.add(ChatMessage(text: text, sender: MessageSender.user));
+      _sending = true;
+    });
+    _controller.clear();
+    _scrollToBottom();
+
+    await _refreshWeather();
+    final weather = _weather;
+
+    setState(() {
+      _messages.add(ChatMessage(
+        // بلا موقع أو بلا قراءة ما نخترع جواباً — نقولها صراحة ونعرض ما نقدر
+        // عليه فعلاً، تماماً مثل بقية حالات تعذّر الموقع.
+        text: weather == null
+            ? 'ما قدرت أعرف حالة الجو عندك هلأ 😕 بس بقدر أدلّك على أقرب مكان أو عرض.'
+            : [
+                weather.descriptionAr,
+                if (weather.suggestion != null) weather.suggestion!.line,
+              ].join(' — '),
+        sender: MessageSender.bot,
+      ));
+      _sending = false;
+    });
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+  }
+
+  /// يحوّل تسجيل المستخدم إلى نص ويرسله فوراً — بلا ضغطة إرسال ثانية.
   ///
-  /// النص يظهر للمستخدم قبل الإرسال عن قصد: تحويل الكلام باللهجة يخطئ أحياناً،
-  /// ونظرة سريعة على «أقرب صيدلية» قبل الضغط أرخص بكثير من بحث غلط + نداء
-  /// تصنيف مصروف على طلب ما قاله أصلاً.
-  Future<void> _handleRecorded(String filePath) async {
+  /// مستخدم الصوت اختار ألا يكتب أصلاً، فإيقافه عند حقل ممتلئ ينتظر ضغطة
+  /// يلغي فائدة المايك. النص يظهر في فقاعة المستخدم على كل حال، فإن أخطأ
+  /// التحويل يبان الخطأ ويُعاد الطلب بدل ما ينتظر مراجعة قبل كل إرسال.
+  Future<void> _handleRecorded(String filePath, VoiceSignals signals) async {
     if (_transcribing || _sending) return;
     setState(() => _transcribing = true);
 
@@ -556,6 +1107,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // هالنداء يوصل أول تسجيل لخادم نايم فيدفع زمن الإيقاظ فوق زمن التحويل.
     BackendWarmup.ping();
 
+    var transcribed = false;
     try {
       final result = await _transcribeService.transcribe(filePath);
       if (!mounted) return;
@@ -564,6 +1116,9 @@ class _ChatScreenState extends State<ChatScreen> {
         case TranscriptionStatus.ok:
           _controller.text = result.text;
           _controller.selection = TextSelection.collapsed(offset: result.text.length);
+          // سرعة الكلام ما تنحسب إلا الحين: عدد الكلمات ما نعرفه قبل التحويل.
+          _pendingVoice = signals.withTranscript(result.text);
+          transcribed = true;
         case TranscriptionStatus.noSpeech:
           _showBotNote('ما سمعتك منيح 🎙 قرّب الموبايل شوي وجرّب مرة تانية.');
         case TranscriptionStatus.failed:
@@ -574,6 +1129,10 @@ class _ChatScreenState extends State<ChatScreen> {
       unawaited(VoiceRecordingService.deleteFile(filePath));
       if (mounted) setState(() => _transcribing = false);
     }
+
+    // الإرسال بعد إطفاء [_transcribing] لا داخله: [_handleSend] يمسك حالة
+    // الانشغال بنفسه، ولو تداخلت الحالتان لبقي المؤلّف معطّلاً بعد الرد.
+    if (transcribed) await _handleSend();
   }
 
   /// رُفض إذن المايك أو تعذّر تشغيله — نفس أسلوب رسائل الموقع: سبب مفهوم
@@ -605,6 +1164,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// المعروضة، تماماً كما تفعل chips الاقتراحات الأولية أعلى الشاشة.
   void _sendQuickReply(String text) {
     if (_sending) return;
+    // حبة اقتراح أثناء تعديل مفتوح = تخلٍّ عن التعديل، لا تعديل بنصها.
+    if (_editingMessage != null) setState(() => _editingMessage = null);
     _controller.text = text;
     _handleSend();
   }
@@ -633,12 +1194,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         _messages[index] = ChatMessage(
-          text: 'هاي منتجات وعروض ${place.name}، اختار اللي يعجبك:',
+          text: 'هاي منتجات وعروض ${place.name}، ضيف اللي بدك إياه للسلّة:',
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
-          onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
-          onConfirmRequest: (name, phone) => _confirmRequest(index, name, phone),
-          onCancelCatalogSelection: () => _cancelCatalogSelection(index),
+          catalogActions: _catalogActionsFor(index),
         );
       });
     } on CatalogException catch (e) {
@@ -651,58 +1210,442 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _selectCatalogItem(int index, String itemType, String itemId, String label, String? detail) {
+  /// أفعال بطاقة المتجر لرسالة بعينها — تُبنى مرة واحدة هنا لأن للسلّة الآن
+  /// مدخلين: تصفّح المستخدم للقائمة بنفسه، وطلب منطوق جهّزناه له.
+  /// يضيف صنفاً اقترحناه («تقصد أرز بحليب؟») للسلّة عند ضغط حبّته.
+  ///
+  /// يحل المعرّف من الكتالوج الواصل مع الرد نفسه بدل ما يطلبه من جديد، ويشيل
+  /// الحبّة بعد الإضافة — السؤال انجاوب، فعرضه مرة ثانية يخلي المستخدم يشك
+  /// إذا ضغطته أصلاً.
+  void _addSuggestion(int index, OrderSuggestion suggestion) {
+    if (index >= _messages.length) return;
+    final message = _messages[index];
+    final catalog = message.requestFlow?.catalog;
+    if (catalog == null) return;
+
+    final remaining = (message.orderSuggestions ?? const <OrderSuggestion>[])
+        .where((s) => s.itemId != suggestion.itemId)
+        .toList();
+
+    if (suggestion.itemType == 'deal') {
+      final deals = catalog.deals.where((d) => d.id == suggestion.itemId);
+      if (deals.isEmpty) return;
+      _updateFlow(index, (f) => f.copyWith(cart: f.cart.add(CartLine.fromDeal(deals.first)), clearError: true));
+    } else {
+      final products = catalog.products.where((p) => p.id == suggestion.itemId);
+      if (products.isEmpty) return;
+      _updateFlow(index, (f) => f.copyWith(cart: f.cart.add(CartLine.fromProduct(products.first)), clearError: true));
+    }
+
+    if (!mounted) return;
+    setState(() => _messages[index] = _messages[index].copyWith(orderSuggestions: remaining));
+  }
+
+  CatalogFlowActions _catalogActionsFor(int index) {
+    return CatalogFlowActions(
+      onAddProduct: (product) => _updateFlow(index, (f) => f.copyWith(
+            cart: f.cart.add(CartLine.fromProduct(product)),
+            clearError: true,
+          )),
+      onAddDeal: (deal) => _updateFlow(index, (f) => f.copyWith(
+            cart: f.cart.add(CartLine.fromDeal(deal)),
+            clearError: true,
+          )),
+      onSetQuantity: (type, id, quantity) => _setCartQuantity(index, type, id, quantity),
+      onReview: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.confirming, clearError: true)),
+      onSelectCategory: (category) => _updateFlow(
+        index,
+        (f) => category == null
+            ? f.copyWith(clearCategory: true, showAllProducts: false)
+            : f.copyWith(activeCategory: category, showAllProducts: false),
+      ),
+      onToggleShowAll: () => _updateFlow(index, (f) => f.copyWith(showAllProducts: !f.showAllProducts)),
+      onConfirm: () => _confirmRequest(index),
+      onRequestLogin: () => _signInThenConfirm(index),
+      onBack: () => _updateFlow(index, (f) => f.copyWith(stage: RequestFlowStage.browsing, clearError: true)),
+    );
+  }
+
+  /// "بدي أطلب من مطعم الماهر كنافة نابلسية وأرز بحليب" — يحلّ المحل، يطابق
+  /// الأصناف مع قائمته الحقيقية، ويفتح السلّة جاهزة على خطوة المراجعة.
+  ///
+  /// الأصناف غير الموجودة تُقال صراحةً في نص الرسالة. السكوت عنها أسوأ عطل
+  /// ممكن هنا: المستخدم يضغط "أكّد" وهو يظن أن الأربعة كلها بالسلّة، وما يكتشف
+  /// نقص اثنين إلا حين يتصل المحل.
+  Future<ChatMessage> _resolveOrderMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    int index,
+  ) async {
+    final placeName = intent.placeName;
+    final categorySlug = intent.slug;
+
+    // "شو المطاعم القريبة؟" ثم "بدي أطلب من الثاني": المحل واحد من اللي
+    // عرضناها للتو، فنطلب منه بمعرّفه. البحث بالاسم بدل هذا قد يرجّع محلاً
+    // آخر بنفس الاسم بعيداً عنه — غير اللي شافه بالقائمة وقرر يطلب منه.
+    final shown = _findLastShown()?.places;
+    final shownShop = shown == null
+        ? null
+        : findShownShop(shown, position: intent.referencedPosition, name: placeName);
+    if (shownShop != null) return _orderFromShownShop(shownShop, intent, index);
+
+    // أشار لرقم بلا اسم، والرقم ما عاد يطابق شي بالقائمة — نسأل بدل ما
+    // نطلب من محل ما اختاره.
+    if (placeName == null && intent.referencedPosition != null) {
+      return ChatMessage(
+        text: 'ما عرفت أي محل بتقصد من القائمة 🤔 احكي لي اسمه أو رقمه.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    // بلا اسم محل ولا فئة ما نعرف من وين نطلب أصلاً.
+    if (placeName == null && categorySlug == null) {
+      return ChatMessage(text: 'ما فهمت من وين بدك تطلب، احكي لي اسم المحل 👌', sender: MessageSender.bot);
+    }
+
+    ResolvedOrder resolved;
+    try {
+      resolved = await _catalogService.resolveOrder(
+        placeName: placeName,
+        // الموقع يُبعث للطلب اللي بلا اسم محل بس — هناك الخادم يحتاجه
+        // ليرتّب المحلات القريبة بمن عنده طلبه.
+        categorySlug: placeName == null ? categorySlug : null,
+        lat: placeName == null ? origin.lat : null,
+        lng: placeName == null ? origin.lng : null,
+        items: intent.orderItems,
+      );
+    } on CatalogException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أجهّز طلبك هلأ 😕', sender: MessageSender.bot);
+    }
+
+    // ما سمّى محلاً: نعرض عليه المحلات القريبة مرتّبة بمن عنده طلبه، ويقرر
+    // هو. الاختيار نيابةً عنه يخفي عنه إن فيه أقرب أو عنده طلبه كاملاً.
+    if (resolved.needsShopChoice) {
+      return _shopChoiceMessage(resolved, intent, index);
+    }
+
+    return _orderMessageFor(resolved, intent, index, shopLabel: placeName);
+  }
+
+  /// "اتصل على مطعم الماهر" — يلقى المحل ويفتح تطبيق الهاتف برقمه.
+  ///
+  /// ريكو ما يتصل بنفسه: يجهّز الرقم، والمستخدم يضغط اتصال (iOS يطلب
+  /// موافقته أصلاً). المحل يُحل مثل الطلب بالضبط — من آخر قائمة عرضناها
+  /// أولاً ([findShownShop])، وإلا بالبحث باسمه حول موقعه.
+  Future<ChatMessage> _resolveCallMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+  ) async {
+    final name = intent.placeName;
+    final shown = _findLastShown()?.places;
+    final shownShop = shown == null ? null : findShownShop(shown, position: intent.referencedPosition, name: name);
+    if (shownShop != null) return _callMessageFor(shownShop, dial: true);
+
+    if (name == null) {
+      return ChatMessage(text: 'ما عرفت أي محل بدك تتصل عليه 🤔 احكي لي اسمه.', sender: MessageSender.bot);
+    }
+
+    List<PlaceResult> found;
+    try {
+      found = await _placesService.search(
+        userLat: origin.lat,
+        userLng: origin.lng,
+        // الخادم يقبل ٦٠ حرفاً لاسم المحل، وأطول من كذا ما هو اسم محل.
+        brandHint: name.length > 60 ? name.substring(0, 60) : name,
+        // اللي يتصل على محل بالاسم يعرفه، فما يلزم يكون جنبه — بس الأقرب أولاً.
+        radiusMeters: 30000,
+      );
+    } on PlacesException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    }
+
+    if (found.isEmpty) {
+      return ChatMessage(
+        text: 'ما لقيت محل باسم "$name" قريب منك 😕 تأكد من الاسم، أو احكي لي شو بدك وبدوّرلك على أقرب محل.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    // الأقرب اللي عنده رقم — "صيدلية النهدي" لها فروع كثيرة، وأقربها هو اللي
+    // يقصده غالباً. ونفتح الهاتف على طول بس إذا الاسم يطابق فعلاً: نتيجة
+    // بحث تقريبية تستاهل نظرة قبل ما يرن على محل غلط.
+    final withPhone = found.where((p) => p.phone?.trim().isNotEmpty ?? false).toList();
+    final place = withPhone.isNotEmpty ? withPhone.first : found.first;
+    return _callMessageFor(place, dial: findShownShop([place], name: name) != null);
+  }
+
+  ChatMessage _callMessageFor(PlaceResult place, {required bool dial}) {
+    final phone = place.phone?.trim();
+    // محل مسجّل عندنا: الطلب منه من هنا أسهل من مكالمة، فنقولها.
+    final orderable = place.source == 'rico';
+
+    if (phone == null || phone.isEmpty) {
+      return ChatMessage(
+        text: orderable
+            ? 'لقيت ${place.name} بس رقمه مش عندي 😕 بتقدر تطلب منهم من هون مباشرة 🛒'
+            : 'لقيت ${place.name} بس رقمه مش عندي 😕 هاد موقعه، وإذا بدك تطلب إشي من محل قريب احكي لي وبجهّزلك ياه 🛒',
+        sender: MessageSender.bot,
+        places: [place],
+        onOrder: orderable ? _openCatalog : null,
+      );
+    }
+
+    if (dial) unawaited(openDialer(phone));
+
+    return ChatMessage(
+      text: orderable
+          ? 'هاد رقم ${place.name}: $phone 📞\nوإذا بدك، بطلبلك منهم من هون بدون مكالمة 🛒'
+          : 'هاد رقم ${place.name}: $phone 📞\nوإذا بدك تطلب إشي من محل قريب، احكي لي وبجهّزلك ياه 🛒',
+      sender: MessageSender.bot,
+      places: [place],
+      onOrder: orderable ? _openCatalog : null,
+    );
+  }
+
+  /// طلب من محل ظاهر بآخر نتائج — نفس مسار المحل المضغوط من قائمة الاختيار
+  /// ([_pickOrderShop]): بالمعرّف، وبنفس رسالة السلّة.
+  Future<ChatMessage> _orderFromShownShop(PlaceResult place, QueryIntent intent, int index) async {
+    // نتائج Google/OSM الاحتياطية ما لها قائمة عندنا ولا أحد يستقبل الطلب —
+    // نقولها صراحة بدل ما نتظاهر بطلب ما راح يوصل.
+    if (place.source != 'rico') {
+      return ChatMessage(
+        text: '${place.name} مش مسجّل عندنا لهلأ، فما بقدر أطلب منه 😕 '
+            'اختار محل تاني من القائمة، أو احكي لي شو بدك وبدوّرلك على محل عنده.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    try {
+      final resolved = await _catalogService.resolveOrder(businessId: place.osmId, items: intent.orderItems);
+      return _orderMessageFor(resolved, intent, index, shopLabel: place.name);
+    } on CatalogException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أجهّز طلبك من ${place.name} هلأ 😕', sender: MessageSender.bot);
+    }
+  }
+
+  /// يبني رسالة الطلب من نتيجة مطابقة — يشترك فيها مساران: محل سمّاه العميل،
+  /// ومحل ضغطه من المحلات المعروضة عليه. النتيجة واحدة بالحالتين، فالفرق
+  /// الوحيد هو الاسم اللي نذكره حين ما يرجّع الخادم محلاً أصلاً.
+  ChatMessage _orderMessageFor(
+    ResolvedOrder resolved,
+    QueryIntent intent,
+    int index, {
+    String? shopLabel,
+  }) {
+    final catalog = resolved.catalog;
+    if (catalog == null) {
+      return ChatMessage(
+        text: shopLabel != null
+            ? 'ما لقيت محل باسم "$shopLabel" 😕 جرّب تكتب اسمه كامل، أو احكي لي شو بدك وأنا بدوّرلك على أقرب محل.'
+            // ما سمّى محلاً، فما ينفع نقول "ما لقيت محل باسم كذا" — المشكلة
+            // إن ما فيه ${intent.label} مسجّل قريب منه، وهذا كلام ثاني.
+            : 'ما لقيت ${intent.label} قريب منك عنده طلبك 😕 جرّب توسّع نطاقك أو سمّي لي المحل.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    final shop = resolved.businessName ?? shopLabel ?? intent.label;
+
+    // محل مسجّل بلا قائمة بعد — "هذي قائمتهم" وما فيها ولا صنف رد أسوأ من
+    // الصمت. نقولها صراحة بدل ما نعرض بطاقة فاضية يتصفّحها بلا فايدة.
+    if (catalog.products.isEmpty && catalog.deals.isEmpty) {
+      return ChatMessage(
+        text: 'لقيت $shop بس قائمتهم مش مضافة عندنا لهلأ 😕 جرّب محل تاني أو احكي لي شو بدك.',
+        sender: MessageSender.bot,
+      );
+    }
+
+    // سمّى المحل بلا أصناف — يبي يشوف قائمتهم، فنفتحها على التصفّح.
+    if (intent.orderItems.isEmpty) {
+      return ChatMessage(
+        text: 'هاي قائمة $shop، ضيف اللي بدك إياه للسلّة:',
+        sender: MessageSender.bot,
+        requestFlow: RequestFlow(catalog: catalog),
+        catalogActions: _catalogActionsFor(index),
+      );
+    }
+
+    // ولا صنف تطابق: نفتح القائمة على التصفّح بدل ما نوقفه عند رسالة خطأ —
+    // هو أصلاً يبي يطلب من هذا المحل.
+    if (resolved.foundNothing) {
+      final suggestions = resolved.suggestions;
+      return ChatMessage(
+        text: buildOrderReplyText(shop: shop, resolved: resolved),
+        sender: MessageSender.bot,
+        orderSuggestions: suggestions.isEmpty ? null : suggestions,
+        onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
+        requestFlow: RequestFlow(catalog: catalog),
+        catalogActions: _catalogActionsFor(index),
+      );
+    }
+
+    final cart = Cart(
+      lines: resolved.matched
+          .map((m) => CartLine(
+                itemType: m.itemType,
+                itemId: m.itemId,
+                label: m.label,
+                detail: m.detail,
+                unitPrice: m.unitPrice,
+                imageUrl: m.imageUrl,
+                quantity: m.quantity,
+              ))
+          .toList(),
+    );
+
+    // لما يكون عندنا بديل قريب نسأل عنه بدل ما نكتفي بـ"ما لقيت": الصنف
+    // الناقص صار سؤالاً له جواب بضغطة، لا طريقاً مسدوداً يرجّع المستخدم
+    // يتصفّح القائمة كلها بنفسه.
+    final suggestions = resolved.suggestions;
+
+    final text = buildOrderReplyText(shop: shop, resolved: resolved);
+
+    return ChatMessage(
+      text: text,
+      sender: MessageSender.bot,
+      orderSuggestions: suggestions.isEmpty ? null : suggestions,
+      onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
+      // مباشرة على المراجعة: هو قال وش يبي، فالخطوة الباقية تأكيد لا تصفّح.
+      requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
+      catalogActions: _catalogActionsFor(index),
+    );
+  }
+
+  /// رسالة «اختر من وين تطلب» — المحلات مرتّبة بمن عنده طلبك أولاً.
+  ChatMessage _shopChoiceMessage(ResolvedOrder resolved, QueryIntent intent, int index) {
+    final options = resolved.shopOptions;
+    final wanted = intent.orderItems.map((i) => i.name).toList();
+    final withAll = options.where((o) => o.hasAll).length;
+
+    // الصدق هنا يوفّر على العميل فتح المحلات وحدة وحدة: إذا ما فيه أحد عنده
+    // طلبه نقولها قبل القائمة، لا نتركه يكتشفها بعد ثلاث ضغطات.
+    final lead = options.every((o) => o.hasNone)
+        ? wanted.isEmpty
+            ? 'هاي أقرب ${intent.label} إلك — اختار من وين بدك تطلب 👇'
+            : 'ما لقيت ${_itemsPhrase(wanted)} في ${intent.label} قريبة منك 😕 بس هاي الأقرب، شوف قوائمهم:'
+        : withAll == 0
+            ? 'لقيتلك ${intent.label} عندها جزء من طلبك — اختار من وين بدك تطلب 👇'
+            : 'لقيتلك ${intent.label} عندها طلبك — اختار من وين بدك تطلب 👇';
+
+    return ChatMessage(
+      text: lead,
+      sender: MessageSender.bot,
+      understandingIntent: intent,
+      shopOptions: options,
+      onPickShop: (option) => _pickOrderShop(index, option, intent),
+    );
+  }
+
+  /// ضغط محلاً من القائمة المعروضة: نجهّز طلبه منه ونستبدل رسالة الاختيار
+  /// بالسلّة نفسها — بنفس الموضع، فما تتراكم فقاعتان لطلب واحد.
+  Future<void> _pickOrderShop(int index, OrderShopOption option, QueryIntent intent) async {
+    if (index >= _messages.length) return;
+    setState(() => _messages[index] = _messages[index].copyWith(busyShopId: option.id));
+    _scrollToBottom();
+
+    ChatMessage message;
+    try {
+      final resolved = await _catalogService.resolveOrder(
+        businessId: option.id,
+        items: intent.orderItems,
+      );
+      message = _orderMessageFor(resolved, intent, index, shopLabel: option.name);
+    } on CatalogException catch (e) {
+      message = ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      message = ChatMessage(text: 'ما قدرت أجهّز طلبك من ${option.name} هلأ 😕', sender: MessageSender.bot);
+    }
+
+    if (!mounted) return;
+    setState(() => _messages[index] = message);
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+  }
+
+  /// "كنافة" / "كنافة وأرز بحليب" / "كنافة وأرز بحليب و٢ غيرها" — عربية تُقرأ،
+  /// لا قائمة مفصولة بفواصل.
+  static String _itemsPhrase(List<String> names) {
+    if (names.isEmpty) return '';
+    if (names.length == 1) return '"${names.first}"';
+    final quoted = names.map((n) => '"$n"').toList();
+    return '${quoted.sublist(0, quoted.length - 1).join('، ')} و${quoted.last}';
+  }
+
+  /// تعديل موضعي على تدفّق طلبٍ داخل رسالة بعينها — كل أفعال بطاقة المتجر
+  /// تمرّ من هنا، فيبقى التحقّق من وجود الرسالة وحالتها في مكان واحد.
+  ///
+  /// لا [_scrollToBottom] هنا عمداً: إضافة منتج لا تغيّر ارتفاع البطاقة، وقفزُ
+  /// المحادثة مع كل ضغطة "أضف" يسحب الشبكة من تحت إصبع المستخدم.
+  void _updateFlow(int index, RequestFlow Function(RequestFlow flow) update) {
     if (index >= _messages.length) return;
     final current = _messages[index];
     final flow = current.requestFlow;
     if (flow == null) return;
+    setState(() => _messages[index] = current.copyWith(requestFlow: update(flow)));
+  }
+
+  /// تفريغ السلّة من المراجعة يعيد المستخدم للتصفّح بدل أن يتركه أمام سلّة
+  /// فارغة وزر تأكيد لا يرسل شيئاً.
+  void _setCartQuantity(int index, String itemType, String itemId, int quantity) {
+    _updateFlow(index, (flow) {
+      final cart = flow.cart.setQuantity(itemType, itemId, quantity);
+      final backToBrowsing = cart.isEmpty && flow.stage == RequestFlowStage.confirming;
+      return flow.copyWith(
+        cart: cart,
+        stage: backToBrowsing ? RequestFlowStage.browsing : null,
+        clearError: true,
+      );
+    });
+  }
+
+  /// يفتح ورقة الدخول من داخل بطاقة الطلب، ويكمل التأكيد تلقائياً عند
+  /// نجاحه — الدخول خطوة في الطلب، فلا يُطلب من المستخدم ضغط "أكّد" مرتين.
+  Future<void> _signInThenConfirm(int index) async {
+    final signedIn = await showAuthSheet(
+      context,
+      reason: 'سجّل دخولك عشان نوصّل طلبك للمحل باسمك ورقمك.',
+    );
+    if (!mounted || !signedIn) return;
+    await _confirmRequest(index);
+  }
+
+  Future<void> _confirmRequest(int index) async {
+    if (index >= _messages.length) return;
+    final current = _messages[index];
+    final flow = current.requestFlow;
+    if (flow == null || flow.cart.isEmpty) return;
+
+    // حارس أخير: البطاقة تعرض زر الدخول للزائر أصلاً، لكن الجلسة قد تنتهي
+    // بين فتح البطاقة والضغط على "أكّد".
+    final customer = AuthStore.instance.customer;
+    final token = AuthStore.instance.token;
+    if (customer == null || token == null) {
+      await _signInThenConfirm(index);
+      return;
+    }
+
     setState(() {
       _messages[index] = current.copyWith(
         requestFlow: flow.copyWith(
-          stage: RequestFlowStage.confirming,
-          selectedItemType: itemType,
-          selectedItemId: itemId,
-          selectedItemLabel: label,
-          selectedItemDetail: detail,
+          stage: RequestFlowStage.submitting,
+          customerName: customer.name,
+          customerPhone: customer.phone,
           clearError: true,
         ),
-      );
-    });
-    _scrollToBottom();
-  }
-
-  void _cancelCatalogSelection(int index) {
-    if (index >= _messages.length) return;
-    final current = _messages[index];
-    final flow = current.requestFlow;
-    if (flow == null) return;
-    setState(() {
-      _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(stage: RequestFlowStage.browsing, clearSelection: true, clearError: true),
-      );
-    });
-  }
-
-  Future<void> _confirmRequest(int index, String name, String phone) async {
-    if (index >= _messages.length) return;
-    final current = _messages[index];
-    final flow = current.requestFlow;
-    if (flow == null || flow.selectedItemType == null || flow.selectedItemId == null) return;
-
-    setState(() {
-      _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(stage: RequestFlowStage.submitting, customerName: name, customerPhone: phone),
       );
     });
 
     try {
       await _requestService.submitRequest(
         businessId: flow.catalog.businessId,
-        customerName: name,
-        customerPhone: phone,
-        itemType: flow.selectedItemType!,
-        itemId: flow.selectedItemId!,
+        token: token,
+        items: flow.cart.toRequestItems(),
       );
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -710,6 +1653,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     } on RequestException catch (e) {
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -717,6 +1661,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         final latest = _messages[index];
         _messages[index] = latest.copyWith(
@@ -729,6 +1674,17 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       _scrollToBottom();
     }
+  }
+
+  /// زر الحساب في الترويسة: ملف المستخدم إن كان داخلاً، وإلا ورقة الدخول.
+  /// الدخول من هنا اختياري تماماً — التطبيق يُفتح ويُستخدم بلا حساب، ولا
+  /// يُطلب الحساب إلا عند تأكيد طلب فعلي.
+  Future<void> _openAccount() async {
+    if (AuthStore.instance.isSignedIn) {
+      await showAccountSheet(context);
+      return;
+    }
+    await showAuthSheet(context);
   }
 
   @override
@@ -744,20 +1700,30 @@ class _ChatScreenState extends State<ChatScreen> {
         onOpenFavorites: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const FavoritesScreen()),
         ),
+        onOpenAccount: _openAccount,
       ),
       body: Column(
         children: [
           Expanded(
             child: showWelcome
-                ? WelcomeHero(onPickSuggestion: _sendQuickReply)
+                ? WelcomeHero(onPickSuggestion: _sendQuickReply, weather: _weather)
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.only(top: 14, bottom: 16),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) => MessageBubble(
-                      message: _messages[index],
-                      showAvatar: _startsBotGroup(index),
-                    ),
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return MessageBubble(
+                        message: message,
+                        showAvatar: _startsBotGroup(index),
+                        // التعديل لرسائل المستخدم وحدها، ومعطّل أثناء انشغال
+                        // ريكو — تعديل سؤال وجوابه لسه جاي يترك المحادثة نصّين.
+                        onEdit: message.sender == MessageSender.user && !_sending && !_transcribing
+                            ? () => _beginEditMessage(message)
+                            : null,
+                        editing: identical(message, _editingMessage),
+                      );
+                    },
                   ),
           ),
           ChatComposer(
@@ -766,6 +1732,8 @@ class _ChatScreenState extends State<ChatScreen> {
             busy: _sending || _transcribing,
             onRecorded: _handleRecorded,
             onMicUnavailable: _handleMicUnavailable,
+            editing: _editingMessage != null,
+            onCancelEdit: _cancelEditMessage,
             // شريط الاقتراحات يفيد في المحادثة الجارية؛ شاشة الترحيب تعرض
             // اقتراحاتها الخاصة بمساحة أوسع، فلا داعي لتكرارها.
             suggestions: showWelcome ? null : SuggestionRail(onPick: _sendQuickReply),
