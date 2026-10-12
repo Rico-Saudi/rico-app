@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import 'catalog_flow_card.dart';
 import 'order_shop_options_card.dart';
 import 'price_comparison_card.dart';
+import 'web_offers_card.dart';
 import 'chat_pill_chip.dart';
 import 'place_result_card.dart';
 import 'professional_flow_card.dart';
@@ -43,6 +44,10 @@ class MessageBubble extends StatelessWidget {
     this.editing = false,
   });
 
+  /// أسعار أونلاين فيها سطر واحد على الأقل — مقارنة رجعت فاضية ما تستاهل
+  /// عنوان قسم تحته لا شي.
+  bool get _hasWebPrices => message.webPrices?.any((c) => c.offers.isNotEmpty) ?? false;
+
   static const double _avatarSize = 30;
   static const double _avatarGutter = _avatarSize + 8;
 
@@ -57,6 +62,8 @@ class MessageBubble extends StatelessWidget {
     final hasAttachments = (message.places?.isNotEmpty ?? false) ||
         (message.shopOptions?.isNotEmpty ?? false) ||
         (message.priceComparisons?.isNotEmpty ?? false) ||
+        (message.webOffers?.isNotEmpty ?? false) ||
+        _hasWebPrices ||
         // فقاعة مدموجة كل مقاطعها فاضية ما عندها places، ومع ذلك عندها وش
         // تعرض: سطر "ما لقيت" تحت عنوان كل مقطع.
         ((message.placeSections?.length ?? 0) > 1) ||
@@ -150,6 +157,8 @@ class MessageBubble extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: DealResultCard(deal: deal),
                         ),
+                    if (message.webOffers != null && message.webOffers!.isNotEmpty)
+                      WebOffersSection(offers: message.webOffers!),
                     // فوق بطاقة المحل: الصنف اللي ما لقيناه ومعه أقرب شي
                     // عندهم، سؤالاً بحبّة تُضيفه — لا افتراضاً يضيفه بلا إذن.
                     if ((message.orderSuggestions?.isNotEmpty ?? false) && message.onAddSuggestion != null)
@@ -179,6 +188,11 @@ class MessageBubble extends StatelessWidget {
                         comparisons: message.priceComparisons!,
                         onOrder: message.onOrderOffer,
                         busyKey: message.busyShopId,
+                      ),
+                    if (_hasWebPrices)
+                      Padding(
+                        padding: EdgeInsets.only(top: (message.priceComparisons?.isNotEmpty ?? false) ? 10 : 0),
+                        child: WebPricesSection(comparisons: message.webPrices!),
                       ),
                     if (message.requestFlow != null)
                       CatalogFlowCard(

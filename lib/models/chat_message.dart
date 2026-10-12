@@ -5,6 +5,7 @@ import 'place_result.dart';
 import 'business_catalog.dart';
 import 'place_section.dart';
 import 'price_comparison.dart';
+import 'web_offer.dart';
 import 'professional.dart';
 import 'professional_flow.dart';
 import 'request_flow.dart';
@@ -64,6 +65,12 @@ class ChatMessage {
   /// ضغط «اطلبه» على محل من المقارنة — تُجهّز سلّة بالصنف من هذا المحل.
   final void Function(PriceOffer offer)? onOrderOffer;
 
+  /// عروض من الإنترنت تحت عروض ريكو — تُفتح بالمتصفح، ما تنطلب من ريكو.
+  final List<WebOffer>? webOffers;
+
+  /// أسعار أونلاين تحت مقارنة ريكو المحلية.
+  final List<WebPriceComparison>? webPrices;
+
   /// تدفّق تصفّح منتجات/عروض نشاط حقيقي واحد ثم تأكيد طلب تواصل حقيقي
   /// (اهتمام بمنتج/عرض، يظهر لصاحب النشاط في لوحته) — بديل حقيقي لتدفّق
   /// الطلب التجريبي القديم الذي كان لا يتصل بأي خادم.
@@ -112,6 +119,8 @@ class ChatMessage {
     this.busyShopId,
     this.priceComparisons,
     this.onOrderOffer,
+    this.webOffers,
+    this.webPrices,
     this.requestFlow,
     this.catalogActions,
     this.professionalFlow,
@@ -150,6 +159,8 @@ class ChatMessage {
       busyShopId: clearBusyShop ? null : (busyShopId ?? this.busyShopId),
       priceComparisons: priceComparisons,
       onOrderOffer: onOrderOffer,
+      webOffers: webOffers,
+      webPrices: webPrices,
       requestFlow: requestFlow ?? this.requestFlow,
       catalogActions: catalogActions,
       professionalFlow: professionalFlow ?? this.professionalFlow,
