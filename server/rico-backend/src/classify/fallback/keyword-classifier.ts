@@ -18,6 +18,7 @@ import { isOrderComplaint, OrderDeps, parseBasket, parseOrder } from './order-pa
 import { editBasket } from './basket-edit';
 import { shopRegistry } from './shop-registry';
 import { parseCall } from './call-parser';
+import { parseCompare } from './compare-parser';
 import { CATEGORIES, MAX_INTENTS } from '../constants/categories';
 import {
   ABOUT_RICO,
@@ -596,6 +597,11 @@ export function keywordClassify(message: string): Intent[] {
   if (ABOUT_RICO_RE.test(text)) return [];
   const wants = WANT_RE.test(text);
   if (!wants && HOW_TO_RE.test(text)) return [];
+
+  // "بدي اشتري جبنة، قارن وين ارخص" — a price comparison, which the order
+  // parser would take for an order and the table for the cheapest shop.
+  const compare = parseCompare(message);
+  if (compare) return [compare];
 
   const parsed = parseOrder(message, ORDER_DEPS);
   if (parsed) {

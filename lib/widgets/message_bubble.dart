@@ -7,6 +7,7 @@ import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
 import 'catalog_flow_card.dart';
 import 'order_shop_options_card.dart';
+import 'price_comparison_card.dart';
 import 'chat_pill_chip.dart';
 import 'place_result_card.dart';
 import 'professional_flow_card.dart';
@@ -55,6 +56,7 @@ class MessageBubble extends StatelessWidget {
     final skipBubble = message.isLoading && message.understandingIntent != null;
     final hasAttachments = (message.places?.isNotEmpty ?? false) ||
         (message.shopOptions?.isNotEmpty ?? false) ||
+        (message.priceComparisons?.isNotEmpty ?? false) ||
         // فقاعة مدموجة كل مقاطعها فاضية ما عندها places، ومع ذلك عندها وش
         // تعرض: سطر "ما لقيت" تحت عنوان كل مقطع.
         ((message.placeSections?.length ?? 0) > 1) ||
@@ -171,6 +173,12 @@ class MessageBubble extends StatelessWidget {
                         options: message.shopOptions!,
                         onPick: message.onPickShop,
                         busyShopId: message.busyShopId,
+                      ),
+                    if (message.priceComparisons != null && message.priceComparisons!.isNotEmpty)
+                      PriceComparisonCard(
+                        comparisons: message.priceComparisons!,
+                        onOrder: message.onOrderOffer,
+                        busyKey: message.busyShopId,
                       ),
                     if (message.requestFlow != null)
                       CatalogFlowCard(

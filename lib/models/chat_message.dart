@@ -4,6 +4,7 @@ import 'deal.dart';
 import 'place_result.dart';
 import 'business_catalog.dart';
 import 'place_section.dart';
+import 'price_comparison.dart';
 import 'professional.dart';
 import 'professional_flow.dart';
 import 'request_flow.dart';
@@ -57,6 +58,12 @@ class ChatMessage {
   /// المحل الجاري تجهيز الطلب منه بعد ضغطه.
   final String? busyShopId;
 
+  /// مقارنة أسعار صنف أو أكثر بين المحلات القريبة ("وين أرخص جبنة؟").
+  final List<PriceComparison>? priceComparisons;
+
+  /// ضغط «اطلبه» على محل من المقارنة — تُجهّز سلّة بالصنف من هذا المحل.
+  final void Function(PriceOffer offer)? onOrderOffer;
+
   /// تدفّق تصفّح منتجات/عروض نشاط حقيقي واحد ثم تأكيد طلب تواصل حقيقي
   /// (اهتمام بمنتج/عرض، يظهر لصاحب النشاط في لوحته) — بديل حقيقي لتدفّق
   /// الطلب التجريبي القديم الذي كان لا يتصل بأي خادم.
@@ -102,6 +109,8 @@ class ChatMessage {
     this.shopOptions,
     this.onPickShop,
     this.busyShopId,
+    this.priceComparisons,
+    this.onOrderOffer,
     this.requestFlow,
     this.catalogActions,
     this.professionalFlow,
@@ -138,6 +147,8 @@ class ChatMessage {
       shopOptions: shopOptions,
       onPickShop: onPickShop,
       busyShopId: clearBusyShop ? null : (busyShopId ?? this.busyShopId),
+      priceComparisons: priceComparisons,
+      onOrderOffer: onOrderOffer,
       requestFlow: requestFlow ?? this.requestFlow,
       catalogActions: catalogActions,
       professionalFlow: professionalFlow ?? this.professionalFlow,

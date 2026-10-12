@@ -51,6 +51,7 @@ class UnderstandingCard extends StatelessWidget {
         IntentKind.professional => _professionIcons[intent.profession] ?? Icons.engineering_rounded,
         IntentKind.order => Icons.shopping_basket_rounded,
         IntentKind.call => Icons.phone_rounded,
+        IntentKind.compare => Icons.compare_arrows_rounded,
         IntentKind.place => CategoryVisuals.iconFor(intent.slug),
       };
 
@@ -70,6 +71,15 @@ class UnderstandingCard extends StatelessWidget {
 
     if (intent.kind == IntentKind.call) {
       return [(icon: Icons.phone_rounded, label: intent.placeName ?? intent.label)];
+    }
+
+    // مقارنة: الوسمان الصادقان هما الصنف وإنه يدوّر على الأرخص — لا فئة ولا
+    // محل، فالمقارنة على كل المحلات القريبة اللي تبيعه.
+    if (intent.kind == IntentKind.compare) {
+      return [
+        (icon: Icons.shopping_bag_rounded, label: intent.label),
+        (icon: Icons.savings_rounded, label: 'الأرخص حولك'),
+      ];
     }
 
     // أصحاب المهن ما ينطبق عليهم ترتيب بسعر ولا تقييم ولا حالة فتح — الوسم

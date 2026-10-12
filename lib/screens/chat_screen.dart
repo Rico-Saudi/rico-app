@@ -7,6 +7,7 @@ import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/place_section.dart';
+import '../models/price_comparison.dart';
 import '../models/professional.dart';
 import '../models/professional_flow.dart';
 import '../models/weather_info.dart';
@@ -39,6 +40,7 @@ import '../widgets/auth/auth_sheet.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_header.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/price_comparison_card.dart';
 import '../widgets/welcome_hero.dart';
 import 'favorites_screen.dart';
 
@@ -438,6 +440,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     if (intent.kind == IntentKind.call) {
       return _resolveCallMessage(intent, origin);
+    }
+
+    if (intent.kind == IntentKind.compare) {
+      return _resolveCompareMessage(intent, origin, index);
     }
 
     if (intent.kind == IntentKind.deals) {
@@ -956,6 +962,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     IntentKind.place => 'أدوّر على ${slot.first.label}…',
                     IntentKind.order => 'أجهّز طلبك من ${slot.first.placeName ?? slot.first.label}…',
                     IntentKind.call => 'أدوّر على رقم ${slot.first.placeName ?? slot.first.label}…',
+                    IntentKind.compare => 'أقارن لك أسعار ${slot.first.label}…',
                   },
             sender: MessageSender.bot,
             isLoading: true,
@@ -1513,6 +1520,113 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
       catalogActions: _catalogActionsFor(index),
     );
+  }
+
+  /// "قارن لي وين أرخص جبنة": نفس الصنف عند المحلات القريبة، الأرخص أولاً،
+  /// وكل محل عليه «اطلبه» — المقارنة خطوة للطلب، مو معلومة تنقرا وتنترك.
+  Future<ChatMessage> _resolveCompareMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    int index,
+  ) async {
+    List<PriceComparison> comparisons;
+    try {
+      comparisons = await _catalogService.comparePrices(
+        items: intent.orderItems,
+        lat: origin.lat,
+        lng: origin.lng,
+        categorySlug: intent.slug,
+      );
+    } on CatalogException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'ما قدرت أقارن الأسعار الحين 😕 حاول مرة ثانية.', sender: MessageSender.bot);
+    }
+
+    final found = comparisons.where((c) => c.offers.isNotEmpty).toList();
+    if (found.isEmpty) {
+      return ChatMessage(
+        text: 'ما لقيت ${intent.label} عند المحلات القريبة منك 😕 '
+            'جرّب تكتب اسمه بطريقة ثانية، أو قل لي من أي محل تبيه وأجهّز لك الطلب.',
+        sender: MessageSender.bot,
+        understandingIntent: intent,
+      );
+    }
+
+    unawaited(_impressionService.trackItems([
+      for (final c in found)
+        for (final o in c.offers) ImpressionItem(businessId: o.businessId),
+    ]));
+
+    return ChatMessage(
+      text: _compareLead(comparisons),
+      sender: MessageSender.bot,
+      understandingIntent: intent,
+      priceComparisons: comparisons,
+      onOrderOffer: (offer) => _orderOffer(index, offer),
+    );
+  }
+
+  /// سطر الرد فوق المقارنة: الجواب نفسه أولاً (وين الأرخص وبكم)، ثم الدعوة
+  /// للطلب — بطاقة بلا جملة تقول النتيجة تخلّيه يقرأ الجدول ليعرف الجواب.
+  static String _compareLead(List<PriceComparison> comparisons) {
+    if (comparisons.length > 1) {
+      return 'قارنت لك الأسعار حولك 👇 اضغط «اطلبه» عند المحل اللي يناسبك وأجهّز لك الطلب.';
+    }
+    final comparison = comparisons.single;
+    final best = comparison.offers.first;
+    final price = '${formatPrice(best.finalPrice)} ر.س';
+    if (comparison.offers.length == 1) {
+      return 'لقيت ${comparison.requested} عند ${best.businessName} بس، بـ$price 👇 اضغط «اطلبه» وأجهّزه لك.';
+    }
+    return 'أرخص ${comparison.requested} حولك عند ${best.businessName} بـ$price 👌 اضغط «اطلبه» وأجهّز لك الطلب.';
+  }
+
+  /// «اطلبه» على محل من المقارنة: يجهّز سلّة فيها الصنف نفسه من هذا المحل،
+  /// على خطوة المراجعة — اختار المحل والصنف، فالباقي تأكيد.
+  ///
+  /// المقارنة تبقى مكانها والسلّة تنزل تحتها: لو غيّر رأيه يرجع يطلب من
+  /// محل ثاني بلا ما يعيد السؤال.
+  Future<void> _orderOffer(int index, PriceOffer offer) async {
+    if (index >= _messages.length) return;
+    setState(() => _messages[index] = _messages[index].copyWith(busyShopId: PriceComparisonCard.offerKey(offer)));
+
+    ChatMessage message;
+    try {
+      final catalog = await _catalogService.fetchCatalog(offer.businessId);
+      final products = catalog.products.where((p) => p.id == offer.productId);
+      if (products.isEmpty) {
+        // انباع أو انشال من القائمة بين المقارنة والضغط.
+        message = ChatMessage(
+          text: '${offer.productName} ما عاد متوفر عند ${offer.businessName} 😕 جرّب محل ثاني من المقارنة.',
+          sender: MessageSender.bot,
+        );
+      } else {
+        final cartIndex = _messages.length;
+        message = ChatMessage(
+          text: 'جهّزت لك ${offer.productName} من ${catalog.businessName} 👇 راجع الكمية وأكّد الطلب.',
+          sender: MessageSender.bot,
+          requestFlow: RequestFlow(
+            catalog: catalog,
+            cart: Cart(lines: [CartLine.fromProduct(products.first)]),
+            stage: RequestFlowStage.confirming,
+          ),
+          catalogActions: _catalogActionsFor(cartIndex),
+        );
+      }
+    } on CatalogException catch (e) {
+      message = ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      message = ChatMessage(text: 'ما قدرت أجهّز طلبك من ${offer.businessName} الحين 😕', sender: MessageSender.bot);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _messages[index] = _messages[index].copyWith(clearBusyShop: true);
+      _messages.add(message);
+    });
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 
   /// رسالة «اختر من وين تطلب» — المحلات مرتّبة بمن عنده طلبك أولاً.

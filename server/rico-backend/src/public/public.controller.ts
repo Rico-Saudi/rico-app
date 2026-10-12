@@ -5,6 +5,7 @@ import { SubmitDealDto } from './dto/submit-deal.dto';
 import { TrackImpressionsDto } from './dto/track-impressions.dto';
 import { TrackSearchGapDto } from './dto/track-search-gap.dto';
 import { ResolveOrderDto } from './dto/resolve-order.dto';
+import { ComparePricesDto } from './dto/compare-prices.dto';
 
 @Controller()
 export class PublicController {
@@ -28,6 +29,14 @@ export class PublicController {
   @HttpCode(HttpStatus.OK)
   resolveOrder(@Body() dto: ResolveOrderDto) {
     return this.publicService.resolveOrder(dto);
+  }
+
+  // "وين أرخص جبنة؟": the same product across the shops near the customer,
+  // cheapest first. Public like the catalogue — it only reads prices.
+  @Post('orders/compare')
+  @HttpCode(HttpStatus.OK)
+  comparePrices(@Body() dto: ComparePricesDto) {
+    return this.publicService.comparePrices(dto);
   }
 
   @Post('submit-deal')

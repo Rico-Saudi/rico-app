@@ -14,7 +14,7 @@ export interface OrderItem {
 }
 
 export interface Intent {
-  kind: 'place' | 'deals' | 'professional' | 'order' | 'call';
+  kind: 'place' | 'deals' | 'professional' | 'order' | 'call' | 'compare';
   category: string | null;
   rank: string;
   brandHint: string | null;
@@ -25,11 +25,14 @@ export interface Intent {
   profession: string | null;
   /** Shop the customer named, for kind='order' or 'call' only — null otherwise. */
   placeName?: string | null;
-  /** Dishes they asked for, for kind='order' only. */
+  /** Dishes they asked for (kind='order'), or the products to compare
+   * prices of (kind='compare'). */
   orderItems?: OrderItem[];
 }
 
 const MAX_ORDER_ITEMS = 20;
+// Matches ComparePricesDto: each product is its own query on the server.
+const MAX_COMPARE_ITEMS = 5;
 
 // The model is told to copy item names verbatim, so nothing here tries to
 // correct them — it only enforces shape and size. Matching them to a real
@@ -153,6 +156,29 @@ export function validateIntent(raw: any, dialect?: string): Intent | null {
       referencedPosition,
       profession: null,
       placeName: placeName || null,
+    };
+  }
+
+  // "قارن لي وين أرخص جبنة" — one product's price across the shops nearby.
+  // The products are the whole question, so without one there is nothing to
+  // compare. A kind of shop is kept only when the customer named one ("أرخص
+  // حليب بالبقالات"); otherwise every shop selling it is in the running.
+  if (raw.kind === 'compare') {
+    const orderItems = parseOrderItems(raw.orderItems)
+      .slice(0, MAX_COMPARE_ITEMS)
+      .map((i) => ({ ...i, quantity: 1 }));
+    if (orderItems.length === 0) return null;
+    return {
+      kind: 'compare',
+      category: (CATEGORIES as readonly string[]).includes(raw.category) ? raw.category : null,
+      rank: 'nearest',
+      brandHint: null,
+      customTag: null,
+      label: null,
+      referencedPosition: null,
+      profession: null,
+      placeName: null,
+      orderItems,
     };
   }
 

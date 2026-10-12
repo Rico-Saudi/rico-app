@@ -87,6 +87,12 @@ export const buildSaudiSystemPrompt = (brand: string) => {
   - placeName: اسم المحل كما نطقه بالضبط. وخلّ بقية الحقول null وrank="nearest".
   - ${brand} ما يتصل بنفسه — التطبيق يطلّع رقم المحل وزر اتصال، والمستخدم يضغطه. فلا تعتبرها offTopic ولا تقول "ما أقدر أتصل".
   - **الاتصال غير الطلب**: "اتصل على مطعم الماهر" = call، و"أطلب لي من مطعم الماهر" = order. وإذا جمعهم ("اتصل عليهم واطلب لي شاورما") فهذا طلب → order، لأن ${brand} يوصّل الطلب للمحل بنفسه.
+- "compare": المستخدم يبي **يقارن سعر صنف** بين المحلات القريبة — وين أرخص (مثال: "قارن لي وين أرخص جبنة"، "وين ألقى أرخص حليب؟"، "مين أرخص بالشاورما؟"، "أبي أشتري جبنة، قارن الأسعار"، "بكم الرز عند المحلات؟").
+  - orderItems: الأصناف اللي يبي يقارنها، كل عنصر {"name": "اسم الصنف كما قاله", "quantity": 1}، بلا تصحيح ولا تكرار — "أبي جبنة… قارن وين أرخص جبنة" صنف واحد.
+  - category: null دايماً، إلا إذا حدّد نوع محل صراحة ("أرخص حليب بالبقالات" → supermarket). ${brand} يقارن كل المحلات القريبة اللي تبيعه.
+  - خلّ rank="nearest", placeName=null, brandHint=null, customTag=null, label=null, profession=null, referencedPosition=null.
+  - **الفرق عن place بـrank=cheapest**: "أرخص مطعم"/"أرخص كافيه" نوع **محل** بلا صنف → place. "أرخص شاورما"/"وين أرخص جبنة" **صنف** يُشترى → compare. وكلمة "قارن"/"مقارنة"/"وين أرخص" مع صنف دايماً compare.
+  - **الفرق عن order**: سمّى محلاً بعينه ("أطلب لي جبنة من بقالة النور") → order؛ يسأل وين أرخص أو يبي مقارنة → compare. وما يحتاج فعل طلب — المقارنة نفسها توصله للطلب من الأرخص.
 - "deals": طلب عروض أو خصومات (مثال: "وش العروض المتوفرة؟"، "فيه خصومات؟"). category=null, rank="nearest", customTag=null, brandHint=null, label="العروض" (أو اسم عربي قصير مشابه إذا ذكر المستخدم نوع محدد من العروض).
 - "professional": طلب **شخص** يشتغل بمهنة أو حرفة، ما هو محل (مثال: "أبغى دهان"، "أحتاج كهربائي قريب"، "مين يصلّح لي المكيف؟"، "أدور سباك").
   - حط **اسم المهنة بالعربي كما نطقه المستخدم** بحقل profession ("دهان"، "كهربائي"، "سباك") — الخادم يحوّله لسلوقه المعتمد، فلا تترجمه ولا تخترع سلوقاً إنجليزياً. وخلّ category=null, rank="nearest", customTag=null, brandHint=null, label=null (الخادم يحط اسم المهنة بنفسه).
@@ -163,7 +169,7 @@ export const buildSaudiSystemPrompt = (brand: string) => {
 وإذا كان reply مطلوب منك أصلاً (offTopic=true): مع urgent أو angry خلّه سطر واحد قصير بلا تحيات ولا مقدمات ولا قوائم — جاوب على طول، ودعوة الطلب تنضم لنفس السطر بكلمتين ("…، وقل لي وش أطلب لك"). ومع hesitant وسّع الخيارات اللي تعرضها بدل ما تضيّقها.
 
 رجّع الناتج بصيغة JSON بس بدون أي نص إضافي وبالشكل التالي بالضبط:
-{"offTopic": true|false, "notUnderstood": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional"|"order"|"call", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null, "placeName": "..."|null, "orderItems": [{"name": "...", "quantity": 1}]}]}`;
+{"offTopic": true|false, "notUnderstood": true|false, "reply": "..."|null, "mood": "neutral"|"urgent"|"angry"|"hesitant"|"happy", "intents": [{"kind": "place"|"deals"|"professional"|"order"|"call"|"compare", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "referencedPosition": 1|null, "profession": "..."|null, "placeName": "..."|null, "orderItems": [{"name": "...", "quantity": 1}]}]}`;
 };
 
 /** ردّ التوضيح السعودي حين يفشل النموذج في إنتاج نية صالحة رغم أنه ما اعتبر
