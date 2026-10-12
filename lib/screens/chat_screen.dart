@@ -8,6 +8,7 @@ import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/place_section.dart';
 import '../models/price_comparison.dart';
+import '../models/web_offer.dart';
 import '../models/professional.dart';
 import '../models/professional_flow.dart';
 import '../models/weather_info.dart';
@@ -34,6 +35,7 @@ import '../models/voice_signals.dart';
 import '../services/transcribe_service.dart';
 import '../services/voice_recording_service.dart';
 import '../services/weather_service.dart';
+import '../services/web_offers_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/auth/account_sheet.dart';
 import '../widgets/auth/auth_sheet.dart';
@@ -63,6 +65,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ImpressionService _impressionService = ImpressionService();
   final SearchGapService _searchGapService = SearchGapService();
   final CatalogService _catalogService = CatalogService();
+  final WebOffersService _webOffersService = WebOffersService();
   final RequestService _requestService = RequestService();
   final TranscribeService _transcribeService = TranscribeService();
   final ProfessionalsService _professionalsService = ProfessionalsService();
@@ -447,9 +450,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     if (intent.kind == IntentKind.deals) {
+      // عروض الإنترنت تنطلب بالتوازي مع عروض ريكو، ولا تؤخّرها ولا تُفشلها —
+      // [WebOffersService] ما يرمي، أسوأ حالاته قائمة فاضية.
+      final webFuture = _webOffersService.fetchDeals(lat: origin.lat, lng: origin.lng, topic: intent.label);
       try {
         final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
+        final webOffers = await webFuture;
         if (deals.isEmpty) {
+          if (webOffers.isNotEmpty) {
+            return ChatMessage(
+              text: 'ما فيه عروض من المحلات المسجّلة عندنا قريبة منك الحين، بس لقيت لك هذي على الإنترنت 👇 '
+                  'وإذا تبي تطلب شي من محل قريب، قل لي وش تبي وأجهّزه لك.',
+              sender: MessageSender.bot,
+              webOffers: webOffers,
+            );
+          }
           return ChatMessage(text: 'ما لقيت عروض قريبة منك الحين 😕', sender: MessageSender.bot);
         }
         unawaited(_impressionService.trackItems(
@@ -477,11 +492,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           text: composedReply ?? 'هذي أقرب العروض المتوفرة لك:',
           sender: MessageSender.bot,
           deals: deals,
+          webOffers: webOffers.isEmpty ? null : webOffers,
         );
-      } on DealsException catch (e) {
-        return ChatMessage(text: e.message, sender: MessageSender.bot);
-      } catch (_) {
-        return ChatMessage(text: 'ما قدرت أجيب العروض الحين 😕', sender: MessageSender.bot);
+      } catch (e) {
+        // عروض ريكو ما وصلت، بس عروض الإنترنت جواب بحد ذاتها.
+        final webOffers = await webFuture;
+        if (webOffers.isNotEmpty) {
+          return ChatMessage(
+            text: 'ما قدرت أجيب عروض المحلات المسجّلة عندنا الحين، بس لقيت لك هذي على الإنترنت 👇',
+            sender: MessageSender.bot,
+            webOffers: webOffers,
+          );
+        }
+        return ChatMessage(
+          text: e is DealsException ? e.message : 'ما قدرت أجيب العروض الحين 😕',
+          sender: MessageSender.bot,
+        );
       }
     }
 
@@ -1619,7 +1645,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     ({double lat, double lng, bool offerSaveHome}) origin,
     int index,
   ) async {
-    List<PriceComparison> comparisons;
+    // أسعار الإنترنت بالتوازي — قسم تحت المقارنة المحلية، وفشلها قائمة فاضية.
+    final webFuture = _webOffersService.fetchPrices(items: intent.orderItems, lat: origin.lat, lng: origin.lng);
+    // المقارنة المحلية لو فشلت ما توقف الرد: أسعار الإنترنت تقدر تجاوب
+    // لحالها، والخطأ ما يُقال إلا إذا ما عندنا شي غيره.
+    var comparisons = const <PriceComparison>[];
+    String? localError;
     try {
       comparisons = await _catalogService.comparePrices(
         items: intent.orderItems,
@@ -1628,13 +1659,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         categorySlug: intent.slug,
       );
     } on CatalogException catch (e) {
-      return ChatMessage(text: e.message, sender: MessageSender.bot);
+      localError = e.message;
     } catch (_) {
-      return ChatMessage(text: 'ما قدرت أقارن الأسعار الحين 😕 حاول مرة ثانية.', sender: MessageSender.bot);
+      localError = 'ما قدرت أقارن الأسعار الحين 😕 حاول مرة ثانية.';
     }
+
+    final webPrices = await webFuture;
+    final hasWeb = webPrices.any((c) => c.offers.isNotEmpty);
 
     final found = comparisons.where((c) => c.offers.isNotEmpty).toList();
     if (found.isEmpty) {
+      if (hasWeb) {
+        return ChatMessage(
+          text: _webOnlyCompareLead(intent.label, webPrices),
+          sender: MessageSender.bot,
+          understandingIntent: intent,
+          webPrices: webPrices,
+        );
+      }
+      if (localError != null) return ChatMessage(text: localError, sender: MessageSender.bot);
       return ChatMessage(
         text: 'ما لقيت ${intent.label} عند المحلات القريبة منك 😕 '
             'جرّب تكتب اسمه بطريقة ثانية، أو قل لي من أي محل تبيه وأجهّز لك الطلب.',
@@ -1654,7 +1697,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       understandingIntent: intent,
       priceComparisons: comparisons,
       onOrderOffer: (offer) => _orderOffer(index, offer),
+      webPrices: hasWeb ? webPrices : null,
     );
+  }
+
+  /// ما فيه محل قريب مسجّل عنده الصنف، بس له سعر أونلاين: نقولها كذا بالضبط
+  /// — الأرخص أونلاين جواب، بس مو من محل يطلب منه ريكو.
+  static String _webOnlyCompareLead(String label, List<WebPriceComparison> webPrices) {
+    final first = webPrices.firstWhere((c) => c.offers.isNotEmpty);
+    final best = first.offers.first;
+    return 'ما لقيت $label عند المحلات القريبة المسجّلة عندنا، بس أرخص سعر لقيته أونلاين '
+        'عند ${best.store} بـ${formatPrice(best.price)} ${best.currencyLabel} 👇 '
+        'وإذا تبي تطلب من محل قريب، قل لي وش تبي ومن وين وأجهّزه لك.';
   }
 
   /// سطر الرد فوق المقارنة: الجواب نفسه أولاً (وين الأرخص وبكم)، ثم الدعوة

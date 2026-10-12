@@ -100,3 +100,9 @@ export const fileUploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Web offers spend a paid search call on every cache miss. The monthly cap
+// in WebOffersService protects the bill; this stops one client from burning
+// that cap for everyone. A real customer asks for offers a few times a
+// session, nowhere near this.
+export const webOffersLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });

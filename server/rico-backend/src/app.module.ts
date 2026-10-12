@@ -13,6 +13,7 @@ import { SearchModule } from './search/search.module';
 import { PhotosModule } from './photos/photos.module';
 import { WeatherModule } from './weather/weather.module';
 import { ScrapingModule } from './scraping/scraping.module';
+import { WebOffersModule } from './web-offers/web-offers.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { ClassifyModule } from './classify/classify.module';
 import { LearningModule } from './learning/learning.module';
@@ -69,6 +70,7 @@ import { SpaModule } from './spa/spa.module';
     PhotosModule,
     WeatherModule,
     ScrapingModule,
+    WebOffersModule,
     InstagramModule,
     ClassifyModule,
     LearningModule,
