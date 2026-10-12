@@ -29,6 +29,10 @@ class RequestFlow {
   final String? customerPhone;
   final String? errorMessage;
 
+  /// أصناف طلبها العميل وما لقيناها بقائمة المحل. التأكيد التلقائي ("…وأكّد
+  /// الطلب") يتوقّف عندها: سلّة ناقصة يراجعها هو قبل ما توصل المحل.
+  final List<String> missingItems;
+
   const RequestFlow({
     required this.catalog,
     this.stage = RequestFlowStage.browsing,
@@ -38,6 +42,7 @@ class RequestFlow {
     this.customerName,
     this.customerPhone,
     this.errorMessage,
+    this.missingItems = const [],
   });
 
   /// المنتجات بعد تطبيق مرشِّح الفئة.
@@ -66,6 +71,7 @@ class RequestFlow {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      missingItems: missingItems,
     );
   }
 }

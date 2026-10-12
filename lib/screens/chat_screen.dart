@@ -854,14 +854,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final index = _messages.indexOf(editing);
       setState(() {
         _editingMessage = null;
-        if (index != -1) _messages.removeRange(index, _messages.length);
+        if (index != -1) {
+          _messages.removeRange(index, _messages.length);
+          // محلات عُرضت بعد الرسالة المعدّلة راحت معها، وتأكيدها المؤجّل كذلك.
+          _confirmWhenPicked.removeWhere((i) => i >= index);
+        }
       });
     }
 
     // «أكّد الطلب» أمرٌ للسلّة المفتوحة، جوابه نفس ضغطة زر التأكيد — لا
     // تصنيف ولا بحث. كان المصنّف يعامله كطلب جديد، فيبقى المستخدم مضطراً
     // يرجع للبطاقة ويضغط الزر بنفسه.
-    if (IntentService.isConfirmCommand(text)) {
+    // و"تمام"/"نعم" وحدها تأكيدٌ كذلك، لكن فقط حين يكون آخر رد لريكو سلّةً
+    // قال تحتها «راجعه وأكّده» — في أي مكان ثاني هي موافقة على كلام، لا طلب.
+    if (IntentService.isConfirmCommand(text) || (IntentService.isBareYes(text) && _lastReplyAwaitsConfirm())) {
       await _confirmFromChat(text);
       return;
     }
@@ -884,6 +890,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _answerLocally(text, distress);
       return;
     }
+
+    // "اطلب لي … وأكّد الطلب": التأكيد يُقرأ من نص العميل نفسه، والمصنّف
+    // ينقل الطلب بس — السلّة تتأكّد لحالها لما تجهز (انظر [_autoConfirm]).
+    final confirmWhenReady = IntentService.asksToConfirm(text);
 
     // القياسات تُستهلك هنا لا في [_handleRecorded]: بين التحويل والإرسال
     // يقدر المستخدم يعدّل النص أو يكتب غيره، فالنبرة تتبع الرسالة اللي
@@ -1032,6 +1042,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
       await Future.wait(futures);
 
+      if (confirmWhenReady) {
+        for (var i = 0; i < slots.length; i++) {
+          if (slots[i].first.kind != IntentKind.order) continue;
+          final index = startIndex + i;
+          // ما سمّى محلاً فعرضنا عليه محلات: التأكيد ينتظر اختياره.
+          if (_messages[index].shopOptions?.isNotEmpty ?? false) {
+            _confirmWhenPicked.add(index);
+          } else {
+            await _autoConfirm(index);
+          }
+        }
+      }
+
       for (final intent in intents) {
         if (intent.kind == IntentKind.place && intent.slug != null) {
           await _sessionMemory.saveLastCategorySlug(intent.slug!);
@@ -1110,8 +1133,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// المستخدم ضغط زر التأكيد في بطاقته، ثم يرد بالنتيجة الفعلية — البطاقة
   /// قد تكون فوق الشاشة، فالرد هو اللي يقول له إن طلبه وصل أو ليش ما وصل.
   Future<void> _confirmFromChat(String text) async {
-    // آخر بطاقة طلب فقط: سلّة قديمة تُركت فوقها ما تُرسل بأمر قيل بعد سلّة أحدث.
-    final flowIndex = _messages.lastIndexWhere((m) => m.requestFlow != null || m.professionalFlow != null);
+    // آخر بطاقة طلب فقط: سلّة قديمة تُركت فوقها ما تُرسل بأمر قيل بعد سلّة
+    // أحدث. وقائمة محلات أو مقارنة لسه ما اختار منها تُحسب بطاقة طلب هنا —
+    // بدونها كانت «أكّد» بعدها تتخطّاها وتؤكّد سلّة أقدم من فوق.
+    final flowIndex = _messages.lastIndexWhere((m) =>
+        m.requestFlow != null ||
+        m.professionalFlow != null ||
+        (m.shopOptions?.isNotEmpty ?? false) ||
+        (m.priceComparisons?.isNotEmpty ?? false));
 
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
@@ -1137,10 +1166,52 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// رسائل «اختر من وين تطلب» لطلبٍ قال صاحبه "وأكّده" — يتأكّد لما يختار.
+  final Set<int> _confirmWhenPicked = {};
+
+  /// "…وأكّد الطلب": يؤكّد السلّة اللي جهزت للتو بنفس مسار الزر، ويضيف رداً
+  /// بالنتيجة. سلّة ناقصة صنفاً ما تتأكّد لحالها — العميل قال "أكّد" على طلب
+  /// كامل، والناقص لازم يشوفه قبل ما يوصل المحل.
+  Future<void> _autoConfirm(int index) async {
+    if (!mounted || index >= _messages.length) return;
+    final flow = _messages[index].requestFlow;
+    if (flow == null || flow.cart.isEmpty || flow.stage != RequestFlowStage.confirming) return;
+
+    final String reply;
+    if (flow.missingItems.isNotEmpty) {
+      reply = 'ما أكّدت الطلب لأن ${flow.missingItems.join(' و')} مو موجود عند ${flow.catalog.businessName} — '
+          'راجع السلّة فوق 👆 وإذا تناسبك قل لي «أكّد» وأرسلها.';
+    } else {
+      reply = await _confirmFlowAt(index);
+    }
+    if (!mounted) return;
+    setState(() => _messages.add(ChatMessage(text: reply, sender: MessageSender.bot)));
+    _scrollToBottom();
+  }
+
+  /// هل آخر رد لريكو سلّة (أو طلب صاحب مهنة) تنتظر التأكيد؟ — الشرط اللي
+  /// يخلّي "تمام" وحدها تأكيداً.
+  bool _lastReplyAwaitsConfirm() {
+    final last = _messages.lastWhere((m) => m.sender == MessageSender.bot && !m.isLoading,
+        orElse: () => ChatMessage(text: '', sender: MessageSender.user));
+    final flow = last.requestFlow;
+    if (flow != null) {
+      return flow.stage == RequestFlowStage.confirming && flow.cart.isNotEmpty;
+    }
+    return last.professionalFlow?.stage == ProfessionalFlowStage.confirming;
+  }
+
   /// يؤكّد تدفّق الطلب في [index] بنفس مسار زر البطاقة، ويرجّع رد ريكو.
   Future<String> _confirmFlowAt(int index) async {
     const noOpenOrder = 'ما عندك طلب مفتوح أأكّده 🤔 قل لي وش تبي تطلب ومن وين، وأجهّزه لك.';
     if (index == -1) return noOpenOrder;
+
+    final message = _messages[index];
+    if (message.requestFlow == null && message.professionalFlow == null) {
+      return (message.shopOptions?.isNotEmpty ?? false)
+          ? 'اختر المحل اللي تبي تطلب منه من القائمة فوق 👆 وبعدها قل لي «أكّد» وأرسله.'
+          : 'اضغط «اطلبه» عند المحل اللي يناسبك فوق 👆 وأجهّز لك السلّة، وبعدها قل لي «أكّد».';
+    }
 
     final requestFlow = _messages[index].requestFlow;
     if (requestFlow != null) {
@@ -1633,7 +1704,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       orderSuggestions: suggestions.isEmpty ? null : suggestions,
       onAddSuggestion: (suggestion) => _addSuggestion(index, suggestion),
       // مباشرة على المراجعة: هو قال وش يبي، فالخطوة الباقية تأكيد لا تصفّح.
-      requestFlow: RequestFlow(catalog: catalog, cart: cart, stage: RequestFlowStage.confirming),
+      requestFlow: RequestFlow(
+        catalog: catalog,
+        cart: cart,
+        stage: RequestFlowStage.confirming,
+        missingItems: resolved.unmatched,
+      ),
       catalogActions: _catalogActionsFor(index),
     );
   }
@@ -1821,6 +1897,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() => _messages[index] = message);
     _scrollToBottom();
+    if (_confirmWhenPicked.remove(index)) await _autoConfirm(index);
     unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 

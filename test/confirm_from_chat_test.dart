@@ -38,6 +38,18 @@ void main() {
     }
 
     for (final text in [
+      'خلص اكد',
+      'أكد طلب',
+      'بدي أأكد الطلب',
+      'ابغى اكد الطلب',
+      'ابعث الطلب للمحل',
+      'أكد عليه',
+      'ممكن تأكد الطلب',
+    ]) {
+      test('"$text" أمر تأكيد كذلك', () => expect(IntentService.isConfirmCommand(text), isTrue));
+    }
+
+    for (final text in [
       'لا تأكد الطلب',
       'أكد لي إن المطعم فاتح',
       'ارسل لي العروض',
@@ -51,35 +63,85 @@ void main() {
     }
   });
 
+  group('asksToConfirm', () {
+    for (final text in [
+      'ريكو اطلب من مطعم الماهر ٢ شاورما سوبر وأكد الطلب',
+      'اطلب لي ٢ شاورما من مطعم الماهر واكده',
+      'بدي من مطعم الماهر كنافة وأرسل الطلب على طول',
+      'اطلب كنافة من الماهر وثبّته',
+    ]) {
+      test('"$text" يطلب التأكيد بنفس الرسالة', () => expect(IntentService.asksToConfirm(text), isTrue));
+    }
+    for (final text in [
+      'ريكو اطلب من مطعم الماهر ٢ شاورما',
+      'اطلب من الماهر شاورما بس لا تأكد الطلب',
+      'اطلب كنافة وتأكد إن عندهم بارد',
+      'بدي أطلب من مطعم الماهر',
+    ]) {
+      test('"$text" ما يطلب التأكيد', () => expect(IntentService.asksToConfirm(text), isFalse));
+    }
+  });
+
+  group('isBareYes', () {
+    for (final text in ['تمام', 'نعم', 'اوكي يلا', 'ايوه ريكو', 'موافق']) {
+      test('"$text" موافقة', () => expect(IntentService.isBareYes(text), isTrue));
+    }
+    for (final text in ['تمام شكراً', 'نعم بس بدون بصل', 'ريكو', 'وش العروض']) {
+      test('"$text" مو موافقة مجرّدة', () => expect(IntentService.isBareYes(text), isFalse));
+    }
+  });
+
   const maher = '64b000000000000000000002';
+  const reem = '64b000000000000000000003';
 
   late List<String> classifyMessages;
   late List<Map<String, dynamic>> requestBodies;
+  late List<String> unmatched;
+
+  /// رد المصنّف لرسائل بعينها؛ وأي رسالة ثانية طلبٌ من مطعم الماهر.
+  late Map<String, Map<String, dynamic>> classifierReplies;
+
+  final orderFromMaher = {
+    'offTopic': false,
+    'reply': null,
+    'mood': 'neutral',
+    'intents': [
+      {
+        'kind': 'order',
+        'placeName': 'مطعم الماهر',
+        'orderItems': [
+          {'name': 'شاورما', 'quantity': 2}
+        ],
+      }
+    ],
+  };
 
   Future<http.Response> server(http.Request request) async {
     final path = request.url.path;
     if (path == '/classify') {
       final message = (jsonDecode(request.body) as Map<String, dynamic>)['message'] as String;
       classifyMessages.add(message);
-      return http.Response.bytes(
-        utf8.encode(jsonEncode({
-          'offTopic': false,
-          'reply': null,
-          'mood': 'neutral',
-          'intents': [
-            {
-              'kind': 'order',
-              'placeName': 'مطعم الماهر',
-              'orderItems': [
-                {'name': 'شاورما', 'quantity': 2}
-              ],
-            }
-          ],
-        })),
-        200,
-      );
+      return http.Response.bytes(utf8.encode(jsonEncode(classifierReplies[message] ?? orderFromMaher)), 200);
     }
     if (path == '/orders/resolve') {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      // بلا محل: نعرض عليه محلين يختار منهما.
+      if (body['businessId'] == null && body['placeName'] == null) {
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'business': null,
+            'catalog': null,
+            'matched': [],
+            'unmatched': [],
+            'suggestions': [],
+            'shopOptions': [
+              {'id': maher, 'name': 'مطعم الماهر', 'distanceMeters': 300, 'has': ['شاورما'], 'missing': []},
+              {'id': reem, 'name': 'شاورما الريم', 'distanceMeters': 500, 'has': ['شاورما'], 'missing': []},
+            ],
+          })),
+          200,
+        );
+      }
       return http.Response.bytes(
         utf8.encode(jsonEncode({
           'business': {'id': maher, 'name': 'مطعم الماهر'},
@@ -94,7 +156,7 @@ void main() {
           'matched': [
             {'itemType': 'product', 'itemId': 'p1', 'label': 'شاورما', 'unitPrice': 3, 'quantity': 2, 'requestedAs': 'شاورما'}
           ],
-          'unmatched': [],
+          'unmatched': unmatched,
           'suggestions': [],
           'shopOptions': [],
         })),
@@ -111,6 +173,8 @@ void main() {
   setUp(() async {
     classifyMessages = [];
     requestBodies = [];
+    unmatched = [];
+    classifierReplies = {};
     SharedPreferences.setMockInitialValues({});
     GeolocatorPlatform.instance = _FakeGeolocator();
     await AuthStore.instance.adopt(const AuthSession(
@@ -180,6 +244,120 @@ void main() {
 
     expect(requestBodies, hasLength(1));
     expect(find.textContaining('وصلهم من قبل'), findsOneWidget);
+  });
+
+  testWidgets('الطلب والتأكيد برسالة وحدة: السلّة تجهز وتنرسل لحالها', (tester) async {
+    const message = 'ريكو اطلب من مطعم الماهر ٢ شاورما سوبر وأكد الطلب';
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, message);
+    });
+    await tester.pump();
+
+    expect(classifyMessages, [message]);
+    expect(requestBodies, hasLength(1));
+    expect(requestBodies.single['items'], [
+      {'itemType': 'product', 'itemId': 'p1', 'quantity': 2}
+    ]);
+    expect(find.textContaining('أكّدت طلبك من مطعم الماهر'), findsOneWidget);
+    expect(find.text('تم إرسال طلبك'), findsOneWidget);
+  });
+
+  testWidgets('…وأكّد الطلب وصنف ناقص: ما يرسل، ويقول وش الناقص', (tester) async {
+    unmatched = ['بيبسي'];
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, 'اطلب من مطعم الماهر ٢ شاورما وبيبسي وأكد الطلب');
+    });
+    await tester.pump();
+
+    expect(requestBodies, isEmpty);
+    expect(find.textContaining('ما أكّدت الطلب لأن بيبسي مو موجود'), findsOneWidget);
+  });
+
+  testWidgets('…وأكّد بلا محل: يتأكّد لحاله بعد ما يختار المحل', (tester) async {
+    const message = 'اطلب لي ٢ شاورما واكده';
+    classifierReplies[message] = {
+      'offTopic': false,
+      'reply': null,
+      'mood': 'neutral',
+      'intents': [
+        {
+          'kind': 'order',
+          'category': 'restaurant',
+          'orderItems': [
+            {'name': 'شاورما', 'quantity': 2}
+          ],
+        }
+      ],
+    };
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, message);
+      expect(requestBodies, isEmpty);
+      await tester.tap(find.text('اطلب من هنا').first);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    });
+    await tester.pump();
+
+    expect(requestBodies, hasLength(1));
+    expect(find.textContaining('أكّدت طلبك من مطعم الماهر'), findsOneWidget);
+  });
+
+  testWidgets('"تمام" بعد السلّة تأكيد', (tester) async {
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, 'اطلب لي من مطعم الماهر ٢ شاورما');
+      await say(tester, 'تمام');
+    });
+    await tester.pump();
+
+    expect(classifyMessages, ['اطلب لي من مطعم الماهر ٢ شاورما']);
+    expect(requestBodies, hasLength(1));
+  });
+
+  testWidgets('"تمام" بعد رد غير السلّة ما يرسل شي', (tester) async {
+    classifierReplies['شكراً'] = {'offTopic': true, 'reply': 'العفو 🌹', 'mood': 'neutral', 'intents': []};
+    classifierReplies['تمام'] = {'offTopic': true, 'reply': 'تمام 👌', 'mood': 'neutral', 'intents': []};
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, 'اطلب لي من مطعم الماهر ٢ شاورما');
+      await say(tester, 'شكراً');
+      await say(tester, 'تمام');
+    });
+    await tester.pump();
+
+    expect(classifyMessages.last, 'تمام');
+    expect(requestBodies, isEmpty);
+  });
+
+  testWidgets('"أكّد" والمحلات معروضة لسه ما اختار: يطلب يختار، وما يأكّد سلّة أقدم', (tester) async {
+    classifierReplies['اطلب لي شاورما'] = {
+      'offTopic': false,
+      'reply': null,
+      'mood': 'neutral',
+      'intents': [
+        {
+          'kind': 'order',
+          'category': 'restaurant',
+          'orderItems': [
+            {'name': 'شاورما', 'quantity': 1}
+          ],
+        }
+      ],
+    };
+    await run(tester, () async {
+      await pumpChat(tester);
+      await say(tester, 'اطلب لي من مطعم الماهر ٢ شاورما'); // سلّة قديمة مفتوحة
+      await say(tester, 'اطلب لي شاورما'); // قائمة محلات
+      await say(tester, 'أكّد الطلب');
+    });
+    await tester.pump();
+
+    expect(requestBodies, isEmpty);
+    expect(find.textContaining('اختر المحل اللي تبي تطلب منه'), findsOneWidget);
   });
 
   testWidgets('"أكّد الطلب" بلا سلّة مفتوحة: يقولها ويدعوه يطلب', (tester) async {
