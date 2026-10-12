@@ -14,6 +14,17 @@ import { PriceCalcService } from '../pricing/price-calc.service';
 // The basket rules worth testing are all about what the server refuses to take
 // from the client — prices, labels, ownership — so this runs the real service
 // against a real (in-memory) Mongo rather than mocking the models.
+// Records what customers would be told; who gets the vendor's email is
+// VendorService's spec's business.
+const stageNotices: any[] = [];
+const notifier = {
+  notifyNewOrder: async () => 0,
+  notifyCustomerStage: async (notice: any) => {
+    stageNotices.push(notice);
+    return true;
+  },
+};
+
 describe('RequestsService baskets', () => {
   let mongod: MongoMemoryServer;
   let service: RequestsService;
@@ -63,7 +74,7 @@ describe('RequestsService baskets', () => {
       dealModel.deleteMany({}),
     ]);
     // Who gets emailed about an order is VendorService's spec's business.
-    service = new RequestsService(requestModel, businessModel, productModel, dealModel, { notifyNewOrder: async () => 0 } as any);
+    service = new RequestsService(requestModel, businessModel, productModel, dealModel, notifier as any);
 
     const business = await makeBusiness({ name: 'Rico Mart', nameAr: 'ريكو مارت' });
     businessId = String(business._id);
@@ -281,7 +292,7 @@ describe('RequestsService baskets', () => {
       const imageModel = mongoose.models[ProductImage.name] ?? mongoose.model(ProductImage.name, ProductImageSchema);
       await discountModel.deleteMany({});
       const priceCalc = new PriceCalcService(productModel, discountModel, new ProductsService(productModel, imageModel as any));
-      priced = new RequestsService(requestModel, businessModel, productModel, dealModel, { notifyNewOrder: async () => 0 } as any, priceCalc);
+      priced = new RequestsService(requestModel, businessModel, productModel, dealModel, notifier as any, priceCalc);
     });
 
     it('drops a discount that ended by date, even though nothing rewrote the product', async () => {
@@ -311,6 +322,96 @@ describe('RequestsService baskets', () => {
         customer,
       );
       expect(result.total).toBe(20);
+    });
+  });
+
+  describe('a retried confirm', () => {
+    it('returns the order the first tap made instead of a second one', async () => {
+      const body = { businessId, clientRef: 'tap-1234-abcd', items: [{ itemType: 'product' as const, itemId: String(tea._id), quantity: 1 }] };
+      const first = await service.create(body, customer);
+      const second = await service.create(body, customer);
+      expect(String(second.requestId)).toBe(String(first.requestId));
+      expect(await requestModel.countDocuments({})).toBe(1);
+    });
+
+    it('still lets a new tap make a new order', async () => {
+      const line = [{ itemType: 'product' as const, itemId: String(tea._id), quantity: 1 }];
+      await service.create({ businessId, clientRef: 'tap-aaaa-0001', items: line }, customer);
+      await service.create({ businessId, clientRef: 'tap-aaaa-0002', items: line }, customer);
+      expect(await requestModel.countDocuments({})).toBe(2);
+    });
+  });
+
+  describe('the customer cancelling', () => {
+    const order = () =>
+      service.create({ businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] }, customer);
+
+    it('works while the shop has not answered', async () => {
+      const { requestId } = await order();
+      await service.cancelByCustomer(String(requestId), String(customer._id));
+      const saved = await requestModel.findById(requestId).lean();
+      expect(saved).toMatchObject({ stage: 'cancelled', cancelledBy: 'customer', status: 'handled' });
+    });
+
+    it('is refused once the shop confirmed', async () => {
+      const { requestId } = await order();
+      await service.setStage(String(requestId), [businessId], 'confirmed');
+      await expect(service.cancelByCustomer(String(requestId), String(customer._id))).rejects.toMatchObject({
+        response: { error: 'too_late_to_cancel', stage: 'confirmed' },
+      });
+    });
+
+    it("can't touch someone else's order", async () => {
+      const { requestId } = await order();
+      await expect(service.cancelByCustomer(String(requestId), String(new mongoose.Types.ObjectId()))).rejects.toMatchObject({
+        response: { error: 'request_not_found' },
+      });
+    });
+  });
+
+  describe('an order nobody answers', () => {
+    beforeEach(() => {
+      stageNotices.length = 0;
+    });
+
+    it('is called off after the response window and the customer is told', async () => {
+      const { requestId } = await service.create(
+        { businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] },
+        customer,
+      );
+      await requestModel.collection.updateOne({ _id: requestId as any }, { $set: { createdAt: new Date(Date.now() - 31 * 60_000) } });
+
+      expect(await service.expireUnanswered()).toBe(1);
+      await service.notifyWrite;
+      const saved = await requestModel.findById(requestId).lean();
+      expect(saved).toMatchObject({ stage: 'cancelled', cancelledBy: 'timeout' });
+      expect(stageNotices[0]).toMatchObject({ stage: 'cancelled', cancelledBy: 'timeout', shopName: 'ريكو مارت' });
+    });
+
+    it('leaves a fresh order, and one the shop already confirmed, alone', async () => {
+      const fresh = await service.create({ businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] }, customer);
+      const answered = await service.create({ businessId, items: [{ itemType: 'product', itemId: String(dates._id), quantity: 1 }] }, customer);
+      await service.setStage(String(answered.requestId), [businessId], 'confirmed');
+      await requestModel.collection.updateOne(
+        { _id: answered.requestId as any },
+        { $set: { createdAt: new Date(Date.now() - 60 * 60_000) } },
+      );
+
+      expect(await service.expireUnanswered()).toBe(0);
+      expect((await requestModel.findById(fresh.requestId).lean())!.stage).toBe('new');
+    });
+  });
+
+  describe('the shop moving an order on', () => {
+    it('tells the customer, with the shop note', async () => {
+      stageNotices.length = 0;
+      const { requestId } = await service.create(
+        { businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] },
+        customer,
+      );
+      await service.setStage(String(requestId), [businessId], 'cancelled', 'خلص الشاي');
+      await service.notifyWrite;
+      expect(stageNotices[0]).toMatchObject({ stage: 'cancelled', cancelledBy: 'shop', note: 'خلص الشاي' });
     });
   });
 });

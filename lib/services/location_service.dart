@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:geolocator/geolocator.dart';
 
 /// نوع مشكلة الموقع، يستخدم لتحديد ما إذا كان يجدر عرض زر "فتح الإعدادات"
@@ -41,9 +43,18 @@ class LocationService {
       );
     }
 
-    return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+    // بلا حد زمني كان الطلب يعلّق للأبد داخل مبنى أو بإشارة ضعيفة، و«ريكو
+    // يدوّر لك الحين…» ما يتغيّر. بعد ١٠ ثواني نرضى بآخر موقع معروف للجهاز.
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+    } on TimeoutException {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return last;
+      throw LocationException('ما قدرت أحدد موقعك الحين — الإشارة ضعيفة.');
+    }
   }
 
   /// هل الموقع متاح الآن بلا أي نافذة إذن؟

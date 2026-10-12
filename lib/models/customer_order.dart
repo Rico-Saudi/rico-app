@@ -35,10 +35,20 @@ class OrderLine {
   }
 }
 
-/// من زاوية العميل: «بانتظار المحل»، «تواصل معك» (أكّد أو سلّم)، «جاهز»
-/// للاستلام، أو «ملغي». الخادم يرسل `stage` بالتفصيل؛ النسخ الأقدم منه ترسل
+/// من زاوية العميل: «بانتظار المحل»، «تواصل معك» (أكّد)، «جاهز» للاستلام،
+/// «اكتمل»، أو «ملغي». الخادم يرسل `stage` بالتفصيل؛ النسخ الأقدم منه ترسل
 /// `status` وحده (new/handled)، فيُقرأ هو عند غياب الأول.
-enum OrderStatus { pending, handled, ready, cancelled }
+enum OrderStatus { pending, handled, ready, completed, cancelled }
+
+/// من ألغى الطلب: المحل، العميل نفسه، أو انتهت مهلة الرد بلا جواب.
+enum CancelledBy { shop, customer, timeout }
+
+CancelledBy? _cancelledByFrom(Object? raw) => switch (raw) {
+      'shop' => CancelledBy.shop,
+      'customer' => CancelledBy.customer,
+      'timeout' => CancelledBy.timeout,
+      _ => null,
+    };
 
 String? _nonBlank(String? text) {
   final trimmed = text?.trim();
@@ -50,8 +60,9 @@ OrderStatus _statusFrom(Map<String, dynamic> json) {
     case 'new':
       return OrderStatus.pending;
     case 'confirmed':
-    case 'completed':
       return OrderStatus.handled;
+    case 'completed':
+      return OrderStatus.completed;
     case 'ready':
       return OrderStatus.ready;
     case 'cancelled':
@@ -74,6 +85,9 @@ class CustomerOrder {
   final String? vendorNote;
   final DateTime createdAt;
 
+  /// للطلب الملغي فقط — null لغيره، وللطلبات الأقدم من الحقل.
+  final CancelledBy? cancelledBy;
+
   const CustomerOrder({
     required this.id,
     this.businessId,
@@ -84,7 +98,36 @@ class CustomerOrder {
     required this.status,
     this.vendorNote,
     required this.createdAt,
+    this.cancelledBy,
   });
+
+  /// طلب ما انتهى بعد — المحل لسا ممكن يغيّر حالته، فيستاهل المتابعة.
+  bool get isOpen => status == OrderStatus.pending || status == OrderStatus.handled || status == OrderStatus.ready;
+
+  /// يلغيه العميل بنفسه ما دام المحل ما رد عليه؛ بعدها المحل يمكن بدأ يجهّزه
+  /// والكلام يصير معه مباشرة (الخادم يرفض أصلاً).
+  bool get canCancel => status == OrderStatus.pending;
+
+  CustomerOrder copyWith({OrderStatus? status, CancelledBy? cancelledBy}) => CustomerOrder(
+        id: id,
+        businessId: businessId,
+        businessName: businessName,
+        businessPhone: businessPhone,
+        lines: lines,
+        total: total,
+        status: status ?? this.status,
+        vendorNote: vendorNote,
+        createdAt: createdAt,
+        cancelledBy: cancelledBy ?? this.cancelledBy,
+      );
+
+  /// نص يطلب نفس الأصناف من نفس المحل — يُرسل للمحادثة كأن العميل كتبه،
+  /// فيمر بنفس طريق الطلب العادي (المحل والأصناف تُطابق من جديد على قائمته
+  /// اليوم، لا على لقطة قديمة قد يكون بعضها ما عاد موجود).
+  String get reorderText {
+    final items = lines.where((l) => l.label.trim().isNotEmpty).map((l) => '${l.quantity} ${l.label}').join('، ');
+    return items.isEmpty ? 'بدي أطلب من $businessName' : 'اطلب لي من $businessName $items';
+  }
 
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
 
@@ -108,6 +151,7 @@ class CustomerOrder {
       status: _statusFrom(json),
       vendorNote: _nonBlank(json['vendorNote'] as String?),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      cancelledBy: _cancelledByFrom(json['cancelledBy']),
     );
   }
 }

@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  CancelledBy,
   CustomerRequest,
   CustomerRequestDocument,
   NEXT_STAGES,
@@ -37,8 +38,25 @@ function dealDetailLabel(deal: DealDocument): string {
   }
 }
 
+/// How long an order may sit unanswered before it is called off for the
+/// customer (RequestsService.expireUnanswered). A customer who ordered dinner
+/// and heard nothing for half an hour has given up — they deserve to be told
+/// to try somewhere else, not to keep waiting. ORDER_RESPONSE_MINUTES
+/// overrides it; 0 turns the sweep off.
+const DEFAULT_ORDER_RESPONSE_MINUTES = 30;
+const EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
+
+function orderResponseMinutes(): number {
+  const raw = process.env.ORDER_RESPONSE_MINUTES;
+  if (raw === undefined || raw === '') return DEFAULT_ORDER_RESPONSE_MINUTES;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_ORDER_RESPONSE_MINUTES;
+}
+
 @Injectable()
-export class RequestsService {
+export class RequestsService implements OnModuleInit, OnModuleDestroy {
+  private sweepTimer: NodeJS.Timeout | null = null;
+
   constructor(
     @InjectModel(CustomerRequest.name) private readonly requestModel: Model<CustomerRequestDocument>,
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
@@ -53,6 +71,18 @@ export class RequestsService {
   // The latest new-order notification, kept so tests can wait for the email
   // that create() deliberately doesn't wait for.
   notifyWrite: Promise<unknown> = Promise.resolve();
+
+  onModuleInit(): void {
+    if (orderResponseMinutes() === 0) return;
+    this.sweepTimer = setInterval(() => {
+      this.expireUnanswered().catch((e) => console.error('[requests] expiry sweep failed:', e?.message || e));
+    }, EXPIRY_SWEEP_INTERVAL_MS);
+    this.sweepTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+  }
 
   async create(dto: CreateRequestDto, customer?: CustomerDocument, baseUrl = 'https://app.rico-go.com') {
     const business = await this.businessModel.findById(dto.businessId).lean();
@@ -74,17 +104,35 @@ export class RequestsService {
       throw new BadRequestException({ error: 'customer_details_required' });
     }
 
+    // A retry of a tap that already went through: hand back that order.
+    const clientRef = customer && dto.clientRef ? dto.clientRef : null;
+    if (clientRef) {
+      const existing = await this.requestModel.findOne({ customerId: customer!._id, clientRef }).lean();
+      if (existing) return this.createdAnswer(existing);
+    }
+
     const items = await this.resolveItems(dto);
     const total = items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
 
-    const request = await this.requestModel.create({
-      businessId: dto.businessId,
-      customerId: customer?._id ?? null,
-      customerName,
-      customerPhone,
-      items,
-      total,
-    });
+    let request: CustomerRequestDocument;
+    try {
+      request = await this.requestModel.create({
+        businessId: dto.businessId,
+        customerId: customer?._id ?? null,
+        customerName,
+        customerPhone,
+        items,
+        total,
+        clientRef,
+      });
+    } catch (e) {
+      // Two copies of the same tap racing: the unique index let one in.
+      if (clientRef && (e as { code?: number }).code === 11000) {
+        const existing = await this.requestModel.findOne({ customerId: customer!._id, clientRef }).lean();
+        if (existing) return this.createdAnswer(existing);
+      }
+      throw e;
+    }
 
     // Not awaited: the customer's confirmation shouldn't wait on an email
     // provider, and a failed email mustn't undo an order that's saved.
@@ -101,7 +149,72 @@ export class RequestsService {
       })
       .catch((e) => console.error('[requests] new-order notification failed:', e?.message || e));
 
-    return { requestId: request._id, status: request.status, itemCount: items.length, total };
+    return this.createdAnswer(request);
+  }
+
+  private createdAnswer(request: { _id: unknown; status: string; items: unknown[]; total: number }) {
+    return { requestId: request._id, status: request.status, itemCount: request.items.length, total: request.total };
+  }
+
+  /// The customer calls off their own order — only while the shop hasn't
+  /// picked it up. Once confirmed the shop may already be cooking it, and
+  /// the customer is told to call the shop instead.
+  async cancelByCustomer(id: string, customerId: string) {
+    const request = await this.requestModel.findOne({ _id: id, customerId });
+    if (!request) throw new NotFoundException({ error: 'request_not_found' });
+    const current = this.readStage(request);
+    if (current !== 'new') throw new ConflictException({ error: 'too_late_to_cancel', stage: current });
+
+    request.stage = 'cancelled';
+    request.cancelledBy = 'customer';
+    request.stageUpdatedAt = new Date();
+    // Off the shop's "new" count: nothing is waiting for them any more.
+    request.status = 'handled';
+    await request.save();
+    return { id: request._id, stage: request.stage, cancelledBy: request.cancelledBy };
+  }
+
+  /// Calls off orders nobody answered in time, and tells their customers.
+  /// Conditional on stage 'new' in the update itself, so an order the shop
+  /// confirms in the same second is never cancelled under it.
+  async expireUnanswered(now = new Date()): Promise<number> {
+    const minutes = orderResponseMinutes();
+    if (minutes === 0) return 0;
+    const cutoff = new Date(now.getTime() - minutes * 60_000);
+    const stale = await this.requestModel
+      .find({ stage: 'new', status: 'new', createdAt: { $lt: cutoff } }, '_id')
+      .limit(200)
+      .lean();
+
+    let expired = 0;
+    for (const { _id } of stale) {
+      const request = await this.requestModel
+        .findOneAndUpdate(
+          { _id, stage: 'new', status: 'new' },
+          { $set: { stage: 'cancelled', cancelledBy: 'timeout', status: 'handled', stageUpdatedAt: now } },
+          { new: true },
+        )
+        .populate('businessId', 'name nameAr')
+        .lean();
+      if (!request) continue;
+      expired++;
+      this.notifyStage(request as any, null);
+    }
+    return expired;
+  }
+
+  private notifyStage(request: any, note: string | null): void {
+    const business = request.businessId;
+    this.notifyWrite = this.orderNotifier
+      .notifyCustomerStage({
+        requestId: String(request._id),
+        customerId: request.customerId ? String(request.customerId) : null,
+        shopName: business?.nameAr || business?.name || 'المحل',
+        stage: request.stage,
+        cancelledBy: (request.cancelledBy ?? null) as CancelledBy | null,
+        note,
+      })
+      .catch(() => false);
   }
 
   // Every label, price and image is read here from the real Product/Deal, never
@@ -211,6 +324,7 @@ export class RequestsService {
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
         stage: this.readStage(r),
+        cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
         stageUpdatedAt: r.stageUpdatedAt ?? null,
         createdAt: r.createdAt,
@@ -243,7 +357,9 @@ export class RequestsService {
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
         stage: this.readStage(r),
+        cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
+        stageUpdatedAt: r.stageUpdatedAt ?? null,
         createdAt: r.createdAt,
       };
     });
@@ -305,8 +421,15 @@ export class RequestsService {
     request.stage = stage;
     request.stageUpdatedAt = new Date();
     request.status = 'handled';
+    if (stage === 'cancelled') request.cancelledBy = 'shop';
     if (note !== undefined) request.vendorNote = note?.trim() || null;
     await request.save();
+
+    // Not awaited, same as the new-order email: the vendor's click
+    // shouldn't wait on an email provider.
+    const populated = await request.populate('businessId', 'name nameAr');
+    this.notifyStage(populated.toObject(), request.vendorNote ?? null);
+
     return { id: request._id, status: request.status, stage: request.stage, vendorNote: request.vendorNote };
   }
 }

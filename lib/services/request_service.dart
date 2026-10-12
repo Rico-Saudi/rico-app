@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/business_catalog.dart';
 import '../models/customer_order.dart';
 
 class RequestException implements Exception {
@@ -22,10 +23,14 @@ class RequestService {
   /// حراً يُكتب مع كل طلب.
   /// [items] أسطر السلّة كما يبنيها [Cart.toRequestItems] — معرّف وكمية فقط:
   /// الاسم والسعر يشتقّهما الخادم من المنتج الحقيقي، فلا يسعّر العميل لنفسه.
+  /// [clientRef] معرّف هذي المحاولة: إعادة الإرسال بعد مهلة (والخادم يمكن
+  /// حفظ الطلب الأول فعلاً) ترسل نفسه، فيرجع الخادم نفس الطلب بدل طلب ثاني
+  /// يجهّزه المحل مرتين.
   Future<void> submitRequest({
     required String businessId,
     required String token,
     required List<Map<String, dynamic>> items,
+    String? clientRef,
   }) async {
     http.Response response;
     try {
@@ -39,6 +44,7 @@ class RequestService {
             body: jsonEncode({
               'businessId': businessId,
               'items': items,
+              if (clientRef != null) 'clientRef': clientRef,
             }),
           )
           .timeout(const Duration(seconds: 8));
@@ -73,22 +79,30 @@ class RequestService {
       return null;
     }
     if (data['error'] != 'orders_paused') return null;
+    return ordersPausedText(
+      resumesAt: DateTime.tryParse(data['resumesAt'] as String? ?? ''),
+      note: data['note'] as String?,
+      now: now,
+    );
+  }
 
-    final buffer = StringBuffer('المحل موقف استقبال الطلبات مؤقتاً');
-    final resumesAt = DateTime.tryParse(data['resumesAt'] as String? ?? '')?.toLocal();
-    if (resumesAt != null) {
-      final today = now ?? DateTime.now();
-      final sameDay = resumesAt.year == today.year && resumesAt.month == today.month && resumesAt.day == today.day;
-      final h = resumesAt.hour % 12 == 0 ? 12 : resumesAt.hour % 12;
-      final m = resumesAt.minute.toString().padLeft(2, '0');
-      final period = resumesAt.hour < 12 ? 'ص' : 'م';
-      buffer.write(sameDay ? '، يرجع الساعة $h:$m$period' : '، يرجع ${resumesAt.day}/${resumesAt.month} الساعة $h:$m$period');
+  /// يلغي العميل طلبه ما دام المحل ما رد عليه (POST /requests/:id/cancel).
+  Future<void> cancelOrder({required String token, required String orderId}) async {
+    http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$_baseUrl/requests/$orderId/cancel'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      throw RequestException('ما قدرت ألغي الطلب، تأكد من اتصالك وحاول مرة ثانية.');
     }
-    buffer.write('.');
-    final note = (data['note'] as String?)?.trim();
-    if (note != null && note.isNotEmpty) buffer.write(' «$note»');
-    buffer.write(' جرّب محل ثاني أو ارجع له بعدين.');
-    return buffer.toString();
+    if (response.statusCode == 401) throw RequestException('انتهت جلستك، سجّل دخولك من جديد.');
+    // المحل سبقه وأكّد الطلب: الإلغاء صار كلام معهم مباشرة.
+    if (response.statusCode == 409) {
+      throw RequestException('المحل أكّد طلبك وبدأ يجهّزه — كلّمهم على رقمهم إذا تبي تلغيه.');
+    }
+    if (response.statusCode != 200) throw RequestException('ما قدرت ألغي الطلب الحين، حاول مرة ثانية.');
   }
 
   /// سجلّ طلبات العميل (GET /requests/mine) — الأحدث أولاً.

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/customer_order.dart';
+import '../services/auth_store.dart';
+import '../services/chat_inbox.dart';
+import '../services/request_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/arabic_dates.dart';
 import '../utils/dialer.dart';
@@ -12,56 +15,145 @@ import '../widgets/rico_surfaces.dart';
 /// البيانات كلها من الطلب نفسه ولا تُجلب من جديد: هي لقطة وقت الإرسال، وهذا
 /// المقصود — لو غيّر المحل سعره بعدها فسجلّ العميل يجب أن يظل يقول ما دفعه
 /// يومها، لا ما صار السعر اليوم.
-class OrderDetailsScreen extends StatelessWidget {
+class OrderDetailsScreen extends StatefulWidget {
   final CustomerOrder order;
 
   const OrderDetailsScreen({super.key, required this.order});
 
+  @override
+  State<OrderDetailsScreen> createState() => _OrderDetailsScreenState();
+}
+
+class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
+  final RequestService _service = RequestService();
+  late CustomerOrder _order = widget.order;
+  bool _cancelling = false;
+
+  @override
+  void didUpdateWidget(OrderDetailsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.order, widget.order)) _order = widget.order;
+  }
+
   Future<void> _callShop() async {
-    final phone = order.businessPhone;
+    final phone = _order.businessPhone;
     if (phone == null) return;
     await openDialer(phone);
   }
 
+  Future<void> _cancel() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تلغي الطلب؟'),
+        content: Text('بنبلّغ ${_order.businessName} إنك ألغيت الطلب.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('لا، خلّه')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: RicoColors.danger),
+            child: const Text('إيه، ألغه'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+
+    final token = AuthStore.instance.token;
+    if (token == null) {
+      _toast('انتهت جلستك، سجّل دخولك من جديد.');
+      return;
+    }
+    setState(() => _cancelling = true);
+    try {
+      await _service.cancelOrder(token: token, orderId: _order.id);
+      if (!mounted) return;
+      setState(() => _order = _order.copyWith(status: OrderStatus.cancelled, cancelledBy: CancelledBy.customer));
+    } on RequestException catch (e) {
+      _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
+  /// يرجع للمحادثة ويطلب نفس الأصناف من نفس المحل — تمر بنفس طريق الطلب
+  /// العادي، فالمحل يطابقها على قائمته اليوم ويقول وش اللي ما عاد موجود.
+  void _reorder() {
+    ChatInbox.send(_order.reorderText);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: RicoColors.canvas,
-      appBar: AppBar(
-        title: const Text('تفاصيل الطلب'),
+    final order = _order;
+    return PopScope(
+      // الشاشة اللي قبلها (طلباتي) تحدّث الحالة لو تغيّرت هنا.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.of(context).pop(order);
+      },
+      child: Scaffold(
         backgroundColor: RicoColors.canvas,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
-          children: [
-            _ShopHeader(order: order),
-            const SizedBox(height: 10),
-            _StatusExplainer(order: order),
-            const SizedBox(height: 10),
-            RicoCard(
-              padding: const EdgeInsets.fromLTRB(13, 13, 13, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const RicoSectionLabel(label: 'الأصناف', icon: Icons.shopping_bag_rounded),
-                  const SizedBox(height: 4),
-                  for (final line in order.lines) _LineRow(line: line),
-                ],
+        appBar: AppBar(
+          title: const Text('تفاصيل الطلب'),
+          backgroundColor: RicoColors.canvas,
+          surfaceTintColor: Colors.transparent,
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
+            children: [
+              _ShopHeader(order: order),
+              const SizedBox(height: 10),
+              _StatusExplainer(order: order),
+              const SizedBox(height: 10),
+              RicoCard(
+                padding: const EdgeInsets.fromLTRB(13, 13, 13, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const RicoSectionLabel(label: 'الأصناف', icon: Icons.shopping_bag_rounded),
+                    const SizedBox(height: 4),
+                    for (final line in order.lines) _LineRow(line: line),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            _TotalCard(order: order),
-            if (order.businessPhone != null) ...[
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: _callShop,
-                icon: const Icon(Icons.phone_rounded, size: 18),
-                label: const Text('اتصل بالمحل'),
-              ),
+              const SizedBox(height: 10),
+              _TotalCard(order: order),
+              if (order.businessPhone != null) ...[
+                const SizedBox(height: 14),
+                ElevatedButton.icon(
+                  onPressed: _callShop,
+                  icon: const Icon(Icons.phone_rounded, size: 18),
+                  label: const Text('اتصل بالمحل'),
+                ),
+              ],
+              if (!order.isOpen) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _reorder,
+                  icon: const Icon(Icons.replay_rounded, size: 18),
+                  label: const Text('اطلب نفسه مرة ثانية'),
+                ),
+              ],
+              if (order.canCancel) ...[
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: _cancelling ? null : _cancel,
+                  style: TextButton.styleFrom(foregroundColor: RicoColors.danger),
+                  icon: _cancelling
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('ألغِ الطلب'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -158,11 +250,23 @@ class _StatusExplainer extends StatelessWidget {
           Icons.shopping_bag_rounded,
           'طلبك جاهز عند المحل. لو تحتاج تتأكد من شي، كلّمهم على الرقم تحت.',
         ),
+      OrderStatus.completed => (
+          RicoColors.inkMuted,
+          RicoColors.surfaceSunken,
+          Icons.task_alt_rounded,
+          'اكتمل الطلب. بالعافية! تقدر تطلب نفسه مرة ثانية من الزر تحت.',
+        ),
       OrderStatus.cancelled => (
           RicoColors.danger,
           RicoColors.dangerTint,
           Icons.cancel_rounded,
-          note != null ? 'المحل ألغى الطلب: $note' : 'المحل ألغى الطلب. تقدر تكلّمهم على الرقم تحت أو تطلب من محل ثاني.',
+          switch (order.cancelledBy) {
+            CancelledBy.customer => 'ألغيت هذا الطلب قبل ما يرد المحل.',
+            CancelledBy.timeout => 'المحل ما رد على طلبك بالوقت، فلغيناه عشان ما تنتظر. جرّب محل ثاني أو اطلب نفسه مرة ثانية.',
+            _ => note != null
+                ? 'المحل ألغى الطلب: $note'
+                : 'المحل ألغى الطلب. تقدر تكلّمهم على الرقم تحت أو تطلب من محل ثاني.',
+          },
         ),
     };
     // A note on any other stage ("جاهز بعد ساعة") is added under the sentence.
