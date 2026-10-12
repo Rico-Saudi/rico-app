@@ -24,6 +24,11 @@ class ResolvedIntent {
   final String? placeName;
   final List<RequestedItem> orderItems;
 
+  /// لـkind == 'place' فقط: الشي المطلوب داخل الفئة ("مندي"، "جلسات
+  /// خارجية")، والحي اللي سمّاه بدل "قريب مني" ("النرجس").
+  final String? keyword;
+  final String? area;
+
   ResolvedIntent({
     required this.kind,
     this.category,
@@ -36,6 +41,8 @@ class ResolvedIntent {
     this.profession,
     this.placeName,
     this.orderItems = const [],
+    this.keyword,
+    this.area,
   });
 
   QueryIntent? toQueryIntent() {
@@ -114,6 +121,8 @@ class ResolvedIntent {
         label: label!,
         rank: rankMode,
         brandHint: brandHint,
+        keyword: keyword,
+        area: area,
         // نفس قيمة وسم OSM (مثل "hairdresser") تُستخدم كـcategorySlug عند
         // البحث في قاعدة ريكو أولاً — تماماً كما تفعل الفئات الثابتة
         // (restaurant/cafe/hotel...) — قبل السقوط لـOverpass إذا لم يوجد
@@ -128,6 +137,8 @@ class ResolvedIntent {
       rank: rankMode,
       brandHint: brandHint,
       referencedPosition: referencedPosition,
+      keyword: keyword,
+      area: area,
     );
   }
 
@@ -188,6 +199,7 @@ class LlmIntentService {
     String message, {
     List<Map<String, String>>? history,
     Map<String, dynamic>? lastResults,
+    Map<String, dynamic>? basket,
     VoiceSignals? voice,
   }) async {
     final body = jsonEncode({
@@ -195,6 +207,7 @@ class LlmIntentService {
       'brand': Brand.slug,
       if (history != null && history.isNotEmpty) 'history': history,
       if (lastResults != null) 'lastResults': lastResults,
+      if (basket != null) 'basket': basket,
       // تُبعث للرسائل الصوتية وحدها — رسالة مكتوبة ما لها نبرة نقيسها،
       // وبعث قياسات فاضية يخلّي المصنّف يتخيّل ما لم نعطه.
       if (voice != null) 'voice': voice.toJson(),
@@ -252,6 +265,8 @@ class LlmIntentService {
         referencedPosition: map['referencedPosition'] as int?,
         profession: map['profession'] as String?,
         placeName: map['placeName'] as String?,
+        keyword: map['keyword'] as String?,
+        area: map['area'] as String?,
         orderItems: ((map['orderItems'] as List?) ?? [])
             .map((raw) {
               final item = raw as Map<String, dynamic>;

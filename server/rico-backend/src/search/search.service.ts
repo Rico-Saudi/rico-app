@@ -55,6 +55,11 @@ function photoUrlFor(placeId: string): string {
   return `/places/${placeId}/photo`;
 }
 
+/// How far a named neighbourhood may be from the customer. Big enough for
+/// one side of Riyadh or Amman to the other, small enough to keep a "النرجس"
+/// that also exists in another city out.
+const AREA_RADIUS_METERS = 30000;
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -92,7 +97,9 @@ export class SearchService {
   // combined with a different sort in the same query.
   async searchBusinesses(dto: SearchBusinessDto) {
     const { lat, lng } = dto;
-    const radiusMeters = dto.radius ?? 3000;
+    // A named area can be across town; the radius around the customer is
+    // widened to reach it, and the district match below does the narrowing.
+    const radiusMeters = dto.area ? Math.max(dto.radius ?? 3000, AREA_RADIUS_METERS) : dto.radius ?? 3000;
     const rank = dto.rank ?? 'nearest';
     const limit = dto.limit ?? 8;
 
@@ -109,6 +116,22 @@ export class SearchService {
       const re = new RegExp(escapeRegex(nameNeedle), 'i');
       filter.$or = [{ name: re }, { nameAr: re }];
     }
+
+    // "مطعم مندي": a restaurant whose name says مندي, or whose menu has it.
+    // Without this, every restaurant nearby answered a request for one dish.
+    const and: Record<string, unknown>[] = [];
+    if (dto.keyword) {
+      const re = new RegExp(escapeRegex(dto.keyword), 'i');
+      const servingIt = await this.productModel
+        .distinct('businessId', { isActive: true, $or: [{ name: re }, { keywords: re }] })
+        .exec();
+      and.push({ $or: [{ name: re }, { nameAr: re }, { _id: { $in: servingIt } }] });
+    }
+    if (dto.area) {
+      const re = new RegExp(escapeRegex(dto.area), 'i');
+      and.push({ $or: [{ district: re }, { address: re }] });
+    }
+    if (and.length) filter.$and = and;
 
     let businesses;
     if (rank === 'nearest') {
@@ -149,6 +172,8 @@ export class SearchService {
         categorySlug: dto.categorySlug,
         brandHint: dto.brandHint,
         label: dto.label,
+        keyword: dto.keyword,
+        area: dto.area,
         needed: limit - places.length,
         seenBusinessIds: new Set(places.map((p) => p.id)),
       });
@@ -245,6 +270,8 @@ export class SearchService {
     categorySlug,
     brandHint,
     label,
+    keyword,
+    area,
     needed,
     seenBusinessIds,
   }: {
@@ -255,6 +282,8 @@ export class SearchService {
     categorySlug?: string;
     brandHint?: string;
     label?: string;
+    keyword?: string;
+    area?: string;
     needed: number;
     seenBusinessIds: Set<string>;
   }): Promise<SearchPlace[]> {
@@ -267,15 +296,20 @@ export class SearchService {
     // one of them routes there. Plain category browsing stays on Nearby,
     // which returns tighter category matches.
     const knownType = categorySlug ? GOOGLE_TYPE_BY_CATEGORY[categorySlug] : undefined;
-    const needsText = Boolean(brandHint) || rank === 'open_now' || !knownType;
+    // A dish or a neighbourhood is words, which only Text Search reads.
+    const needsText = Boolean(brandHint) || rank === 'open_now' || !knownType || Boolean(keyword) || Boolean(area);
     // The slug is the last resort, not the second: asking Google for
     // "maintenance_centre" in Riyadh returns nothing, while the Arabic
     // phrase for the same category returns the real shops.
-    const textQuery =
+    const base =
       brandHint ||
       label ||
       (categorySlug ? GOOGLE_TEXT_QUERY_BY_CATEGORY[categorySlug] : undefined) ||
       categorySlug;
+    // "مطعم مندي في النرجس" — the way a person would type it into Maps.
+    const textQuery = base
+      ? [base, brandHint ? null : keyword, area ? `في ${area}` : null].filter(Boolean).join(' ')
+      : undefined;
     if (needsText && !textQuery) return [];
 
     // Reserved before the call, not counted after it: concurrent searches

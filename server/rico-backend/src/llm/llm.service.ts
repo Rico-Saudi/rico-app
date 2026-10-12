@@ -28,7 +28,24 @@ export interface LlmRequest {
   messages: LlmMessage[];
   temperature: number;
   maxTokens: number;
+  /// Overrides the purpose's default deadline (see DEFAULT_TIMEOUT_MS).
+  timeoutMs?: number;
 }
+
+/// How long one complete() may take, the whole model chain included.
+///
+/// The app gives /classify 8s on its first try and /compose 5s, and the old
+/// fetch had no deadline at all — so a slow Groq answer arrived after the
+/// app had given up, and the app's retry sent the same ~7k-token prompt a
+/// second time while the first was still being billed. Ending a little
+/// before the app does lets /classify answer from its keyword table in time,
+/// and lets compose fail fast to the app's template.
+const DEFAULT_TIMEOUT_MS: Record<LlmPurpose, number> = {
+  classify: 7000,
+  compose: 4500,
+  training: 60000,
+  simulate: 60000,
+};
 
 export interface LlmResult {
   /// The assistant's raw message content. Callers parse it — this service
@@ -78,7 +95,11 @@ export class LlmService {
     // bucket. Any other error, or the last model's 429, surfaces as before.
     // OpenRouter gets the whole chain in one request and never loops.
     const attempts = provider.name === 'groq' ? provider.models : [provider.models[0]];
+    // One deadline for the whole chain: a 429 walk is still one answer the
+    // customer is waiting on.
+    const signal = AbortSignal.timeout(request.timeoutMs ?? DEFAULT_TIMEOUT_MS[request.purpose]);
     let response: Response | undefined;
+    let data: any;
     for (const [index, model] of attempts.entries()) {
       try {
         response = await fetch(provider.url, {
@@ -89,8 +110,16 @@ export class LlmService {
             ...provider.headers,
           },
           body: JSON.stringify(this.buildBody(provider, request, model)),
+          signal,
         });
-      } catch {
+        // Read inside the try: the deadline can also land while the body
+        // is still streaming in.
+        if (response.ok) data = await response.json();
+      } catch (e) {
+        if (signal.aborted) {
+          console.warn(`[llm] ${request.purpose}: ${model} timed out`);
+          throw new HttpException({ error: 'upstream_timeout' }, HttpStatus.GATEWAY_TIMEOUT);
+        }
         throw new HttpException({ error: 'upstream_unreachable' }, HttpStatus.BAD_GATEWAY);
       }
 
@@ -105,8 +134,13 @@ export class LlmService {
       throw new HttpException({ error: 'upstream_error', status: response!.status }, HttpStatus.BAD_GATEWAY);
     }
 
-    const data = await response!.json();
     const content = data?.choices?.[0]?.message?.content;
+    // `length` means max_tokens ran out mid-answer — on gpt-oss the hidden
+    // reasoning counts against it too — so the JSON is cut off. Worth seeing
+    // in the log: it is a budget to raise, not a model being wrong.
+    if (data?.choices?.[0]?.finish_reason === 'length') {
+      console.warn(`[llm] ${request.purpose}: answer cut off at max_tokens=${request.maxTokens}`);
+    }
     if (typeof content !== 'string') {
       throw new HttpException({ error: 'parse_error' }, HttpStatus.BAD_GATEWAY);
     }

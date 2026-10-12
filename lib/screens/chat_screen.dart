@@ -216,10 +216,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return recent
         .map((m) => {
               'role': m.sender == MessageSender.user ? 'user' : 'assistant',
-              'content': m.text,
+              // الخادم يقصّ لنفس الطول؛ القص هنا يوفّر الحجم على الشبكة فقط.
+              'content': m.text.length > _maxHistoryChars ? m.text.substring(0, _maxHistoryChars) : m.text,
             })
         .toList();
   }
+
+  static const _maxHistoryChars = 300;
+
+  /// أقصى عدد عناصر يقبله الخادم بـ lastResults. أكثر منه كان يرجّع 400،
+  /// والتطبيق يقرأ أي رد غير 200 كعطل ويسقط لأضعف قاموس محلي.
+  static const _maxLastResults = 30;
 
   /// يبحث عن آخر رسالة عرضت نتائج فعلية (أماكن أو عروض) بترتيبها المعروض
   /// للمستخدم، لدعم إشارات مثل "الثاني" أو "مثله بس أرخص". يُحسب من ترتيب
@@ -243,14 +250,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _buildLastResultsPayload() {
     final last = _findLastShown();
     if (last == null) return null;
-    final items = last.places != null
-        ? [
-            for (var j = 0; j < last.places!.length; j++) {'position': j + 1, 'name': last.places![j].name}
-          ]
-        : [
-            for (var j = 0; j < last.deals!.length; j++) {'position': j + 1, 'name': last.deals![j].placeName}
-          ];
+    final count = last.places?.length ?? last.deals!.length;
+    final items = [
+      for (var j = 0; j < count && j < _maxLastResults; j++)
+        {'position': j + 1, 'name': last.places != null ? last.places![j].name : last.deals![j].placeName}
+    ];
     return {'label': last.label, 'items': items};
+  }
+
+  /// السلة المفتوحة الحين (آخر بطاقة طلب ما انرسلت وفيها أصناف)، كما هي
+  /// بالبطاقة — بما فيها تعديلات أزرار + و− اللي ما تظهر بنص المحادثة. بدونها
+  /// "شيل البيبسي" كانت تُفهم من آخر رسائل مكتوبة بس.
+  Map<String, dynamic>? _buildBasketPayload() {
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final flow = _messages[i].requestFlow;
+      if (flow == null) continue;
+      if (flow.stage == RequestFlowStage.submitted || flow.cart.isEmpty) return null;
+      return {
+        'placeName': flow.catalog.businessName,
+        'items': [
+          for (final line in flow.cart.lines.where((l) => l.label.trim().isNotEmpty).take(30))
+            {'name': line.label.length > 80 ? line.label.substring(0, 80) : line.label, 'quantity': line.quantity.clamp(1, 99)}
+        ],
+      };
+    }
+    return null;
   }
 
   void _scrollToBottom() {
@@ -525,6 +549,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // يمرره لـGoogle Text Search. الفئات الثابتة لها نوع Google خاص فما
         // تحتاجه.
         label: intent.slug == null || IntentService.byCategorySlug(intent.slug!) == null ? intent.label : null,
+        keyword: intent.keyword,
+        area: intent.area,
       );
 
       if (places.isEmpty) {
@@ -534,7 +560,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
         }
         return ChatMessage(
-          text: 'ما لقيت ${intent.label} قريب منك الحين 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
+          text: intent.area != null
+              ? 'ما لقيت ${intent.displayLabel} الحين 😕 جرّب حي قريب منه أو نوع ثاني.'
+              : 'ما لقيت ${intent.displayLabel} قريب منك الحين 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
           sender: MessageSender.bot,
         );
       }
@@ -901,6 +929,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final voice = _pendingVoice;
     _pendingVoice = null;
 
+    // يُبنى السياق قبل إضافة فقاعة المستخدم: بعدها يصير آخر سطر بالسجل هو
+    // الرسالة نفسها، والخادم يضيفها مرة ثانية — فيشوفها النموذج مكررة،
+    // ويحسبها القاموس "الرسالة السابقة" ("من البيك" بعد "من وين؟" تصير
+    // بحث بدل طلب).
+    final history = _buildHistory();
+    final lastResults = _buildLastResultsPayload();
+    final basket = _buildBasketPayload();
+
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
@@ -913,8 +949,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final classification = await LlmIntentService.classify(
         text,
-        history: _buildHistory(),
-        lastResults: _buildLastResultsPayload(),
+        history: history,
+        lastResults: lastResults,
+        basket: basket,
         voice: voice,
       );
 
