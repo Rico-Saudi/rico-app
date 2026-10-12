@@ -146,6 +146,8 @@ export function intentKey(i: Intent): string {
       return 'order';
     case 'call':
       return 'call';
+    case 'compare':
+      return 'compare';
     case 'professional':
       return `pro:${i.profession}`;
     default:

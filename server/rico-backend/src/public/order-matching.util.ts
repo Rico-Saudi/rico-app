@@ -132,3 +132,50 @@ export function bestMatch<T extends Candidate>(
   const closest = closestMatch(query, candidates);
   return closest && closest.score >= threshold ? closest : null;
 }
+
+/**
+ * Whether a catalogue row *is* the product a customer asked to compare
+ * ("جبنة"), not just a row that mentions it.
+ *
+ * Stricter than [similarity] on purpose. Ordering from one shop forgives a
+ * loose match — the customer sees the basket before confirming. A price
+ * comparison doesn't: «فطيرة جبنة» scores 0.88 against "جبنة", and listing a
+ * cheese pie as the cheapest cheese in town is a wrong answer, not a near
+ * one. In Arabic the head noun comes first ("جبنة شيدر", "حليب طازج"), so
+ * the row must start with the first word asked for — after the brand, when a
+ * supermarket lists it brand-first ("كرافت جبنة شيدر").
+ */
+export function isSameProduct(query: string, name: string, brand?: string | null): boolean {
+  const qTokens = tokenize(query);
+  if (qTokens.length === 0) return false;
+
+  let nTokens = tokenize(name);
+  const bTokens = brand ? tokenize(brand) : [];
+  if (bTokens.length > 0 && bTokens.every((t, i) => nTokens[i] === t)) {
+    nTokens = nTokens.slice(bTokens.length);
+  }
+  if (nTokens[0] !== qTokens[0]) return false;
+
+  // Every word asked for has to be there: "جبنة شيدر" shares "جبنة" with
+  // «جبنة بيضاء», and that one word is exactly the difference they asked
+  // about. Only a near-identical spelling earns a pass without it.
+  const words = new Set(nTokens);
+  if (qTokens.every((t) => words.has(t))) return true;
+  return similarity(qTokens.join(' '), nTokens.join(' ')) >= SAME_PRODUCT_SPELLING;
+}
+
+// "جبنه شيدار" against «جبنة شيدر» — a misspelling, not a different cheese.
+const SAME_PRODUCT_SPELLING = 0.85;
+
+/**
+ * A Mongo regex for one normalized word that also matches the spellings
+ * [normalizeArabic] folds together — a vendor types «جبنة» or «جبنه»,
+ * «أرز» or «ارز», and Mongo compares the raw text.
+ */
+export function spellingTolerantPattern(word: string): RegExp {
+  const variants: Record<string, string> = { ا: '[اأإآٱ]', ه: '[هة]', ي: '[يىئ]', و: '[وؤ]' };
+  const body = [...normalizeArabic(word)]
+    .map((ch) => variants[ch] ?? ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('');
+  return new RegExp(body, 'i');
+}

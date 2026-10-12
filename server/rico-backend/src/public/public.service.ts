@@ -12,12 +12,16 @@ import { SubmitDealDto } from './dto/submit-deal.dto';
 import { ImpressionItemDto } from './dto/track-impressions.dto';
 import { TrackSearchGapDto } from './dto/track-search-gap.dto';
 import { ResolveOrderDto } from './dto/resolve-order.dto';
+import { ComparePricesDto } from './dto/compare-prices.dto';
 import {
   closestMatch,
+  isSameProduct,
   MATCH_THRESHOLD,
   normalizeArabic,
   similarity,
+  spellingTolerantPattern,
   SUGGESTION_THRESHOLD,
+  tokenize,
 } from './order-matching.util';
 import { PickPreference, readGenericItem } from './generic-order.util';
 import { CustomerRequest, CustomerRequestDocument } from '../requests/schemas/request.schema';
@@ -47,6 +51,26 @@ export interface ResolvedOrderResult {
   shopOptions: any[];
   /** They tapped one of those offered shops rather than naming it. */
   pickedFromOptions: boolean;
+}
+
+/** One shop's answer to "how much is X here?" — its cheapest row that is X. */
+export interface PriceOffer {
+  businessId: string;
+  businessName: string;
+  distanceMeters: number | null;
+  productId: string;
+  productName: string;
+  unit: string | null;
+  price: number;
+  finalPrice: number;
+  imageUrl: string | null;
+}
+
+export interface PriceComparison {
+  /** The product as the customer said it. */
+  requested: string;
+  /** Cheapest first; distance breaks a tie. Empty when no shop nearby has it. */
+  offers: PriceOffer[];
 }
 
 @Injectable()
@@ -346,6 +370,95 @@ export class PublicService {
     return { ...empty, shopOptions: options };
   }
 
+  /**
+   * "وين أرخص جبنة؟" — the same product across every shop near the customer,
+   * cheapest first.
+   *
+   * One row per shop: its cheapest row that *is* the product (see
+   * isSameProduct). Listing every cheese a supermarket stocks would bury the
+   * other shops under one shop's shelf, and the question was which shop.
+   *
+   * Paused shops are left out — the point of the answer is to order from the
+   * winner, and a paused shop can't take that order.
+   */
+  async comparePrices(dto: ComparePricesDto): Promise<{ comparisons: PriceComparison[] }> {
+    const shops = await this.businessModel
+      .find({
+        isActive: true,
+        ...(dto.categorySlug ? { categorySlug: dto.categorySlug } : {}),
+        location: {
+          $near: {
+            $geometry: { type: 'Point', coordinates: [dto.lng, dto.lat] },
+            $maxDistance: PublicService.COMPARE_RADIUS_METERS,
+          },
+        },
+      })
+      .limit(PublicService.COMPARE_SHOP_CANDIDATES)
+      .lean();
+
+    const now = new Date();
+    const open = new Map(shops.filter((b) => !ordersPauseState(b, now)).map((b) => [String(b._id), b]));
+
+    // The same product named twice ("جبنة… قارن وين أرخص جبنة") is one question.
+    const seen = new Set<string>();
+    const requested: string[] = [];
+    for (const item of dto.items) {
+      const key = tokenize(item.name).join(' ');
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      requested.push(item.name.trim());
+    }
+
+    const comparisons: PriceComparison[] = [];
+    for (const name of requested) {
+      comparisons.push({ requested: name, offers: open.size ? await this.offersFor(name, open, dto) : [] });
+    }
+    return { comparisons };
+  }
+
+  private async offersFor(name: string, shops: Map<string, any>, origin: { lat: number; lng: number }): Promise<PriceOffer[]> {
+    // Mongo can't normalize Arabic, so it only narrows the field to rows
+    // mentioning the head word; isSameProduct decides on the normalized text.
+    const head = tokenize(name)[0];
+    const pattern = spellingTolerantPattern(head);
+    const rows = await this.productModel
+      .find({
+        businessId: { $in: [...shops.keys()].map((id) => new Types.ObjectId(id)) },
+        isActive: true,
+        inStock: { $ne: false },
+        $or: [{ name: pattern }, { keywords: pattern }],
+      })
+      .lean();
+
+    const cheapestPerShop = new Map<string, any>();
+    for (const row of rows) {
+      if (!isSameProduct(name, row.name, row.brand)) continue;
+      const shopId = String(row.businessId);
+      const current = cheapestPerShop.get(shopId);
+      if (!current || row.finalPrice < current.finalPrice) cheapestPerShop.set(shopId, row);
+    }
+
+    const offers: PriceOffer[] = [];
+    for (const [shopId, row] of cheapestPerShop) {
+      const shop = shops.get(shopId);
+      const coords = shop.location?.coordinates;
+      offers.push({
+        businessId: shopId,
+        businessName: shop.nameAr || shop.name,
+        distanceMeters: coords ? Math.round(haversineMeters(origin.lat, origin.lng, coords[1], coords[0])) : null,
+        productId: String(row._id),
+        productName: row.name,
+        unit: row.unit ?? null,
+        price: row.price,
+        finalPrice: row.finalPrice,
+        imageUrl: row.imageUrl ?? null,
+      });
+    }
+
+    offers.sort((a, b) => a.finalPrice - b.finalPrice || (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity));
+    return offers.slice(0, PublicService.COMPARE_MAX_OFFERS);
+  }
+
   /** Which of these dishes the shop serves, and which it doesn't. */
   private async splitByAvailability(businessId: string, items: { name: string }[]) {
     const catalog = await this.getCatalog(businessId);
@@ -449,6 +562,13 @@ export class PublicService {
   // stocks the dish is almost always within this many.
   private static readonly ORDER_SHOP_CANDIDATES = 6;
   private static readonly ORDER_SEARCH_RADIUS_METERS = 5000;
+
+  // A comparison looks wider than an order does: the answer is worth a short
+  // drive, and the more shops it covers the more "the cheapest" means. One
+  // product query covers all of them, so the count costs little.
+  private static readonly COMPARE_SHOP_CANDIDATES = 40;
+  private static readonly COMPARE_RADIUS_METERS = 10000;
+  private static readonly COMPARE_MAX_OFFERS = 6;
 
 
   /**

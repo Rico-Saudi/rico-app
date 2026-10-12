@@ -133,3 +133,39 @@ describe('validateIntent — order from a shop in the last list', () => {
     expect(order({ placeName: null, referencedPosition: '2', orderItems: [] })).toBeNull();
   });
 });
+
+// "قارن لي وين أرخص جبنة" — a product to price across the shops nearby.
+describe('compare intent validation', () => {
+  const compare = (over: Record<string, unknown> = {}) =>
+    validateIntentForTest({ kind: 'compare', orderItems: [{ name: 'جبنة', quantity: 1 }], ...over });
+
+  it('keeps the products verbatim, one of each', () => {
+    const intent = compare({ orderItems: [{ name: 'جبنه بيضا', quantity: 3 }] });
+    expect(intent).toMatchObject({ kind: 'compare', placeName: null, category: null, referencedPosition: null });
+    expect(intent!.orderItems).toEqual([{ name: 'جبنه بيضا', quantity: 1 }]);
+  });
+
+  it('drops a comparison with nothing to compare', () => {
+    expect(compare({ orderItems: [] })).toBeNull();
+    expect(compare({ orderItems: [{ name: '' }] })).toBeNull();
+    expect(compare({ orderItems: undefined })).toBeNull();
+  });
+
+  it('keeps a named kind of shop, and only a real one', () => {
+    expect(compare({ category: 'supermarket' })!.category).toBe('supermarket');
+    expect(compare({ category: 'cheese_shop' })!.category).toBeNull();
+  });
+
+  it('never carries a shop name or a list position', () => {
+    // A named shop is an order, not a comparison — the prompt says so, and
+    // this keeps a stray field from pinning the comparison to one shop.
+    const intent = compare({ placeName: 'بقالة النور', referencedPosition: 2 });
+    expect(intent!.placeName).toBeNull();
+    expect(intent!.referencedPosition).toBeNull();
+  });
+
+  it('caps the list at what the comparison endpoint accepts', () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({ name: `صنف ${i}` }));
+    expect(compare({ orderItems: many })!.orderItems!.length).toBe(5);
+  });
+});

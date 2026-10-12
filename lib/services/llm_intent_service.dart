@@ -8,7 +8,7 @@ import 'intent_service.dart';
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
 /// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
 class ResolvedIntent {
-  final String kind; // 'place' | 'deals' | 'professional' | 'order' | 'call'
+  final String kind; // 'place' | 'deals' | 'professional' | 'order' | 'call' | 'compare'
   final String? category;
   final String rank; // 'nearest' | 'cheapest' | 'open_now' | 'best_rated'
   final String? brandHint;
@@ -53,6 +53,18 @@ class ResolvedIntent {
         label: (shop != null && shop.isNotEmpty) ? shop : 'المحل',
         placeName: (shop != null && shop.isNotEmpty) ? shop : null,
         referencedPosition: referencedPosition,
+      );
+    }
+
+    // "قارن لي وين أرخص جبنة": الأصناف هي السؤال كله، وبلاها ما فيه شي
+    // يُقارن. الفئة تُحفظ بس لو سمّى نوع محل ("أرخص حليب بالبقالات").
+    if (kind == 'compare') {
+      if (orderItems.isEmpty) return null;
+      return QueryIntent(
+        kind: IntentKind.compare,
+        label: orderItems.map((i) => i.name).join(' و'),
+        slug: category,
+        orderItems: orderItems,
       );
     }
 
