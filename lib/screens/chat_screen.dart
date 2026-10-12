@@ -832,6 +832,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
     }
 
+    // «أكّد الطلب» أمرٌ للسلّة المفتوحة، جوابه نفس ضغطة زر التأكيد — لا
+    // تصنيف ولا بحث. كان المصنّف يعامله كطلب جديد، فيبقى المستخدم مضطراً
+    // يرجع للبطاقة ويضغط الزر بنفسه.
+    if (IntentService.isConfirmCommand(text)) {
+      await _confirmFromChat(text);
+      return;
+    }
+
     // سؤال عن الجو يُجاب من القراءة المحفوظة مباشرة: بلا تصنيف ولا بحث ولا
     // انتظار خادم. كان ريكو يرد عليه بـ«ما أقدر أساعدك في هذي» وهو يعرف
     // الجواب فعلاً — [IntentService.isWeatherQuestion] يتكفّل بألا تُلتقط
@@ -1070,6 +1078,88 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _controller.clear();
     _scrollToBottom();
     unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+  }
+
+  /// «أكّد الطلب» مكتوبةً أو منطوقة: يؤكّد آخر طلب مفتوح بالمحادثة كأن
+  /// المستخدم ضغط زر التأكيد في بطاقته، ثم يرد بالنتيجة الفعلية — البطاقة
+  /// قد تكون فوق الشاشة، فالرد هو اللي يقول له إن طلبه وصل أو ليش ما وصل.
+  Future<void> _confirmFromChat(String text) async {
+    // آخر بطاقة طلب فقط: سلّة قديمة تُركت فوقها ما تُرسل بأمر قيل بعد سلّة أحدث.
+    final flowIndex = _messages.lastIndexWhere((m) => m.requestFlow != null || m.professionalFlow != null);
+
+    setState(() {
+      _messages.add(ChatMessage(text: text, sender: MessageSender.user));
+      _messages.add(ChatMessage(text: 'أأكّد طلبك الحين…', sender: MessageSender.bot, isLoading: true));
+      _sending = true;
+    });
+    _controller.clear();
+    _scrollToBottom();
+    final replyIndex = _messages.length - 1;
+
+    var reply = 'ما قدرت أأكّد طلبك الحين، حاول مرة ثانية.';
+    try {
+      reply = await _confirmFlowAt(flowIndex);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _messages[replyIndex] = ChatMessage(text: reply, sender: MessageSender.bot);
+          _sending = false;
+        });
+        _scrollToBottom();
+        unawaited(_sessionMemory.saveTranscript(_persistableMessages));
+      }
+    }
+  }
+
+  /// يؤكّد تدفّق الطلب في [index] بنفس مسار زر البطاقة، ويرجّع رد ريكو.
+  Future<String> _confirmFlowAt(int index) async {
+    const noOpenOrder = 'ما عندك طلب مفتوح أأكّده 🤔 قل لي وش تبي تطلب ومن وين، وأجهّزه لك.';
+    if (index == -1) return noOpenOrder;
+
+    final requestFlow = _messages[index].requestFlow;
+    if (requestFlow != null) {
+      final shop = requestFlow.catalog.businessName;
+      switch (requestFlow.stage) {
+        case RequestFlowStage.submitted:
+          return 'طلبك من $shop وصلهم من قبل ✅ تبي تطلب شي ثاني؟';
+        case RequestFlowStage.submitting:
+          return 'طلبك من $shop ينرسل الحين ⏳';
+        case RequestFlowStage.browsing:
+        case RequestFlowStage.confirming:
+          if (requestFlow.cart.isEmpty) {
+            return 'سلّتك من $shop فاضية للحين 🛒 أضف اللي تبغاه أو قل لي وش تبي، وأأكّده لك.';
+          }
+      }
+      await _confirmRequest(index);
+      final after = _messages[index].requestFlow!;
+      if (after.stage == RequestFlowStage.submitted) {
+        return 'تم ✅ أكّدت طلبك من $shop، وبيتواصلون معك قريباً على رقمك.';
+      }
+      return after.errorMessage ??
+          'ما أكّدت الطلب للحين — سجّل دخولك عشان يوصل لـ$shop باسمك ورقمك، وبعدها قل لي «أكّد».';
+    }
+
+    final professionalFlow = _messages[index].professionalFlow!;
+    final selected = professionalFlow.selected;
+    switch (professionalFlow.stage) {
+      case ProfessionalFlowStage.submitted:
+        return 'طلبك وصل لـ${selected?.name ?? 'صاحب المهنة'} من قبل ✅ تبي شي ثاني؟';
+      case ProfessionalFlowStage.submitting:
+        return 'طلبك لـ${selected?.name ?? 'صاحب المهنة'} ينرسل الحين ⏳';
+      case ProfessionalFlowStage.browsing:
+        return 'اختر من القائمة فوق مين تبيه، وبعدها قل لي «أكّد» وأرسل له طلبك 👆';
+      case ProfessionalFlowStage.confirming:
+        break;
+    }
+    final confirm = _messages[index].onConfirmProfessionalRequest;
+    if (confirm == null || selected == null) return noOpenOrder;
+    await confirm(null);
+    final after = _messages[index].professionalFlow!;
+    if (after.stage == ProfessionalFlowStage.submitted) {
+      return 'تم ✅ وصل طلبك لـ${selected.name}، وبيتصل فيك قريباً.';
+    }
+    return after.errorMessage ??
+        'ما أرسلت الطلب للحين — سجّل دخولك عشان يوصل لـ${selected.name} اسمك ورقمك، وبعدها قل لي «أكّد».';
   }
 
   Future<void> _answerWeatherQuestion(String text) async {
