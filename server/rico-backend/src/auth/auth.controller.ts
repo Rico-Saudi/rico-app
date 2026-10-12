@@ -6,6 +6,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { SessionGuard } from '../common/guards/session.guard';
 import { AccountId } from '../common/decorators/account-id.decorator';
+import { publicBaseUrl } from '../common/utils/base-url.util';
 
 @Controller('auth')
 export class AuthController {
@@ -22,6 +23,7 @@ export class AuthController {
     });
     req.session.accountId = account.id;
     req.session.app = account.app;
+    req.session.issuedAt = Date.now();
     if (account.platformRole) req.session.platformRole = account.platformRole;
 
     return account;
@@ -40,7 +42,7 @@ export class AuthController {
 
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = publicBaseUrl(req);
     return this.authService.forgotPassword(dto.email, dto.app, baseUrl);
   }
 

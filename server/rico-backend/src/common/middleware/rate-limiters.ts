@@ -37,11 +37,45 @@ export const submitDealLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }
 // one-off form submission — capped generously, just enough to blunt abuse.
 export const impressionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 
-// The only unauthenticated endpoint that spends money per call (Groq
-// speech-to-text), so it gets the tightest public cap. A real voice user
-// sends a handful of clips per session; 40 per 15 minutes is far past
-// normal use and still cheap if someone burns the whole window.
+// Unauthenticated and paid per call (Groq speech-to-text), so it gets the
+// tightest public cap. A real voice user sends a handful of clips per
+// session; 40 per 15 minutes is far past normal use and still cheap if
+// someone burns the whole window.
 export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
+
+// /classify and /compose are the other two public endpoints that spend money
+// on every call — each one carries the ~7k-token system prompt to Groq. One
+// chat message is one classify plus one compose, and a fast chatter sends
+// maybe two a minute; 120 per 15 minutes leaves room for carrier NAT (many
+// phones behind one IP) while capping a single script at a few dollars a
+// day. The daily budget in LlmService catches what gets past this.
+export const llmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Public search can fall through to Google Places, whose monthly cap is
+// shared with everyone — one script draining it turns live search off for
+// all customers until the month ends. A chat message can fire up to three
+// searches (one per intent) plus a catalog lookup, hence the headroom.
+export const searchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Every result card asks for its photo, so a normal session makes many of
+// these; the cap is only there so nobody can walk the whole catalog and
+// burn the monthly Places Photos budget.
+export const photoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // The app's own auth (customer accounts) gets its own IP cap rather than
 // reusing loginIpLimiter: a rate-limit instance is one shared counter, so

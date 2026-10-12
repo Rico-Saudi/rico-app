@@ -6,6 +6,10 @@ import { Business, BusinessDocument, BusinessSchema } from '../businesses/schema
 import { Product, ProductDocument, ProductSchema } from '../products/schemas/product.schema';
 import { Deal, DealDocument, DealSchema } from '../deals/schemas/deal.schema';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
+import { Discount, DiscountDocument, DiscountSchema } from '../discounts/schemas/discount.schema';
+import { ProductImage, ProductImageSchema } from '../products/schemas/product-image.schema';
+import { ProductsService } from '../products/products.service';
+import { PriceCalcService } from '../pricing/price-calc.service';
 
 // The basket rules worth testing are all about what the server refuses to take
 // from the client — prices, labels, ownership — so this runs the real service
@@ -238,5 +242,75 @@ describe('RequestsService baskets', () => {
     const saved = await requestModel.findById(result.requestId).lean();
     expect(saved!.items[0]).toMatchObject({ itemType: 'deal', unitPrice: null });
     expect(saved!.total).toBe(0);
+  });
+
+  describe('what can be ordered', () => {
+    it('refuses a product the shop has removed', async () => {
+      await productModel.updateOne({ _id: tea._id }, { isActive: false });
+      await expect(
+        service.create({ businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] }, customer),
+      ).rejects.toMatchObject({ response: { error: 'item_not_found' } });
+    });
+
+    it.each([
+      ['still waiting for review', { status: 'pending_review' }],
+      ['rejected', { status: 'rejected' }],
+      ['past its end date', { status: 'active', endsAt: new Date(Date.now() - 60_000) }],
+      ['not started yet', { status: 'active', startsAt: new Date(Date.now() + 60 * 60_000) }],
+    ])('refuses a deal %s', async (_label, fields) => {
+      const deal = await dealModel.create({
+        businessId: new mongoose.Types.ObjectId(businessId),
+        titleAr: 'عرض',
+        dealType: 'bogo',
+        source: 'vendor',
+        ...fields,
+      });
+      await expect(
+        service.create({ businessId, items: [{ itemType: 'deal', itemId: String(deal._id), quantity: 1 }] }, customer),
+      ).rejects.toMatchObject({ response: { error: 'item_not_found' } });
+    });
+  });
+
+  describe('prices at checkout', () => {
+    let discountModel: Model<DiscountDocument>;
+    let priced: RequestsService;
+
+    beforeEach(async () => {
+      discountModel = (mongoose.models[Discount.name] ??
+        mongoose.model(Discount.name, DiscountSchema)) as unknown as Model<DiscountDocument>;
+      const imageModel = mongoose.models[ProductImage.name] ?? mongoose.model(ProductImage.name, ProductImageSchema);
+      await discountModel.deleteMany({});
+      const priceCalc = new PriceCalcService(productModel, discountModel, new ProductsService(productModel, imageModel as any));
+      priced = new RequestsService(requestModel, businessModel, productModel, dealModel, { notifyNewOrder: async () => 0 } as any, priceCalc);
+    });
+
+    it('drops a discount that ended by date, even though nothing rewrote the product', async () => {
+      // The stored finalPrice (10) still reflects a discount that ended an hour ago.
+      await discountModel.create({
+        productId: tea._id,
+        type: 'fixed',
+        value: 10,
+        endDate: new Date(Date.now() - 60 * 60_000),
+      });
+      const result = await priced.create(
+        { businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 2 }] },
+        customer,
+      );
+      expect(result.total).toBe(24);
+    });
+
+    it('applies a discount that started by date', async () => {
+      await discountModel.create({
+        productId: dates._id,
+        type: 'percentage',
+        value: 20,
+        startDate: new Date(Date.now() - 60_000),
+      });
+      const result = await priced.create(
+        { businessId, items: [{ itemType: 'product', itemId: String(dates._id), quantity: 1 }] },
+        customer,
+      );
+      expect(result.total).toBe(20);
+    });
   });
 });

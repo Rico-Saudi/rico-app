@@ -10,6 +10,7 @@ import { CustomersModule } from '../customers/customers.module';
 import { submitDealLimiter } from '../common/middleware/rate-limiters';
 import { OrderNotifierService } from './order-notifier.service';
 import { MailerModule } from '../mailer/mailer.module';
+import { PricingModule } from '../pricing/pricing.module';
 import { Account, AccountSchema } from '../accounts/schemas/account.schema';
 import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-claim.schema';
 
@@ -26,6 +27,7 @@ import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-c
     ProductsModule,
     DealsModule,
     CustomersModule,
+    PricingModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService, OrderNotifierService],

@@ -1,10 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Discount, DiscountDocument } from './schemas/discount.schema';
 import { CreateDiscountDto } from './dto/create-discount.dto';
 import { UpdateDiscountDto } from './dto/update-discount.dto';
 import { PriceCalcService } from '../pricing/price-calc.service';
+
+/// More than 100% off is a negative price — reject it where it's entered,
+/// rather than only clamping it later where it's priced.
+function assertSaneValue(type: string, value: number): void {
+  if (type === 'percentage' && value > 100) {
+    throw new BadRequestException({ error: 'percentage_over_100' });
+  }
+}
 
 @Injectable()
 export class DiscountsService {
@@ -14,6 +22,7 @@ export class DiscountsService {
   ) {}
 
   async create(dto: CreateDiscountDto): Promise<DiscountDocument> {
+    assertSaneValue(dto.type, dto.value);
     const discount = await this.discountModel.create({
       productId: dto.productId,
       type: dto.type,
@@ -44,6 +53,7 @@ export class DiscountsService {
     if (dto.startDate !== undefined) discount.startDate = new Date(dto.startDate);
     if (dto.endDate !== undefined) discount.endDate = new Date(dto.endDate);
     if (dto.isActive !== undefined) discount.isActive = dto.isActive;
+    assertSaneValue(discount.type, discount.value);
     await discount.save();
     await this.priceCalcService.recomputeForProduct(String(discount.productId));
     return discount;

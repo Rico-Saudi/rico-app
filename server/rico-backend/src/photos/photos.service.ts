@@ -79,16 +79,14 @@ export class PhotosService {
     const cap = process.env.GOOGLE_PHOTOS_MONTHLY_CAP
       ? Number(process.env.GOOGLE_PHOTOS_MONTHLY_CAP)
       : DEFAULT_GOOGLE_PHOTOS_MONTHLY_CAP;
-    const usage = await this.apiUsageService.getUsage(GOOGLE_PHOTOS_PROVIDER);
-    if (usage.count >= cap) {
-      console.warn(`[photos] skipped: ${usage.count}/${cap} used for ${usage.period}`);
+    if (!(await this.apiUsageService.tryConsume(GOOGLE_PHOTOS_PROVIDER, cap))) {
+      console.warn(`[photos] skipped: monthly cap of ${cap} reached`);
       return null;
     }
 
     let uri: string | null;
     try {
       uri = await fetchPhotoUri(photoRef, width);
-      await this.apiUsageService.increment(GOOGLE_PHOTOS_PROVIDER);
     } catch (e) {
       // A photo is decoration, not the answer — degrade to the glyph rather
       // than failing the card.

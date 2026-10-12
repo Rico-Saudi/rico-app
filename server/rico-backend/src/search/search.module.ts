@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import cors from 'cors';
+import { searchLimiter } from '../common/middleware/rate-limiters';
 import { SearchService } from './search.service';
 import { SearchController } from './search.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
@@ -15,6 +16,10 @@ import { PhotosModule } from '../photos/photos.module';
 export class SearchModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(cors()).forRoutes(
+      { path: 'search', method: RequestMethod.GET },
+      { path: 'search/products', method: RequestMethod.GET },
+    );
+    consumer.apply(searchLimiter).forRoutes(
       { path: 'search', method: RequestMethod.GET },
       { path: 'search/products', method: RequestMethod.GET },
     );

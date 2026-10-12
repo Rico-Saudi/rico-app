@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import cors from 'cors';
+import { llmLimiter } from '../common/middleware/rate-limiters';
 import { ComposeService } from './compose.service';
 import { ComposeController } from './compose.controller';
 import { LlmModule } from '../llm/llm.module';
@@ -13,5 +14,6 @@ import { WeatherModule } from '../weather/weather.module';
 export class ComposeModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(cors()).forRoutes({ path: 'compose', method: RequestMethod.POST });
+    consumer.apply(llmLimiter).forRoutes({ path: 'compose', method: RequestMethod.POST });
   }
 }

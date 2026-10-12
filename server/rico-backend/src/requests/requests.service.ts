@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -15,6 +15,7 @@ import { CreateRequestDto, CreateRequestItemDto } from './dto/create-request.dto
 import { CustomerDocument } from '../customers/schemas/customer.schema';
 import { OrderNotifierService } from './order-notifier.service';
 import { ordersPauseState } from '../businesses/orders-pause.util';
+import { PriceCalcService } from '../pricing/price-calc.service';
 
 // Same wording as the Flutter Deal.typeLabel getter and the owner dashboard's
 // DEAL_TYPE_LABELS — kept in sync by hand since this is the one place a deal's
@@ -44,6 +45,9 @@ export class RequestsService {
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
     private readonly orderNotifier: OrderNotifierService,
+    // Optional so specs that only test basket rules can leave pricing out;
+    // the running server always injects it.
+    @Optional() private readonly priceCalc?: PriceCalcService,
   ) {}
 
   // The latest new-order notification, kept so tests can wait for the email
@@ -107,9 +111,27 @@ export class RequestsService {
     const requested = this.normalizeRequestedItems(dto);
 
     const idsOfType = (type: string) => requested.filter((i) => i.itemType === type).map((i) => i.itemId);
+    // A discount that ended (or started) by date alone leaves a stale
+    // finalPrice until something writes to the product — refresh exactly the
+    // lines being bought, so the total is what the price is right now.
+    await this.priceCalc?.recomputeForProducts(idsOfType('product'));
+    // Only what a customer could actually see: a soft-deleted product, or a
+    // deal still waiting for review, rejected or past its end, is "not found"
+    // rather than orderable by anyone who kept its id.
+    const now = new Date();
     const [products, deals] = await Promise.all([
-      this.productModel.find({ _id: { $in: idsOfType('product') }, businessId: dto.businessId }).lean(),
-      this.dealModel.find({ _id: { $in: idsOfType('deal') }, businessId: dto.businessId }).lean(),
+      this.productModel.find({ _id: { $in: idsOfType('product') }, businessId: dto.businessId, isActive: { $ne: false } }).lean(),
+      this.dealModel
+        .find({
+          _id: { $in: idsOfType('deal') },
+          businessId: dto.businessId,
+          status: 'active',
+          $and: [
+            { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
+            { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] },
+          ],
+        })
+        .lean(),
     ]);
 
     const productById = new Map(products.map((p: any) => [String(p._id), p]));

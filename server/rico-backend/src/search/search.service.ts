@@ -261,11 +261,6 @@ export class SearchService {
     const cap = process.env.GOOGLE_PLACES_MONTHLY_CAP
       ? Number(process.env.GOOGLE_PLACES_MONTHLY_CAP)
       : DEFAULT_GOOGLE_PLACES_MONTHLY_CAP;
-    const usage = await this.apiUsageService.getUsage(GOOGLE_PLACES_PROVIDER);
-    if (usage.count >= cap) {
-      console.warn(`[search] Google Places skipped: ${usage.count}/${cap} used for ${usage.period}`);
-      return [];
-    }
 
     // Nearby Search can't do brand names, free-text categories, or an
     // open-now filter — Text Search can do all three, so anything that needs
@@ -283,6 +278,14 @@ export class SearchService {
       categorySlug;
     if (needsText && !textQuery) return [];
 
+    // Reserved before the call, not counted after it: concurrent searches
+    // each checking "under the cap" and then spending is how a burst used to
+    // overshoot the monthly budget.
+    if (!(await this.apiUsageService.tryConsume(GOOGLE_PLACES_PROVIDER, cap))) {
+      console.warn(`[search] Google Places skipped: monthly cap of ${cap} reached`);
+      return [];
+    }
+
     let results: GooglePlaceResult[];
     try {
       results = needsText
@@ -296,7 +299,6 @@ export class SearchService {
             includedType: knownType?.[0],
           })
         : await searchNearby({ lat, lng, radiusMeters, categorySlug: categorySlug! });
-      await this.apiUsageService.increment(GOOGLE_PLACES_PROVIDER);
     } catch (e) {
       console.error('[search] Google Places call failed:', (e as Error).message || e);
       return [];

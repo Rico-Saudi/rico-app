@@ -234,6 +234,13 @@ export class MailerService {
     const apiKey = process.env.RESEND_API_KEY;
 
     if (!apiKey) {
+      // devLine carries the live code or reset link. Fine in a local
+      // terminal; in production it would put working credentials in the
+      // hosted log, readable by anyone with dashboard access there.
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[mailer] RESEND_API_KEY is not set — "${subject}" to ${email} was not sent`);
+        return;
+      }
       console.log(`[dev email fallback] ${devLine}`);
       return;
     }

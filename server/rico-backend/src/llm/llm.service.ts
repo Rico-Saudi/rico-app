@@ -1,5 +1,22 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { ApiUsageService, currentDay } from '../api-usage/api-usage.service';
 import { LlmPurpose, ProviderConfig, providerFor } from './llm.constants';
+
+/// Usage-table key for the daily LLM budget — every purpose shares it, since
+/// they all bill the same account.
+export const LLM_PROVIDER_USAGE_KEY = 'llm_calls';
+
+/// Upper bound on model calls per UTC day, across every purpose. /classify
+/// and /compose are public, so without a ceiling a script looping on them
+/// spends without limit; the per-IP limiters slow one source down, this stops
+/// many. At ~7k prompt tokens a call it is roughly $20–25/day on gpt-oss-120b
+/// — far above real traffic today. Override with LLM_DAILY_CALL_CAP.
+const DEFAULT_LLM_DAILY_CALL_CAP = 20000;
+
+function dailyCallCap(): number {
+  const raw = Number(process.env.LLM_DAILY_CALL_CAP);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_LLM_DAILY_CALL_CAP;
+}
 
 export interface LlmMessage {
   role: string;
@@ -30,6 +47,10 @@ export interface LlmResult {
 /// describe what they want said.
 @Injectable()
 export class LlmService {
+  /// Optional so scripts and specs can still `new LlmService()` without a
+  /// database; the running server always injects it.
+  constructor(@Optional() private readonly apiUsage?: ApiUsageService) {}
+
   async complete(request: LlmRequest): Promise<LlmResult> {
     const provider = providerFor(request.purpose);
 
@@ -41,6 +62,15 @@ export class LlmService {
       // model — a config mistake, and one worth failing loudly rather than
       // silently guessing a model that bills.
       throw new HttpException({ error: 'server_misconfigured' }, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    // Reserved once per complete(), not per model tried: a 429 walk down the
+    // chain is one answer to the customer. Over budget fails like an
+    // unreachable upstream, so /classify falls back to its keyword table and
+    // the app's compose falls back to its fixed template.
+    if (this.apiUsage && !(await this.apiUsage.tryConsume(LLM_PROVIDER_USAGE_KEY, dailyCallCap(), 1, currentDay()))) {
+      console.warn(`[llm] ${request.purpose}: daily call cap of ${dailyCallCap()} reached`);
+      throw new HttpException({ error: 'llm_budget_exhausted' }, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     // Groq has no server-side failover, so the chain is walked here: a 429

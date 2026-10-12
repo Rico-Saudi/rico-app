@@ -31,6 +31,11 @@ export class SessionGuard implements CanActivate {
     if (!account || !account.isActive) {
       throw new UnauthorizedException({ error: 'unauthorized' });
     }
+    // A password reset ends every session opened before it — otherwise
+    // whoever prompted the reset keeps their cookie for up to a year.
+    if (account.passwordChangedAt && (req.session.issuedAt ?? 0) < new Date(account.passwordChangedAt).getTime()) {
+      throw new UnauthorizedException({ error: 'unauthorized' });
+    }
 
     const requiredApp = this.reflector.getAllAndOverride<'owner' | 'vendor' | undefined>(REQUIRE_APP_KEY, [
       context.getHandler(),

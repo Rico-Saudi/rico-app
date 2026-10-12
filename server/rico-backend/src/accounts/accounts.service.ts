@@ -30,6 +30,13 @@ export class AccountsService implements OnModuleInit {
     const existing = await this.accountModel.countDocuments({ app: 'owner' });
     if (existing > 0) return;
 
+    // The defaults are written in this repo, so in production they would be
+    // a working owner login for anyone who reads it. Refuse to boot instead
+    // of warning into a log nobody reads.
+    if (process.env.NODE_ENV === 'production' && (!process.env.OWNER_EMAIL || !process.env.OWNER_PASSWORD)) {
+      throw new Error('OWNER_EMAIL and OWNER_PASSWORD must be set in production to create the first owner account.');
+    }
+
     const email = (process.env.OWNER_EMAIL || DEFAULT_OWNER_EMAIL).trim().toLowerCase();
     const password = process.env.OWNER_PASSWORD || DEFAULT_OWNER_PASSWORD;
     await this.accountModel.create({
@@ -61,11 +68,14 @@ export class AccountsService implements OnModuleInit {
       verifyPassword(password || '', DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException({ error: 'invalid_credentials' });
     }
-    if (account.app !== app) {
-      throw new UnauthorizedException({ error: 'wrong_app', app: account.app });
-    }
     if (!verifyPassword(password || '', account.passwordHash)) {
       throw new UnauthorizedException({ error: 'invalid_credentials' });
+    }
+    // After the password, not before: answering `wrong_app` to anyone who
+    // types an email told them the account exists and which dashboard it
+    // belongs to. Only someone who knows the password learns that now.
+    if (account.app !== app) {
+      throw new UnauthorizedException({ error: 'wrong_app', app: account.app });
     }
 
     account.lastLoginAt = new Date();
@@ -116,10 +126,15 @@ export class AccountsService implements OnModuleInit {
 
     const account = await this.accountModel.findByIdAndUpdate(
       record.accountId,
-      { passwordHash: hashPassword(password) },
+      { passwordHash: hashPassword(password), passwordChangedAt: new Date() },
       { new: true },
     );
     if (!account) throw new NotFoundException({ error: 'account_not_found' });
+
+    // A reset is usually "someone else may have my password". Any other
+    // link still sitting in the inbox is retired with it; SessionGuard ends
+    // the sessions opened before this moment (see passwordChangedAt).
+    await this.tokenModel.updateMany({ accountId: record.accountId, usedAt: null }, { $set: { usedAt: new Date() } });
 
     return { accountId: String(account._id), app: account.app };
   }
