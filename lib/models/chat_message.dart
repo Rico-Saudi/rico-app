@@ -75,8 +75,9 @@ class ChatMessage {
   final void Function(Professional professional)? onSelectProfessional;
 
   /// يُستدعى عند تأكيد إرسال الطلب لصاحب المهنة المختار، ومعه وصف الشغلة
-  /// إن كتبه العميل.
-  final void Function(String? note)? onConfirmProfessionalRequest;
+  /// إن كتبه العميل. يُنتظر عند التأكيد من الدردشة ("أكّد الطلب") ليُبنى
+  /// الرد على النتيجة الفعلية.
+  final Future<void> Function(String? note)? onConfirmProfessionalRequest;
 
   /// يُستدعى حين يضغط زائر (غير مسجّل) زر الإرسال — يفتح ورقة الدخول ثم
   /// يكمل الإرسال تلقائياً، تماماً مثل [onRequestLogin].

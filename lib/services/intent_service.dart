@@ -890,6 +890,51 @@ class IntentService {
     return !hasSearchSignal(text, lastCategorySlug: lastCategorySlug);
   }
 
+  /// أفعال التأكيد بصيغتها المطبَّعة (انظر [normalizeArabic]) — "أكّد"
+  /// و"اكد" و"أكد" كلها تصير "اكد".
+  static const Set<String> _confirmVerbs = {
+    'اكد', 'اكده', 'اكدها', 'اكدو', 'اكدوه', 'اكدلي', 'تاكيد',
+    'ثبت', 'ثبته', 'ثبتها', 'ثبتو', 'ثبتلي', 'تثبيت',
+    'ارسل', 'ارسله', 'ارسلها', 'ارسلو', 'ارسال',
+    'ابعث', 'ابعثه', 'ابعثها', 'ابعثو', 'ابعت', 'ابعته', 'ابعتها', 'ابعتو',
+    'اعتمد', 'اعتمده', 'اعتمدو',
+    'اطلب', 'اطلبه', 'اطلبها', 'اطلبو', 'confirm',
+  };
+
+  /// كلمات تحيط بفعل التأكيد ولا تغيّر معناه: "تمام أكّد الطلب لو سمحت".
+  /// أي كلمة خارجها ("لا"، "المطعم"، "العروض") تُسقط المطابقة — فـ«لا تأكد
+  /// الطلب» و«أكد لي إن المطعم فاتح» و«ارسل لي العروض» تروح للمصنّف كالعادة.
+  static const Set<String> _confirmFillers = {
+    'الطلب', 'طلبي', 'الطلبيه', 'طلبيتي', 'الاوردر', 'اوردر', 'order', 'my', 'the',
+    'لي', 'ياه', 'اياه', 'لو', 'سمحت', 'سمحتي', 'من', 'فضلك', 'بليز', 'please', 'plz',
+    'نعم', 'ايوه', 'ايوا', 'ايه', 'اي', 'اه', 'اكيد', 'تمام', 'اوكي', 'اوك', 'ok', 'okay', 'yes',
+    'يلا', 'يالله', 'يله', 'طيب', 'خلاص', 'زين', 'ماشي', 'حلو', 'ريكو', 'يا',
+    'الحين', 'هسا', 'هسه', 'هلق', 'هلا', 'بسرعه', 'السله', 'سلتي',
+    'هذا', 'هذي', 'هاد', 'هيك', 'كذا', 'بالله', 'والله',
+  };
+
+  /// هل الرسالة أمر تأكيد للطلب المفتوح وحده ("أكّد الطلب"، "تمام ثبّته")؟
+  ///
+  /// يُفحص قبل المصنّف: الأمر جوابه ضغطة زر التأكيد نفسها، لا بحث جديد. ولهذا
+  /// المطابقة ضيّقة عمداً — فعل تأكيد واحد على الأقل وكل ما سواه من
+  /// [_confirmFillers]. رسالة تذكر أصنافاً أو محلاً ("اطلب لي كنافة") طلب
+  /// جديد يفهمه المصنّف، لا تأكيد للسلّة.
+  static bool isConfirmCommand(String text) {
+    final words = normalizeArabic(text).split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty || words.length > 8) return false;
+    var sawVerb = false;
+    for (final word in words) {
+      // "تمام واكده": واو العطف ملتصقة بالفعل.
+      final bare = word.length > 2 && word.startsWith('و') ? word.substring(1) : word;
+      if (_confirmVerbs.contains(word) || _confirmVerbs.contains(bare)) {
+        sawVerb = true;
+      } else if (!_confirmFillers.contains(word)) {
+        return false;
+      }
+    }
+    return sawVerb;
+  }
+
   static bool hasSearchSignal(String text, {String? lastCategorySlug}) {
     if (_matches(_dealsWords, text)) return true;
     if (professionFor(text) != null) return true;
