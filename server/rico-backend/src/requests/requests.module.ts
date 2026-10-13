@@ -11,6 +11,7 @@ import { anonymousOrderLimiter, submitDealLimiter } from '../common/middleware/r
 import { OrderNotifierService } from './order-notifier.service';
 import { MailerModule } from '../mailer/mailer.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { PushModule } from '../push/push.module';
 import { Account, AccountSchema } from '../accounts/schemas/account.schema';
 import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-claim.schema';
 
@@ -28,6 +29,7 @@ import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-c
     DealsModule,
     CustomersModule,
     PricingModule,
+    PushModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService, OrderNotifierService],

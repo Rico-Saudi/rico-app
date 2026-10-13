@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { PushService } from '../push/push.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Account, AccountDocument } from '../accounts/schemas/account.schema';
@@ -59,6 +60,8 @@ export class OrderNotifierService {
     @InjectModel(Account.name) private readonly accountModel: Model<AccountDocument>,
     private readonly mailer: MailerService,
     @InjectModel(Customer.name) private readonly customerModel: Model<CustomerDocument>,
+    // Optional so specs that only check emails can leave it out.
+    @Optional() private readonly push?: PushService,
   ) {}
 
   // Tells the customer their order moved. Anonymous orders (no account) have
@@ -90,6 +93,9 @@ export class OrderNotifierService {
   async notifyNewOrder(notice: NewOrderNotice): Promise<number> {
     const claims = await this.claimModel.find({ businessId: notice.businessId, status: 'active' }, 'accountId').lean();
     if (claims.length === 0) return 0;
+    // Every browser the shop's people subscribed — independent of the email
+    // switch, which is about the inbox. Not awaited by the emails below.
+    void this.push?.wake(claims.map((c) => String(c.accountId)));
     const accounts = await this.accountModel
       .find({ _id: { $in: claims.map((c) => c.accountId) }, app: 'vendor', isActive: true, orderEmails: { $ne: false } }, 'email')
       .lean();
