@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuard
 import { Request } from 'express';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { RateRequestDto } from './dto/rate-request.dto';
 import { CustomerAuthGuard, OptionalCustomerAuthGuard } from '../customers/customer-auth.guard';
 import { CurrentCustomer } from '../common/decorators/current-customer.decorator';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
@@ -31,6 +32,13 @@ export class RequestsController {
   @HttpCode(HttpStatus.OK)
   cancel(@Param('id', new MongoIdPipe()) id: string, @CurrentCustomer() customer: CustomerDocument) {
     return this.requestsService.cancelByCustomer(id, String(customer._id));
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post(':id/rate')
+  @HttpCode(HttpStatus.OK)
+  rate(@Param('id', new MongoIdPipe()) id: string, @Body() dto: RateRequestDto, @CurrentCustomer() customer: CustomerDocument) {
+    return this.requestsService.rate(id, String(customer._id), dto.stars, dto.comment);
   }
 
   @UseGuards(CustomerAuthGuard)

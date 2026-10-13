@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   CancelledBy,
   CustomerRequest,
@@ -180,6 +180,34 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
     return { id: request._id, stage: request.stage, cancelledBy: request.cancelledBy };
   }
 
+  /// The customer rates an order they got. Only once the shop took it on —
+  /// a rating for an order nobody answered is a rating of Rico's timeout,
+  /// not of the shop. Re-rating replaces the earlier verdict.
+  async rate(id: string, customerId: string, stars: number, comment?: string) {
+    const request = await this.requestModel.findOne({ _id: id, customerId });
+    if (!request) throw new NotFoundException({ error: 'request_not_found' });
+    const stage = this.readStage(request);
+    if (stage === 'new' || stage === 'cancelled') throw new ConflictException({ error: 'not_rateable', stage });
+
+    request.rating = { stars, comment: comment?.trim() || null, ratedAt: new Date() };
+    await request.save();
+    await this.rollUpRating(String(request.businessId));
+    return { id: request._id, rating: request.rating };
+  }
+
+  /// Recomputes the shop's average from every rated order — cheap at this
+  /// scale, and it can't drift the way an incremental average does.
+  private async rollUpRating(businessId: string): Promise<void> {
+    const [agg] = await this.requestModel.aggregate<{ avg: number; count: number }>([
+      { $match: { businessId: new Types.ObjectId(businessId), 'rating.stars': { $gte: 1 } } },
+      { $group: { _id: null, avg: { $avg: '$rating.stars' }, count: { $sum: 1 } } },
+    ]);
+    await this.businessModel.updateOne(
+      { _id: businessId },
+      { $set: { ricoRatingAvg: agg ? Math.round(agg.avg * 10) / 10 : null, ricoRatingCount: agg?.count ?? 0 } },
+    );
+  }
+
   /// Calls off orders nobody answered in time, and tells their customers.
   /// Conditional on stage 'new' in the update itself, so an order the shop
   /// confirms in the same second is never cancelled under it.
@@ -337,6 +365,7 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
         cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
         stageUpdatedAt: r.stageUpdatedAt ?? null,
+        rating: r.rating ?? null,
         createdAt: r.createdAt,
       };
     });
@@ -370,6 +399,7 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
         cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
         stageUpdatedAt: r.stageUpdatedAt ?? null,
+        rating: r.rating ?? null,
         createdAt: r.createdAt,
       };
     });

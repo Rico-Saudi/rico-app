@@ -402,6 +402,33 @@ describe('RequestsService baskets', () => {
     });
   });
 
+  describe('rating', () => {
+    const order = () =>
+      service.create({ businessId, items: [{ itemType: 'product', itemId: String(tea._id), quantity: 1 }] }, customer);
+
+    it('waits until the shop took the order on', async () => {
+      const { requestId } = await order();
+      await expect(service.rate(String(requestId), String(customer._id), 5)).rejects.toMatchObject({
+        response: { error: 'not_rateable', stage: 'new' },
+      });
+    });
+
+    it("averages onto the shop, and a re-rating replaces the customer's first one", async () => {
+      const a = await order();
+      const b = await order();
+      await service.setStage(String(a.requestId), [businessId], 'completed');
+      await service.setStage(String(b.requestId), [businessId], 'ready');
+      await service.rate(String(a.requestId), String(customer._id), 5, 'ممتاز');
+      await service.rate(String(b.requestId), String(customer._id), 2);
+      await service.rate(String(b.requestId), String(customer._id), 4);
+
+      const shop = await businessModel.findById(businessId).lean();
+      expect(shop).toMatchObject({ ricoRatingAvg: 4.5, ricoRatingCount: 2 });
+      const mine = await service.findForCustomer(String(customer._id));
+      expect(mine.find((o) => String(o.id) === String(a.requestId))!.rating).toMatchObject({ stars: 5, comment: 'ممتاز' });
+    });
+  });
+
   describe('the shop moving an order on', () => {
     it('tells the customer, with the shop note', async () => {
       stageNotices.length = 0;

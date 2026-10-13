@@ -116,4 +116,25 @@ void main() {
     expect(find.text('اطلب نفسه مرة ثانية'), findsOneWidget);
     expect(find.textContaining('ما رد على طلبك بالوقت'), findsOneWidget);
   });
+
+  testWidgets('النجوم تظهر بعد ما يتعامل المحل مع الطلب، ومع تقييم سابق', (tester) async {
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light(), home: OrderDetailsScreen(order: order())));
+    expect(find.text('كيف كان طلبك؟'), findsNothing);
+
+    final rated = CustomerOrder.fromJson({
+      'id': 'o1',
+      'businessName': 'مطعم الماهر',
+      'items': [],
+      'total': 0,
+      'stage': 'completed',
+      'rating': {'stars': 4, 'comment': 'لذيذ'},
+      'createdAt': '2026-10-12T11:30:00.000Z',
+    });
+    expect(rated.ratingStars, 4);
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light(), home: OrderDetailsScreen(order: rated)));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('تقييمك'), 200);
+    expect(find.text('تقييمك'), findsOneWidget);
+    expect(find.byIcon(Icons.star_rounded), findsNWidgets(4 + 1)); // ٤ نجوم + أيقونة العنوان
+  });
 }

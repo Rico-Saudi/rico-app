@@ -76,6 +76,22 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
+  Future<void> _rate(int stars, String? comment) async {
+    final token = AuthStore.instance.token;
+    if (token == null) {
+      _toast('انتهت جلستك، سجّل دخولك من جديد.');
+      return;
+    }
+    try {
+      await _service.rateOrder(token: token, orderId: _order.id, stars: stars, comment: comment);
+      if (!mounted) return;
+      setState(() => _order = _order.copyWith(ratingStars: stars, ratingComment: comment));
+      _toast('شكراً! تقييمك يساعد غيرك يختار 🌟');
+    } on RequestException catch (e) {
+      _toast(e.message);
+    }
+  }
+
   /// يرجع للمحادثة ويطلب نفس الأصناف من نفس المحل — تمر بنفس طريق الطلب
   /// العادي، فالمحل يطابقها على قائمته اليوم ويقول وش اللي ما عاد موجود.
   void _reorder() {
@@ -125,6 +141,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               ),
               const SizedBox(height: 10),
               _TotalCard(order: order),
+              if (order.canRate) ...[
+                const SizedBox(height: 10),
+                _RatingCard(
+                  stars: order.ratingStars,
+                  onRate: _rate,
+                ),
+              ],
               if (order.businessPhone != null) ...[
                 const SizedBox(height: 14),
                 ElevatedButton.icon(
@@ -393,6 +416,80 @@ class _TotalCard extends StatelessWidget {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// خمس نجوم يقيّم فيها العميل طلبه، وتعليق اختياري. التقييم يتجمّع على المحل
+/// ويرتّب محلات ريكو بـ«الأعلى تقييماً».
+class _RatingCard extends StatefulWidget {
+  final int? stars;
+  final Future<void> Function(int stars, String? comment) onRate;
+
+  const _RatingCard({required this.stars, required this.onRate});
+
+  @override
+  State<_RatingCard> createState() => _RatingCardState();
+}
+
+class _RatingCardState extends State<_RatingCard> {
+  late int _stars = widget.stars ?? 0;
+  final TextEditingController _comment = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_stars == 0 || _sending) return;
+    setState(() => _sending = true);
+    await widget.onRate(_stars, _comment.text);
+    if (mounted) setState(() => _sending = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rated = widget.stars != null;
+    return RicoCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RicoSectionLabel(label: rated ? 'تقييمك' : 'كيف كان طلبك؟', icon: Icons.star_rounded),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 1; i <= 5; i++)
+                IconButton(
+                  tooltip: '$i من 5',
+                  onPressed: _sending ? null : () => setState(() => _stars = i),
+                  icon: Icon(
+                    i <= _stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 32,
+                    color: i <= _stars ? RicoColors.goldInk : RicoColors.inkFaint,
+                  ),
+                ),
+            ],
+          ),
+          if (_stars > 0 && _stars != widget.stars) ...[
+            const SizedBox(height: 6),
+            TextField(
+              controller: _comment,
+              maxLength: 300,
+              decoration: const InputDecoration(hintText: 'كلمة للمحل (اختياري)', counterText: ''),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _sending ? null : _submit,
+              child: Text(_sending ? 'يرسل…' : 'أرسل التقييم'),
+            ),
+          ],
         ],
       ),
     );

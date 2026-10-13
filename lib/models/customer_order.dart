@@ -88,6 +88,10 @@ class CustomerOrder {
   /// للطلب الملغي فقط — null لغيره، وللطلبات الأقدم من الحقل.
   final CancelledBy? cancelledBy;
 
+  /// تقييم العميل للطلب (١–٥)، وnull إذا ما قيّمه.
+  final int? ratingStars;
+  final String? ratingComment;
+
   const CustomerOrder({
     required this.id,
     this.businessId,
@@ -99,7 +103,12 @@ class CustomerOrder {
     this.vendorNote,
     required this.createdAt,
     this.cancelledBy,
+    this.ratingStars,
+    this.ratingComment,
   });
+
+  /// يُقيَّم بعد ما تعامل معه المحل — لا قبل ولا لطلب ملغي.
+  bool get canRate => status == OrderStatus.handled || status == OrderStatus.ready || status == OrderStatus.completed;
 
   /// طلب ما انتهى بعد — المحل لسا ممكن يغيّر حالته، فيستاهل المتابعة.
   bool get isOpen => status == OrderStatus.pending || status == OrderStatus.handled || status == OrderStatus.ready;
@@ -108,7 +117,7 @@ class CustomerOrder {
   /// والكلام يصير معه مباشرة (الخادم يرفض أصلاً).
   bool get canCancel => status == OrderStatus.pending;
 
-  CustomerOrder copyWith({OrderStatus? status, CancelledBy? cancelledBy}) => CustomerOrder(
+  CustomerOrder copyWith({OrderStatus? status, CancelledBy? cancelledBy, int? ratingStars, String? ratingComment}) => CustomerOrder(
         id: id,
         businessId: businessId,
         businessName: businessName,
@@ -119,6 +128,8 @@ class CustomerOrder {
         vendorNote: vendorNote,
         createdAt: createdAt,
         cancelledBy: cancelledBy ?? this.cancelledBy,
+        ratingStars: ratingStars ?? this.ratingStars,
+        ratingComment: ratingComment ?? this.ratingComment,
       );
 
   /// نص يطلب نفس الأصناف من نفس المحل — يُرسل للمحادثة كأن العميل كتبه،
@@ -152,6 +163,8 @@ class CustomerOrder {
       vendorNote: _nonBlank(json['vendorNote'] as String?),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ?? DateTime.now(),
       cancelledBy: _cancelledByFrom(json['cancelledBy']),
+      ratingStars: ((json['rating'] as Map<String, dynamic>?)?['stars'] as num?)?.toInt(),
+      ratingComment: _nonBlank((json['rating'] as Map<String, dynamic>?)?['comment'] as String?),
     );
   }
 }

@@ -230,6 +230,16 @@ export default function RequestsTab({ authedFetch, activeClaims = [] }) {
                 {r.total > 0 && <div className="text-sm font-extrabold text-primary pt-1">الإجمالي: {r.total} ر.س</div>}
               </div>
 
+              {r.rating && (
+                <div className="text-sm">
+                  <span className="font-bold" style={{ color: '#C9A24A' }} aria-label={`تقييم العميل ${r.rating.stars} من 5`}>
+                    {'★'.repeat(r.rating.stars)}
+                    <span className="text-on-surface-variant/40">{'★'.repeat(5 - r.rating.stars)}</span>
+                  </span>
+                  {r.rating.comment && <span className="text-xs text-on-surface-variant mr-2">«{r.rating.comment}»</span>}
+                </div>
+              )}
+
               {r.stage === 'cancelled' && CANCELLED_BY_LABELS[r.cancelledBy] && (
                 <p className="text-xs font-semibold text-error">{CANCELLED_BY_LABELS[r.cancelledBy]}</p>
               )}

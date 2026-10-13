@@ -105,6 +105,24 @@ class RequestService {
     if (response.statusCode != 200) throw RequestException('ما قدرت ألغي الطلب الحين، حاول مرة ثانية.');
   }
 
+  /// تقييم العميل لطلب تعامل معه المحل (POST /requests/:id/rate).
+  Future<void> rateOrder({required String token, required String orderId, required int stars, String? comment}) async {
+    http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_baseUrl/requests/$orderId/rate'),
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+            body: jsonEncode({'stars': stars, if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim()}),
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      throw RequestException('ما قدرت أرسل تقييمك، تأكد من اتصالك وحاول مرة ثانية.');
+    }
+    if (response.statusCode == 401) throw RequestException('انتهت جلستك، سجّل دخولك من جديد.');
+    if (response.statusCode != 200) throw RequestException('ما قدرت أرسل تقييمك الحين، حاول مرة ثانية.');
+  }
+
   /// سجلّ طلبات العميل (GET /requests/mine) — الأحدث أولاً.
   Future<List<CustomerOrder>> fetchMyOrders(String token) async {
     http.Response response;

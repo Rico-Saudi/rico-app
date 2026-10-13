@@ -134,6 +134,16 @@ export class CustomerRequest {
   // instead of a second order the shop would prepare twice.
   @Prop({ type: String, default: null })
   clientRef: string | null;
+
+  // The customer's verdict once they had the order: 1–5 stars and an
+  // optional word. Rolled up onto the business (ricoRatingAvg) so Rico's own
+  // partners can rank on "best rated" without a Google rating.
+  @Prop({
+    type: { stars: { type: Number, min: 1, max: 5 }, comment: { type: String, maxlength: 300 }, ratedAt: Date },
+    default: null,
+    _id: false,
+  })
+  rating: { stars: number; comment: string | null; ratedAt: Date } | null;
 }
 
 export const CustomerRequestSchema = SchemaFactory.createForClass(CustomerRequest);

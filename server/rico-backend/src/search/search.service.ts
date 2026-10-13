@@ -60,6 +60,9 @@ function photoUrlFor(placeId: string): string {
 /// that also exists in another city out.
 const AREA_RADIUS_METERS = 30000;
 
+/// Fewer ratings than this and one unhappy customer is the whole average.
+const MIN_RICO_RATINGS = 3;
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -216,8 +219,10 @@ export class SearchService {
       openingHours: b.openingHours,
       openNow: null, // stored hours are free text; we don't guess from them
       priceLevel: b.priceLevel,
-      rating: b.rating,
-      ratingCount: b.ratingCount,
+      // Google's rating when there is one; otherwise Rico's own customers',
+      // once enough of them rated for an average to mean something.
+      rating: b.rating ?? (b.ricoRatingCount >= MIN_RICO_RATINGS ? b.ricoRatingAvg : null),
+      ratingCount: b.rating != null ? b.ratingCount : b.ricoRatingCount >= MIN_RICO_RATINGS ? b.ricoRatingCount : b.ratingCount,
       distanceMeters: haversineMeters(lat, lng, b.location.coordinates[1], b.location.coordinates[0]),
       // Auto-cached rows are Google data wearing a Business document — they
       // have no catalog, so they must not unlock ordering in the app.
