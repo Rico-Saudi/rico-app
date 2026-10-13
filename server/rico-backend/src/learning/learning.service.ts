@@ -28,6 +28,8 @@ export interface GapRecord {
  * الدوال تخدم لوحة المالك. بينهما TrainingService، اللي يقرأ الفجوات
  * ويقترح دروساً — وما شي من اقتراحاته يدخل البرومبت قبل ما يوافق المالك هنا.
  */
+const LESSON_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class LearningService implements OnModuleInit {
   private readonly logger = new Logger(LearningService.name);
@@ -48,6 +50,12 @@ export class LearningService implements OnModuleInit {
       // before anyone taught it anything, which is a working assistant.
       this.logger.warn(`lessons not loaded, the classifier runs untaught: ${error}`);
     }
+    // A write refreshes only the process that handled it. With more than one
+    // instance behind the load balancer, the others would keep the old
+    // lessons until their next deploy; this bounds that to a few minutes.
+    setInterval(() => {
+      this.refresh().catch((e) => this.logger.warn(`lesson refresh failed: ${e}`));
+    }, LESSON_REFRESH_INTERVAL_MS).unref();
   }
 
   /** Reloads the approved examples into the in-process registry, which is
@@ -222,14 +230,14 @@ export class LearningService implements OnModuleInit {
     if (edits.message) lesson.message = edits.message.trim();
     if (edits.dialect) lesson.dialect = edits.dialect;
     if (edits.reply !== undefined) lesson.reply = edits.reply.trim() || null;
-    if (edits.intents) lesson.intents = this.validateIntents(edits.intents);
+    if (edits.intents) lesson.intents = this.validateIntents(edits.intents, lesson.dialect);
 
     if (lesson.kind === 'example') {
       // An approved example is a promise about what the classifier will
       // return, so it goes through the same gate a live answer does. A
       // lesson that validates to nothing would teach the model a shape the
       // server then throws away.
-      const intents = this.validateIntents(lesson.intents);
+      const intents = this.validateIntents(lesson.intents, lesson.dialect);
       if (!intents.length && !lesson.reply) {
         throw new BadRequestException({ error: 'lesson_teaches_nothing' });
       }
@@ -262,7 +270,7 @@ export class LearningService implements OnModuleInit {
     const gap = await this.gapModel.findById(gapId);
     if (!gap) throw new NotFoundException({ error: 'gap_not_found' });
 
-    const intents = this.validateIntents(dto.intents ?? []);
+    const intents = this.validateIntents(dto.intents ?? [], dto.dialect ?? gap.dialect);
     const reply = dto.reply?.trim() || null;
     if (!intents.length && !reply) throw new BadRequestException({ error: 'lesson_teaches_nothing' });
 
@@ -325,8 +333,13 @@ export class LearningService implements OnModuleInit {
 
   // ─── Internals ───────────────────────────────────────────────────────────
 
-  private validateIntents(raw: unknown[]): Record<string, unknown>[] {
-    return (raw ?? []).map((i) => validateIntent(i)).filter(Boolean) as unknown as Record<string, unknown>[];
+  /** [dialect] matters for trades: "سمكري" is a plumber in Jordan and a
+   * car-body mechanic in Saudi, so a lesson must resolve it the way the
+   * prompt it lands in will. 'any' resolves like the classifier does with no
+   * brand (Saudi wording). */
+  private validateIntents(raw: unknown[], dialect?: string | null): Record<string, unknown>[] {
+    const d = dialect && dialect !== 'any' ? dialect : undefined;
+    return (raw ?? []).map((i) => validateIntent(i, d)).filter(Boolean) as unknown as Record<string, unknown>[];
   }
 
   private async createProposedProfession(lesson: LessonDocument): Promise<void> {

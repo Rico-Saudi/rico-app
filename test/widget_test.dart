@@ -1,3 +1,4 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,6 +9,8 @@ void main() {
     // شاشة البداية تستعيد جلسة الدخول من SharedPreferences قبل أن تنتقل،
     // فبدون قيم وهمية يعلق الإقلاع على قناة المنصة غير الموجودة في الاختبار.
     SharedPreferences.setMockInitialValues({});
+    // ونفس الشي لمخزن النظام اللي صار يحفظ رمز الدخول.
+    FlutterSecureStorage.setMockInitialValues({});
   });
 
   testWidgets('يبدأ التطبيق بشاشة البداية ثم ينتقل للمحادثة', (WidgetTester tester) async {

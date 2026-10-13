@@ -32,6 +32,7 @@ class OrderStatusChip extends StatelessWidget {
       OrderStatus.pending => (RicoColors.goldInk, RicoColors.goldTint, Icons.schedule_rounded, 'بانتظار المحل'),
       OrderStatus.handled => (RicoColors.success, RicoColors.primaryTint, Icons.check_circle_rounded, 'تواصل معك'),
       OrderStatus.ready => (RicoColors.success, RicoColors.primaryTint, Icons.shopping_bag_rounded, 'جاهز'),
+      OrderStatus.completed => (RicoColors.inkMuted, RicoColors.surfaceSunken, Icons.task_alt_rounded, 'اكتمل'),
       OrderStatus.cancelled => (RicoColors.danger, RicoColors.dangerTint, Icons.cancel_rounded, 'ملغي'),
     };
 

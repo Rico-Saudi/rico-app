@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import 'business_catalog.dart';
@@ -33,7 +35,12 @@ class RequestFlow {
   /// الطلب") يتوقّف عندها: سلّة ناقصة يراجعها هو قبل ما توصل المحل.
   final List<String> missingItems;
 
-  const RequestFlow({
+  /// معرّف محاولة الإرسال لهذي السلّة بالذات. إعادة «أكّد» بعد مهلة ترسله
+  /// نفسه، فلو كان الخادم حفظ الطلب الأول يرجعه بدل ما يسجّل طلب ثاني.
+  /// يتجدد مع أي تعديل على السلّة: سلّة مختلفة طلب مختلف.
+  final String clientRef;
+
+  RequestFlow({
     required this.catalog,
     this.stage = RequestFlowStage.browsing,
     this.cart = const Cart(),
@@ -43,7 +50,14 @@ class RequestFlow {
     this.customerPhone,
     this.errorMessage,
     this.missingItems = const [],
-  });
+    String? clientRef,
+  }) : clientRef = clientRef ?? newClientRef();
+
+  static final Random _random = Random.secure();
+
+  /// ٣٢ خانة hex — يكفي ألا يتكرر لنفس العميل.
+  static String newClientRef() =>
+      List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
 
   /// المنتجات بعد تطبيق مرشِّح الفئة.
   List<CatalogProduct> get visibleProducts {
@@ -72,6 +86,7 @@ class RequestFlow {
       customerPhone: customerPhone ?? this.customerPhone,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       missingItems: missingItems,
+      clientRef: cart == null || identical(cart, this.cart) ? clientRef : null,
     );
   }
 }

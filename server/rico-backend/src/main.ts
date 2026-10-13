@@ -17,6 +17,12 @@ async function bootstrap() {
   const SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
 
   if (!process.env.SESSION_SECRET) {
+    // The fallback is in this public repo, so anyone could sign a session
+    // cookie for any account (and forge Instagram OAuth state) with it.
+    // Locally that's fine; in production it's an open door, so refuse to boot.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SESSION_SECRET must be set in production.');
+    }
     console.warn('SESSION_SECRET is not set — using an insecure dev-only default. Set it before a real deploy.');
   }
 
@@ -39,6 +45,20 @@ async function bootstrap() {
       },
     }),
   );
+
+  // The handful of headers helmet would set that matter here, without the
+  // dependency: no MIME sniffing, no framing of the dashboards (clickjacking
+  // on owner actions), no full URLs — reset tokens included — leaking in
+  // Referer, and HTTPS-only once a browser has seen us over HTTPS.
+  app.use((_req: unknown, res: { setHeader(name: string, value: string): void }, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
 
   // يترجم أخطاء Mongoose/Mongo إلى 4xx مفهومة، ويرفق requestId بكل رد خطأ
   // ليُطابَق بسطر السجل — بدونه كان أي استثناء غير HttpException يصل للعميل

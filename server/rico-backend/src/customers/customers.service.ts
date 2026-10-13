@@ -111,10 +111,21 @@ export class CustomersService {
         passwordHash: hashPassword(input.password),
       });
 
+    // While a signup's code is still live, a second registration on the
+    // same address only re-sends the code; it doesn't get to replace the
+    // password. Otherwise someone racing the real owner could swap in their
+    // own password, and the owner — typing the code that just landed in
+    // their inbox — would verify an account the other person can log into.
+    // Once the code has expired the signup is abandoned and anyone who can
+    // read the inbox may start it over, as before.
     if (existing) {
-      existing.name = input.name.trim();
-      existing.phone = input.phone.trim();
-      existing.passwordHash = hashPassword(input.password);
+      const updatedAt = (existing as unknown as { updatedAt?: Date }).updatedAt;
+      const pending = updatedAt != null && Date.now() - new Date(updatedAt).getTime() < OTP_TTL_MS;
+      if (!pending || verifyPassword(input.password, existing.passwordHash)) {
+        existing.name = input.name.trim();
+        existing.phone = input.phone.trim();
+        existing.passwordHash = hashPassword(input.password);
+      }
     }
     await customer.save();
 

@@ -10,7 +10,7 @@ import { VendorImpression, VendorImpressionSchema } from './schemas/vendor-impre
 import { SearchGap, SearchGapSchema } from './schemas/search-gap.schema';
 import { CatalogGap, CatalogGapSchema } from './schemas/catalog-gap.schema';
 import { CustomerRequest, CustomerRequestSchema } from '../requests/schemas/request.schema';
-import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-limiters';
+import { submitDealLimiter, impressionLimiter, searchLimiter } from '../common/middleware/rate-limiters';
 
 @Module({
   imports: [
@@ -39,6 +39,12 @@ export class PublicModule implements NestModule {
       { path: 'search-gaps', method: RequestMethod.POST },
     );
     consumer.apply(submitDealLimiter).forRoutes({ path: 'submit-deal', method: RequestMethod.POST });
+    // Both scan businesses by unanchored name regex — cheap once, not when
+    // looped — so they share the public search budget per IP.
+    consumer.apply(searchLimiter).forRoutes(
+      { path: 'places/search', method: RequestMethod.GET },
+      { path: 'orders/resolve', method: RequestMethod.POST },
+    );
     consumer.apply(impressionLimiter).forRoutes(
       { path: 'impressions', method: RequestMethod.POST },
       { path: 'search-gaps', method: RequestMethod.POST },

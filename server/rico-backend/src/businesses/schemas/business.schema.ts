@@ -59,6 +59,14 @@ export class Business {
   @Prop({ type: Number, default: null })
   ratingCount: number | null;
 
+  // From Rico's own customers rating their orders — kept apart from
+  // rating/ratingCount, which are Google's and get overwritten by sync.
+  @Prop({ type: Number, min: 1, max: 5, default: null })
+  ricoRatingAvg: number | null;
+
+  @Prop({ type: Number, default: 0 })
+  ricoRatingCount: number;
+
   @Prop({ type: String, default: null })
   enrichmentSource: string | null;
 

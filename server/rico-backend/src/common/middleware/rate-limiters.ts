@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { MongoRateLimitStore } from './mongo-rate-limit.store';
 import crypto from 'node:crypto';
 import { Request } from 'express';
 
@@ -14,6 +15,8 @@ function emailKey(req: Request): string {
 // vector, not just a cost concern). `app.set('trust proxy', 1)` in main.ts
 // makes req.ip reflect the real client IP behind Render's proxy.
 export const loginIpLimiter = rateLimit({
+  store: new MongoRateLimitStore('loginIpLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -21,6 +24,8 @@ export const loginIpLimiter = rateLimit({
 });
 
 export const loginEmailLimiter = rateLimit({
+  store: new MongoRateLimitStore('loginEmailLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 5,
   standardHeaders: true,
@@ -30,18 +35,73 @@ export const loginEmailLimiter = rateLimit({
 
 // Public write endpoint with no auth — cap abuse without adding real
 // friction for a legitimate one-off submission.
-export const submitDealLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 });
+export const submitDealLimiter = rateLimit({
+  store: new MongoRateLimitStore('submitDealLimiter'),
+  passOnStoreError: true,
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+});
 
 // Fires once per chat response (batched, up to 20 businessIds per call), so
 // a normal browsing session legitimately makes many more calls than a
 // one-off form submission — capped generously, just enough to blunt abuse.
-export const impressionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
+export const impressionLimiter = rateLimit({
+  store: new MongoRateLimitStore('impressionLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+});
 
-// The only unauthenticated endpoint that spends money per call (Groq
-// speech-to-text), so it gets the tightest public cap. A real voice user
-// sends a handful of clips per session; 40 per 15 minutes is far past
-// normal use and still cheap if someone burns the whole window.
-export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
+// Unauthenticated and paid per call (Groq speech-to-text), so it gets the
+// tightest public cap. A real voice user sends a handful of clips per
+// session; 40 per 15 minutes is far past normal use and still cheap if
+// someone burns the whole window.
+export const transcribeLimiter = rateLimit({
+  store: new MongoRateLimitStore('transcribeLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+});
+
+// /classify and /compose are the other two public endpoints that spend money
+// on every call — each one carries the ~7k-token system prompt to Groq. One
+// chat message is one classify plus one compose, and a fast chatter sends
+// maybe two a minute; 120 per 15 minutes leaves room for carrier NAT (many
+// phones behind one IP) while capping a single script at a few dollars a
+// day. The daily budget in LlmService catches what gets past this.
+export const llmLimiter = rateLimit({
+  store: new MongoRateLimitStore('llmLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Public search can fall through to Google Places, whose monthly cap is
+// shared with everyone — one script draining it turns live search off for
+// all customers until the month ends. A chat message can fire up to three
+// searches (one per intent) plus a catalog lookup, hence the headroom.
+export const searchLimiter = rateLimit({
+  store: new MongoRateLimitStore('searchLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Every result card asks for its photo, so a normal session makes many of
+// these; the cap is only there so nobody can walk the whole catalog and
+// burn the monthly Places Photos budget.
+export const photoLimiter = rateLimit({
+  store: new MongoRateLimitStore('photoLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // The app's own auth (customer accounts) gets its own IP cap rather than
 // reusing loginIpLimiter: a rate-limit instance is one shared counter, so
@@ -50,6 +110,8 @@ export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 }
 // mobile users sit behind carrier NAT — many real people can share one IP,
 // while a dashboard login is one person at a desk.
 export const customerIpLimiter = rateLimit({
+  store: new MongoRateLimitStore('customerIpLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 60,
   standardHeaders: true,
@@ -60,6 +122,8 @@ export const customerIpLimiter = rateLimit({
 // mistyping a password on a phone keyboard is routine, while the codes and
 // passwords behind it are still rate-limited server-side by OTP attempt caps.
 export const customerEmailLimiter = rateLimit({
+  store: new MongoRateLimitStore('customerEmailLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 15,
   standardHeaders: true,
@@ -71,6 +135,8 @@ export const customerEmailLimiter = rateLimit({
 // costs a real message to someone's inbox and the abuse case (mailbombing
 // an address you don't own) needs only the address, not an account.
 export const customerOtpSendLimiter = rateLimit({
+  store: new MongoRateLimitStore('customerOtpSendLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 6,
   standardHeaders: true,
@@ -84,6 +150,8 @@ export const customerOtpSendLimiter = rateLimit({
 // professionals while comparing, and tighter than impressions because each
 // call costs someone's attention rather than a row in a table.
 export const professionalRequestLimiter = rateLimit({
+  store: new MongoRateLimitStore('professionalRequestLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 30,
   standardHeaders: true,
@@ -95,6 +163,8 @@ export const professionalRequestLimiter = rateLimit({
 // well above the handful of attempts someone makes while getting the photo
 // of their certificate, or of themselves, straight.
 export const fileUploadLimiter = rateLimit({
+  store: new MongoRateLimitStore('fileUploadLimiter'),
+  passOnStoreError: true,
   windowMs: 60 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -105,4 +175,23 @@ export const fileUploadLimiter = rateLimit({
 // in WebOffersService protects the bill; this stops one client from burning
 // that cap for everyone. A real customer asks for offers a few times a
 // session, nowhere near this.
-export const webOffersLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+export const webOffersLimiter = rateLimit({
+  store: new MongoRateLimitStore('webOffersLimiter'),
+  passOnStoreError: true,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+});
+
+// An order with no account behind it: older app builds still send a bare
+// name and phone, and nothing proves the number is the sender's — so
+// someone could flood a shop with orders that ring a stranger's phone. Those
+// get a tight cap of their own; a signed-in customer never touches it.
+export const anonymousOrderLimiter = rateLimit({
+  store: new MongoRateLimitStore('anonymousOrderLimiter'),
+  passOnStoreError: true,
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer '),
+});

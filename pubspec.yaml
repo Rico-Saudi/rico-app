@@ -33,6 +33,7 @@ dependencies:
   # GeneratedPluginRegistrant، وكإضافة تطوير كان الملف المولّد يختلف بين
   # debug وrelease فينكسر بناء الإصدار أو يخرج بلا أي إضافة مسجّلة.
   flutter_native_splash: ^2.4.7
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:

@@ -59,6 +59,11 @@ class QueryIntent {
   /// (بدون بحث شبكي جديد) في شاشة الدردشة.
   final int? referencedPosition;
 
+  /// الشي المطلوب داخل الفئة ("مندي") والحي اللي سمّاه ("النرجس") — من
+  /// المصنّف وحده، ويمرّان للخادم كما هما.
+  final String? keyword;
+  final String? area;
+
   QueryIntent({
     this.kind = IntentKind.place,
     required this.label,
@@ -69,7 +74,17 @@ class QueryIntent {
     this.referencedPosition,
     this.placeName,
     this.orderItems = const [],
+    this.keyword,
+    this.area,
   });
+
+  /// النص اللي يشوفه العميل: "مطعم مندي في النرجس" بدل "مطعم" لحالها،
+  /// عشان رسالة "ما لقيت…" تقول اللي دوّرناه فعلاً.
+  String get displayLabel => [
+        label,
+        if (keyword != null && keyword!.isNotEmpty) keyword!,
+        if (area != null && area!.isNotEmpty) 'في ${area!}',
+      ].join(' ');
 
   bool get wantsCheapest => rank == RankMode.cheapest;
   bool get wantsOpenNow => rank == RankMode.openNow;
@@ -1205,6 +1220,8 @@ class IntentService {
     RankMode rank = RankMode.nearest,
     String? brandHint,
     int? referencedPosition,
+    String? keyword,
+    String? area,
   }) {
     for (final category in _categories) {
       if (category['slug'] == slug) {
@@ -1214,6 +1231,8 @@ class IntentService {
           brandHint: brandHint,
           slug: slug,
           referencedPosition: referencedPosition,
+          keyword: keyword,
+          area: area,
         );
       }
     }

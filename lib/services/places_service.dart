@@ -31,6 +31,8 @@ class PlacesService {
     String? brandHint,
     String? categorySlug,
     String? label,
+    String? keyword,
+    String? area,
     int radiusMeters = 3000,
   }) async {
     // بلا فئة ولا اسم ولا وصف ما فيه شي نبحث فيه أصلاً.
@@ -43,6 +45,8 @@ class PlacesService {
       if (categorySlug != null) 'categorySlug': categorySlug,
       if (brandHint != null) 'brandHint': brandHint,
       if (label != null) 'label': label,
+      if (keyword != null && keyword.isNotEmpty) 'keyword': keyword,
+      if (area != null && area.isNotEmpty) 'area': area,
       'rank': openNow
           ? 'open_now'
           : bestRated

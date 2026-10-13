@@ -30,6 +30,10 @@ class CatalogFlowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final submitted = flow.stage == RequestFlowStage.submitted;
+    // المحل موقف الطلبات: القائمة تنعرض للتصفّح، بس بلا سلّة — كان العميل
+    // يعبّيها كاملة ويعرف عند «أكّد» إن المحل ما يستقبل.
+    final paused = !submitted && flow.catalog.isPausedAt(DateTime.now());
+    final actions = paused ? const CatalogFlowActions() : this.actions;
 
     return RicoCard(
       padding: EdgeInsets.zero,
@@ -38,6 +42,11 @@ class CatalogFlowCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Header(flow: flow, submitted: submitted),
+          if (paused)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+              child: _PausedNotice(message: flow.catalog.pausedMessage()),
+            ),
           Padding(
             padding: const EdgeInsets.all(14),
             child: switch (flow.stage) {
@@ -48,7 +57,7 @@ class CatalogFlowCard extends StatelessWidget {
           ),
           // شريط السلّة ملتصق بأسفل البطاقة أثناء التصفّح فقط: الإجمالي وزر
           // المتابعة يبقيان تحت العين مهما طالت الشبكة فوقهما.
-          if (flow.stage == RequestFlowStage.browsing && flow.cart.isNotEmpty)
+          if (!paused && flow.stage == RequestFlowStage.browsing && flow.cart.isNotEmpty)
             _CartBar(cart: flow.cart, onReview: actions.onReview),
         ],
       ),
@@ -1063,6 +1072,28 @@ class _StageDots extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PausedNotice extends StatelessWidget {
+  final String message;
+
+  const _PausedNotice({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: const BoxDecoration(color: RicoColors.goldTint, borderRadius: RicoRadii.controlR),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.pause_circle_outline_rounded, size: 16, color: RicoColors.goldInk),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message, style: RicoText.caption.copyWith(color: RicoColors.goldInk, height: 1.6))),
+        ],
+      ),
     );
   }
 }

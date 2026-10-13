@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { InstagramConnection, InstagramConnectionSchema } from './schemas/instagram-connection.schema';
 import { InstagramService } from './instagram.service';
-import { InstagramController } from './instagram.controller';
+import { InstagramCallbackController, InstagramController } from './instagram.controller';
 import { VendorModule } from '../vendor/vendor.module';
 import { DealsModule } from '../deals/deals.module';
 import { AccountsModule } from '../accounts/accounts.module';
@@ -17,7 +17,7 @@ import { LlmModule } from '../llm/llm.module';
     AccountsModule,
     LlmModule,
   ],
-  controllers: [InstagramController],
+  controllers: [InstagramController, InstagramCallbackController],
   providers: [InstagramService],
 })
 export class InstagramModule {}

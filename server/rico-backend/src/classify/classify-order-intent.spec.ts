@@ -129,7 +129,7 @@ describe('validateIntent — order from a shop in the last list', () => {
 
   it('treats an out-of-range position as no position at all', () => {
     expect(order({ placeName: null, referencedPosition: 0, orderItems: [] })).toBeNull();
-    expect(order({ placeName: null, referencedPosition: 11, orderItems: [] })).toBeNull();
+    expect(order({ placeName: null, referencedPosition: 31, orderItems: [] })).toBeNull();
     expect(order({ placeName: null, referencedPosition: '2', orderItems: [] })).toBeNull();
   });
 });

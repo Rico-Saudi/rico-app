@@ -12,6 +12,9 @@ export type RequestItemType = (typeof REQUEST_ITEM_TYPES)[number];
 export const REQUEST_STAGES = ['new', 'confirmed', 'ready', 'completed', 'cancelled'] as const;
 export type RequestStage = (typeof REQUEST_STAGES)[number];
 
+export const CANCELLED_BY = ['shop', 'customer', 'timeout'] as const;
+export type CancelledBy = (typeof CANCELLED_BY)[number];
+
 // Forward only: an order the customer already collected can't go back to
 // "being prepared", and a cancelled one is reopened by ordering again.
 export const NEXT_STAGES: Record<RequestStage, readonly RequestStage[]> = {
@@ -117,7 +120,37 @@ export class CustomerRequest {
   // What the shop tells the customer — why it cancelled, or "جاهز بعد ساعة".
   @Prop({ type: String, default: null, maxlength: 300 })
   vendorNote: string | null;
+
+  // Who ended a cancelled order: the shop, the customer changing their mind,
+  // or nobody answering in time (RequestsService.expireUnanswered). The
+  // customer is told something different in each case — "the shop declined"
+  // is not "the shop never saw it".
+  @Prop({ type: String, default: null, enum: [...CANCELLED_BY, null] })
+  cancelledBy: CancelledBy | null;
+
+  // A per-attempt id the app generates when the customer taps confirm. A
+  // retry after a slow answer (the app gives up at 8s, the server may still
+  // be saving) sends the same one, and gets the order it already made back
+  // instead of a second order the shop would prepare twice.
+  @Prop({ type: String, default: null })
+  clientRef: string | null;
+
+  // The customer's verdict once they had the order: 1–5 stars and an
+  // optional word. Rolled up onto the business (ricoRatingAvg) so Rico's own
+  // partners can rank on "best rated" without a Google rating.
+  @Prop({
+    type: { stars: { type: Number, min: 1, max: 5 }, comment: { type: String, maxlength: 300 }, ratedAt: Date },
+    default: null,
+    _id: false,
+  })
+  rating: { stars: number; comment: string | null; ratedAt: Date } | null;
 }
 
 export const CustomerRequestSchema = SchemaFactory.createForClass(CustomerRequest);
 CustomerRequestSchema.index({ businessId: 1, createdAt: -1 });
+CustomerRequestSchema.index(
+  { customerId: 1, clientRef: 1 },
+  { unique: true, partialFilterExpression: { clientRef: { $type: 'string' } } },
+);
+// The unanswered-order sweep reads exactly this.
+CustomerRequestSchema.index({ stage: 1, createdAt: 1 });

@@ -11,6 +11,8 @@
  * nothing yet, and an empty block simply isn't added to the prompt.
  */
 
+import { normalizeArabic } from './normalize';
+
 export interface LearnedExample {
   /** The customer phrasing, verbatim. */
   message: string;
@@ -32,6 +34,7 @@ export const MAX_PROMPT_CHARS = 6000;
 
 class LessonRegistry {
   private examples: LearnedExample[] = [];
+  private byNormalized = new Map<string, LearnedExample[]>();
 
   /** Bumped on every replace, so the built prompt block can be memoized
    * against it rather than rebuilt for every message. */
@@ -39,7 +42,25 @@ class LessonRegistry {
 
   replaceAll(rows: LearnedExample[]): void {
     this.examples = rows.slice(0, MAX_PROMPT_EXAMPLES);
+    this.byNormalized = new Map();
+    for (const example of this.examples) {
+      const key = normalizeArabic(example.message);
+      if (!key) continue;
+      this.byNormalized.set(key, [...(this.byNormalized.get(key) ?? []), example]);
+    }
     this.version++;
+  }
+
+  /** The lesson taught for exactly this question (spelling variants folded
+   * by normalizeArabic), in this dialect, newest first — or null.
+   *
+   * The prompt only shows lessons to the model as examples to imitate, so
+   * the owner's own words came back paraphrased, and not at all when Groq
+   * was down. For the very question the owner answered, there is nothing to
+   * imitate: the answer is served as written. */
+  exactMatch(message: string, dialect: string): LearnedExample | null {
+    const candidates = this.byNormalized.get(normalizeArabic(message)) ?? [];
+    return candidates.find((e) => e.dialect === dialect) ?? candidates.find((e) => e.dialect === 'any') ?? null;
   }
 
   all(): LearnedExample[] {
@@ -57,9 +78,11 @@ function exampleLine(example: LearnedExample): string {
   const output = example.intents.length
     ? JSON.stringify({ offTopic: false, reply: null, intents: example.intents })
     : JSON.stringify({ offTopic: true, reply: example.reply ?? '', intents: [] });
-  // The message is folded onto one line: a newline inside it would look like
-  // the start of the next example to the model.
-  return `- "${example.message.replace(/\s+/g, ' ').trim()}" ← ${output}`;
+  // The message is folded onto one line (a newline inside it would look like
+  // the start of the next example) and JSON-quoted, so a quote inside a
+  // customer's words can't close the string early and read as the owner's
+  // instruction. Capped: these come from the public gap log.
+  return `- ${JSON.stringify(example.message.replace(/\s+/g, ' ').trim().slice(0, 200))} ← ${output}`;
 }
 
 const blockCache = new Map<string, { version: number; block: string }>();

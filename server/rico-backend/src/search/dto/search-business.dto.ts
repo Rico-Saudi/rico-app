@@ -39,6 +39,22 @@ export class SearchBusinessDto {
   @MaxLength(60)
   label?: string;
 
+  /// What they want inside the category — a dish, a cuisine, a feature
+  /// ("مندي", "جلسات خارجية"). Narrows our own results to shops whose name
+  /// or menu mentions it, and goes into Google's text query.
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  keyword?: string;
+
+  /// A neighbourhood they named instead of "near me" ("النرجس"). We have no
+  /// coordinates for it, so our own rows are matched by district/address
+  /// over a wider radius, and Google is asked for "… في النرجس".
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  area?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

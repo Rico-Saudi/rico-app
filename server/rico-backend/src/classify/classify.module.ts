@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import cors from 'cors';
+import { llmLimiter } from '../common/middleware/rate-limiters';
 import { ClassifyService } from './classify.service';
 import { ClassifyController } from './classify.controller';
 import { LlmModule } from '../llm/llm.module';
@@ -24,5 +25,6 @@ import { ShopNamesService } from './shop-names.service';
 export class ClassifyModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(cors()).forRoutes({ path: 'classify', method: RequestMethod.POST });
+    consumer.apply(llmLimiter).forRoutes({ path: 'classify', method: RequestMethod.POST });
   }
 }

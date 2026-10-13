@@ -7,9 +7,11 @@ import { BusinessesModule } from '../businesses/businesses.module';
 import { ProductsModule } from '../products/products.module';
 import { DealsModule } from '../deals/deals.module';
 import { CustomersModule } from '../customers/customers.module';
-import { submitDealLimiter } from '../common/middleware/rate-limiters';
+import { anonymousOrderLimiter, submitDealLimiter } from '../common/middleware/rate-limiters';
 import { OrderNotifierService } from './order-notifier.service';
 import { MailerModule } from '../mailer/mailer.module';
+import { PricingModule } from '../pricing/pricing.module';
+import { PushModule } from '../push/push.module';
 import { Account, AccountSchema } from '../accounts/schemas/account.schema';
 import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-claim.schema';
 
@@ -26,6 +28,8 @@ import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-c
     ProductsModule,
     DealsModule,
     CustomersModule,
+    PricingModule,
+    PushModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService, OrderNotifierService],
@@ -33,6 +37,6 @@ import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-c
 })
 export class RequestsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(submitDealLimiter).forRoutes({ path: 'requests', method: RequestMethod.POST });
+    consumer.apply(submitDealLimiter, anonymousOrderLimiter).forRoutes({ path: 'requests', method: RequestMethod.POST });
   }
 }

@@ -84,23 +84,61 @@ class CatalogDeal {
 
 /// قائمة منتجات وعروض نشاط تجاري واحد — لعرضها داخل الدردشة عند اختيار
 /// نتيجة بحث حقيقية من قاعدة ريكو (source == 'rico').
+/// نص «المحل موقف الطلبات» — نفس الجملة سواء عرفناها من القائمة قبل ما
+/// يبني العميل سلّته، أو من رفض الخادم وقت التأكيد.
+String ordersPausedText({DateTime? resumesAt, String? note, DateTime? now}) {
+  final buffer = StringBuffer('المحل موقف استقبال الطلبات مؤقتاً');
+  if (resumesAt != null) {
+    final local = resumesAt.toLocal();
+    final today = now ?? DateTime.now();
+    final sameDay = local.year == today.year && local.month == today.month && local.day == today.day;
+    final h = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final m = local.minute.toString().padLeft(2, '0');
+    final period = local.hour < 12 ? 'ص' : 'م';
+    buffer.write(sameDay ? '، يرجع الساعة $h:$m$period' : '، يرجع ${local.day}/${local.month} الساعة $h:$m$period');
+  }
+  buffer.write('.');
+  final trimmed = note?.trim();
+  if (trimmed != null && trimmed.isNotEmpty) buffer.write(' «$trimmed»');
+  buffer.write(' جرّب محل ثاني أو ارجع له بعدين.');
+  return buffer.toString();
+}
+
 class BusinessCatalog {
   final String businessId;
   final String businessName;
   final List<CatalogProduct> products;
   final List<CatalogDeal> deals;
 
+  /// المحل موقف الطلبات: [pausedUntil] null مع [ordersPaused] يعني لين ما
+  /// يفتحها بنفسه.
+  final bool ordersPaused;
+  final DateTime? pausedUntil;
+  final String? pausedNote;
+
   BusinessCatalog({
     required this.businessId,
     required this.businessName,
     required this.products,
     required this.deals,
+    this.ordersPaused = false,
+    this.pausedUntil,
+    this.pausedNote,
   });
 
+  /// موقف الحين؟ إيقاف انتهى وقته منتهي، حتى لو البطاقة مفتوحة من قبلها.
+  bool isPausedAt(DateTime now) => ordersPaused && (pausedUntil == null || pausedUntil!.isAfter(now));
+
+  String pausedMessage({DateTime? now}) => ordersPausedText(resumesAt: pausedUntil, note: pausedNote, now: now);
+
   factory BusinessCatalog.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final pause = json['ordersPause'] as Map<String, dynamic>?;
     return BusinessCatalog(
       businessId: json['businessId'] as String,
       businessName: json['businessName'] as String,
+      ordersPaused: pause != null,
+      pausedUntil: DateTime.tryParse(pause?['until'] as String? ?? ''),
+      pausedNote: pause?['note'] as String?,
       products: (json['products'] as List? ?? [])
           .map((p) => CatalogProduct.fromJson(p as Map<String, dynamic>, baseUrl: baseUrl))
           .toList(),
