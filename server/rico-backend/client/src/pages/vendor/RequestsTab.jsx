@@ -175,6 +175,14 @@ export default function RequestsTab({ authedFetch, activeClaims = [] }) {
                     <span className="flex items-center gap-1 font-bold">
                       <User className="w-4 h-4" /> {r.customerName}
                     </span>
+                    {r.verified === false && (
+                      <span
+                        className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                        title="الطلب من نسخة قديمة من التطبيق بلا حساب — الاسم والرقم ما انتحقق منهم. تأكد بمكالمة قبل التجهيز."
+                      >
+                        رقم غير موثّق
+                      </span>
+                    )}
                     <a href={`tel:${r.customerPhone}`} className="flex items-center gap-1 text-primary font-semibold" dir="ltr">
                       <Phone className="w-3.5 h-3.5" /> {r.customerPhone}
                     </a>

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -98,6 +98,12 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
     // A logged-in customer's own name/phone win over anything the client
     // sent: the vendor calls this number back, so it has to be the one tied
     // to a verified account, not a per-order free-text field.
+    // ALLOW_ANONYMOUS_ORDERS=false closes the old no-account path once the
+    // builds that need it are gone from users' phones.
+    if (!customer && process.env.ALLOW_ANONYMOUS_ORDERS === 'false') {
+      throw new UnauthorizedException({ error: 'sign_in_required' });
+    }
+
     const customerName = customer ? customer.name : dto.customerName?.trim();
     const customerPhone = customer ? customer.phone : dto.customerPhone?.trim();
     if (!customerName || !customerPhone) {
@@ -320,6 +326,10 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
         businessName: r.businessId ? r.businessId.nameAr || r.businessId.name : null,
         customerName: r.customerName,
         customerPhone: r.customerPhone,
+        // False for an order from an app build without accounts: the name and
+        // number were typed, not verified, and the shop should know that
+        // before it starts cooking.
+        verified: Boolean(r.customerId),
         items,
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,

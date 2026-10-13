@@ -415,3 +415,24 @@ describe('RequestsService baskets', () => {
     });
   });
 });
+
+describe('RequestsService anonymous orders', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it('are refused once ALLOW_ANONYMOUS_ORDERS=false', async () => {
+    process.env.ALLOW_ANONYMOUS_ORDERS = 'false';
+    const service = new RequestsService(
+      {} as any,
+      { findById: () => ({ lean: async () => ({ _id: 'b1' }) }) } as any,
+      {} as any,
+      {} as any,
+      notifier as any,
+    );
+    await expect(
+      service.create({ businessId: 'b1', customerName: 'x', customerPhone: '0500000000', items: [] } as any),
+    ).rejects.toMatchObject({ response: { error: 'sign_in_required' } });
+  });
+});
