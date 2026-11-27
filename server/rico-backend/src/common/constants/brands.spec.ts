@@ -1,7 +1,7 @@
 import { buildSystemPrompt } from '../../classify/constants/classify.constants';
 import { buildComposePrompt } from '../../compose/constants/compose.constants';
 import { buildVocabHint } from '../../transcribe/constants/transcribe.constants';
-import { brandFor } from './brands';
+import { BRANDS, brandFor, priceLabel } from './brands';
 
 // The regression this guards: the prompts used to hardcode one dialect, so
 // whichever variant the deployment was built from answered for all of them —
@@ -50,6 +50,30 @@ describe('per-brand dialect', () => {
     for (const slug of [undefined, '', 'not-a-brand']) {
       expect(buildSystemPrompt(brandFor(slug))).toContain('أنت "ريكو"، مساعد سعودي');
       expect(buildVocabHint(brandFor(slug))).toContain('البيك');
+    }
+  });
+});
+
+describe('currency per market', () => {
+  it('labels a price in the currency of the brand that asked', () => {
+    expect(priceLabel(12, 'rico')).toBe('12 ر.س');
+    expect(priceLabel(12, 'tadallal')).toBe('12 د.أ');
+  });
+
+  it('falls back to the default market, never to a bare number', () => {
+    // A stale client sends no brand, or one this deployment has not heard
+    // of. Answering in riyals is the old behaviour and stays correct for
+    // every Rico build already installed.
+    expect(priceLabel(5)).toBe('5 ر.س');
+    expect(priceLabel(5, 'who-knows')).toBe('5 ر.س');
+  });
+
+  it('gives every brand both an Arabic symbol and an ISO code', () => {
+    // web-offers asks Google in the ISO code; the customer reads the symbol.
+    for (const [slug, brand] of Object.entries(BRANDS)) {
+      expect(brand.currency).toMatch(/[؀-ۿ]/);
+      expect(brand.currencyCode).toMatch(/^[A-Z]{3}$/);
+      expect(slug).toMatch(/^[a-z-]+$/);
     }
   });
 });

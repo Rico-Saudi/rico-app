@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/price_comparison.dart';
 import '../models/web_offer.dart';
 import '../theme/app_theme.dart';
 import 'rico_surfaces.dart';
+import '../utils/money.dart';
 
 /// يفتح رابط عرض من الإنترنت بمتصفح الجهاز — صفحة خارجية، فما تنفتح داخل
 /// التطبيق كأنها منه.
@@ -195,7 +195,7 @@ class _WebPriceRow extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('${formatPrice(price.price)} ${price.currencyLabel}', style: RicoText.cardTitle),
+                Text('${money(price.price)} ${price.currencyLabel}', style: RicoText.cardTitle),
                 const SizedBox(height: 2),
                 const Icon(Icons.open_in_new_rounded, size: 14, color: RicoColors.inkFaint),
               ],

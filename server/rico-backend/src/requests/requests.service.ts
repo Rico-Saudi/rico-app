@@ -16,6 +16,7 @@ import { CreateRequestDto, CreateRequestItemDto } from './dto/create-request.dto
 import { CustomerDocument } from '../customers/schemas/customer.schema';
 import { OrderNotifierService } from './order-notifier.service';
 import { ordersPauseState } from '../businesses/orders-pause.util';
+import { priceLabel } from '../common/constants/brands';
 import { PriceCalcService } from '../pricing/price-calc.service';
 
 // Same wording as the Flutter Deal.typeLabel getter and the owner dashboard's
@@ -152,6 +153,7 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
         items,
         total,
         baseUrl,
+        brand: dto.brand,
       })
       .catch((e) => console.error('[requests] new-order notification failed:', e?.message || e));
 
@@ -292,7 +294,7 @@ export class RequestsService implements OnModuleInit, OnModuleDestroy {
           itemType: 'product' as const,
           itemId: product._id,
           label: product.name,
-          detail: `${product.finalPrice} ر.س`,
+          detail: priceLabel(product.finalPrice, dto.brand),
           quantity: line.quantity,
           unitPrice: product.finalPrice,
           imageUrl: product.imageUrl ?? null,

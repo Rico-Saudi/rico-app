@@ -8,6 +8,7 @@ import '../models/request_flow.dart';
 import '../services/auth_store.dart';
 import '../theme/app_theme.dart';
 import 'rico_surfaces.dart';
+import '../utils/money.dart';
 
 /// واجهة متجر المحل داخل المحادثة: تصفّح منتجاته بصورها، إضافة أكثر من منتج
 /// لسلّة واحدة، ثم مراجعة وتأكيد طلب تواصل — بمراحله الثلاث مع مؤشر خطوات
@@ -65,11 +66,6 @@ class CatalogFlowCard extends StatelessWidget {
   }
 }
 
-/// تنسيق سعر: بلا كسور حين يكون صحيحاً، فـ«١٠ ر.س» أنظف من «١٠٫٠٠ ر.س».
-String _money(double value) {
-  final rounded = value.roundToDouble();
-  return value == rounded ? rounded.toStringAsFixed(0) : value.toStringAsFixed(2);
-}
 
 class _Header extends StatelessWidget {
   final RequestFlow flow;
@@ -276,14 +272,14 @@ class _ProductTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${_money(product.finalPrice)} ر.س',
+                        priceLabel(product.finalPrice),
                         style: RicoText.labelStrong.copyWith(color: RicoColors.primaryDeep),
                       ),
                       if (product.hasDiscount) ...[
                         const SizedBox(width: 5),
                         Expanded(
                           child: Text(
-                            _money(product.price),
+                            money(product.price),
                             style: RicoText.caption.copyWith(
                               color: RicoColors.inkFaint,
                               decoration: TextDecoration.lineThrough,
@@ -615,7 +611,7 @@ class _CartBar extends StatelessWidget {
               children: [
                 Text('${cart.itemCount} ${_pieces(cart.itemCount)}', style: RicoText.caption),
                 const SizedBox(height: 1),
-                Text('${_money(cart.total)} ر.س', style: RicoText.cardTitle.copyWith(color: RicoColors.primaryDeep)),
+                Text(priceLabel(cart.total), style: RicoText.cardTitle.copyWith(color: RicoColors.primaryDeep)),
               ],
             ),
           ),
@@ -758,7 +754,7 @@ class _CartLineRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   // مجموع السطر لا سعر الوحدة: هو ما سيدفعه فعلاً عن هذا الصنف.
-                  line.unitPrice == null ? (line.detail ?? '') : '${_money(line.lineTotal)} ر.س',
+                  line.unitPrice == null ? (line.detail ?? '') : priceLabel(line.lineTotal),
                   style: RicoText.caption.copyWith(color: isDeal ? RicoColors.goldInk : RicoColors.primaryDeep),
                 ),
               ],
@@ -793,7 +789,7 @@ class _TotalRow extends StatelessWidget {
           Row(
             children: [
               const Expanded(child: Text('الإجمالي', style: RicoText.labelStrong)),
-              Text('${_money(cart.total)} ر.س', style: RicoText.cardTitle.copyWith(color: RicoColors.primaryDeep)),
+              Text(priceLabel(cart.total), style: RicoText.cardTitle.copyWith(color: RicoColors.primaryDeep)),
             ],
           ),
           // العرض بلا سعر مفرد، فلا يدخل الإجمالي — قولها هنا أصدق من رقم
@@ -885,7 +881,7 @@ class _Submitted extends StatelessWidget {
                           ),
                         ),
                         if (line.unitPrice != null)
-                          Text('${_money(line.lineTotal)} ر.س', style: RicoText.caption),
+                          Text(priceLabel(line.lineTotal), style: RicoText.caption),
                       ],
                     ),
                   ),
@@ -895,7 +891,7 @@ class _Submitted extends StatelessWidget {
                     children: [
                       const Expanded(child: Text('الإجمالي', style: RicoText.labelStrong)),
                       Text(
-                        '${_money(cart.total)} ر.س',
+                        priceLabel(cart.total),
                         style: RicoText.labelStrong.copyWith(color: RicoColors.primaryDeep),
                       ),
                     ],

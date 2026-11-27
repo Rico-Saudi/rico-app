@@ -8,6 +8,7 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
+  Length,
   Matches,
   Max,
   MaxLength,
@@ -69,6 +70,14 @@ export class CreateRequestDto {
   @IsOptional()
   @IsMongoId()
   itemId?: string;
+
+  // Which regional build is ordering — decides the currency on every price
+  // label in the answer. Not validated against the known slugs, for the same
+  // reason as in ClassifyRequestDto: brandFor() falls back to the default.
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  brand?: string;
 
   // Same value on a retry of the same tap — see CustomerRequest.clientRef.
   @IsOptional()

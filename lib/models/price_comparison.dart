@@ -74,8 +74,3 @@ class PriceComparison {
   }
 }
 
-/// تنسيق سعر: بلا كسور حين يكون صحيحاً، فـ«١٠ ر.س» أنظف من «١٠٫٠٠ ر.س».
-String formatPrice(double value) {
-  final rounded = value.roundToDouble();
-  return value == rounded ? rounded.toStringAsFixed(0) : value.toStringAsFixed(2);
-}

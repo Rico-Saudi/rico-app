@@ -59,4 +59,12 @@ export class ResolveOrderDto {
   @ValidateNested({ each: true })
   @Type(() => RequestedItemDto)
   items: RequestedItemDto[];
+
+  // Which regional build is ordering — decides the currency on every price
+  // label in the answer. Not validated against the known slugs, for the same
+  // reason as in ClassifyRequestDto: brandFor() falls back to the default.
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  brand?: string;
 }

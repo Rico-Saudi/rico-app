@@ -1,4 +1,5 @@
 import 'business_catalog.dart';
+import '../utils/money.dart';
 
 /// سطر واحد في سلّة نشاط تجاري — منتج أو عرض مع الكمية المطلوبة.
 ///
@@ -46,7 +47,7 @@ class CartLine {
         itemType: 'product',
         itemId: product.id,
         label: product.name,
-        detail: '${product.finalPrice.toStringAsFixed(0)} ر.س',
+        detail: priceLabel(product.finalPrice),
         unitPrice: product.finalPrice,
         imageUrl: product.imageUrl,
       );

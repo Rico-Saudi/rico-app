@@ -9,6 +9,7 @@ import '../utils/arabic_dates.dart';
 import '../utils/dialer.dart';
 import '../widgets/order_widgets.dart';
 import '../widgets/rico_surfaces.dart';
+import '../utils/money.dart';
 
 /// تفاصيل طلب سابق — ما طُلب بالضبط، بكم، ومن أي محل، ومتى.
 ///
@@ -346,7 +347,7 @@ class _LineRow extends StatelessWidget {
                   // فالمجموع وحده لا يكفيه ليتأكد.
                   line.unitPrice == null
                       ? (line.detail ?? 'عرض')
-                      : '${money(line.unitPrice!)} ر.س × ${line.quantity}',
+                      : '${priceLabel(line.unitPrice!)} × ${line.quantity}',
                   style: RicoText.caption.copyWith(color: RicoColors.inkMuted),
                 ),
               ],
@@ -364,7 +365,7 @@ class _LineRow extends StatelessWidget {
               if (line.unitPrice != null) ...[
                 const SizedBox(height: 5),
                 Text(
-                  '${money(line.lineTotal)} ر.س',
+                  priceLabel(line.lineTotal),
                   style: RicoText.labelStrong.copyWith(color: RicoColors.primaryDeep),
                 ),
               ],
@@ -398,7 +399,7 @@ class _TotalCard extends StatelessWidget {
               const Text('الإجمالي', style: RicoText.labelStrong),
               const SizedBox(width: 10),
               Text(
-                '${money(order.total)} ر.س',
+                priceLabel(order.total),
                 style: RicoText.title.copyWith(fontSize: 18, color: RicoColors.primaryDeep),
               ),
             ],
