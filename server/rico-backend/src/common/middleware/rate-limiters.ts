@@ -37,10 +37,10 @@ export const submitDealLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }
 // one-off form submission — capped generously, just enough to blunt abuse.
 export const impressionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 
-// The only unauthenticated endpoint that spends money per call (Groq
-// speech-to-text), so it gets the tightest public cap. A real voice user
-// sends a handful of clips per session; 40 per 15 minutes is far past
-// normal use and still cheap if someone burns the whole window.
+// The priciest unauthenticated call (Groq speech-to-text runs on an audio
+// clip, not a sentence), so it gets the tightest of the public caps. A real
+// voice user sends a handful of clips per session; 40 per 15 minutes is far
+// past normal use and still cheap if someone burns the whole window.
 export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
 
 // The app's own auth (customer accounts) gets its own IP cap rather than
@@ -106,3 +106,28 @@ export const fileUploadLimiter = rateLimit({
 // that cap for everyone. A real customer asks for offers a few times a
 // session, nowhere near this.
 export const webOffersLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+
+// /classify and /compose each spend a Groq call per request, and both are
+// unauthenticated — they were the last money-spending endpoints with no cap
+// at all, which made a loop against either one a bill with no ceiling.
+//
+// Sized off how the app actually talks: one classify and one compose per
+// message the customer sends, so a busy 15 minutes of real chatting is tens
+// of calls, not hundreds. Deliberately looser than the transcribe cap
+// because every message passes through here while only voice notes reach
+// transcribe, and because phone users share carrier-NAT addresses — the cap
+// has to blunt a script without locking out a street's worth of real users.
+// They get separate counters so a burst of one never starves the other.
+export const classifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const composeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+});

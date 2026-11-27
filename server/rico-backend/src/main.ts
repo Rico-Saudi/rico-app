@@ -16,13 +16,23 @@ async function bootstrap() {
   const mongoUri = process.env.MONGODB_URI;
   const SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
 
-  if (!process.env.SESSION_SECRET) {
+  // A missing secret used to be a warning the deploy log swallowed, leaving
+  // every session cookie signed with a default that is public in this file —
+  // anyone could forge a dashboard session. In production that is not a
+  // warning, it is a reason not to open the door at all.
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'SESSION_SECRET is not set. Refusing to start in production: session cookies would be signed with a public default.',
+      );
+    }
     console.warn('SESSION_SECRET is not set — using an insecure dev-only default. Set it before a real deploy.');
   }
 
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || 'dev_only_insecure_secret_change_me',
+      secret: sessionSecret || 'dev_only_insecure_secret_change_me',
       resave: false,
       saveUninitialized: false,
       rolling: true, // refresh expiry on every response so active use never gets logged out mid-session
