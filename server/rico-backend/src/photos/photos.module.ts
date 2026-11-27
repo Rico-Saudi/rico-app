@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import cors from 'cors';
+import { photoLimiter } from '../common/middleware/rate-limiters';
 import { PhotosService } from './photos.service';
 import { PhotosController } from './photos.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
@@ -18,5 +19,6 @@ export class PhotosModule implements NestModule {
     // Same reason /search is CORS-enabled: the Flutter web build fetches this
     // cross-origin, and an <img> there is subject to the same policy.
     consumer.apply(cors()).forRoutes({ path: 'places/:id/photo', method: RequestMethod.GET });
+    consumer.apply(photoLimiter).forRoutes({ path: 'places/:id/photo', method: RequestMethod.GET });
   }
 }

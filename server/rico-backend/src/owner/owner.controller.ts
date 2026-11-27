@@ -21,6 +21,7 @@ import { SyncGoogleDto } from './dto/sync-google.dto';
 import { ListAuditLogDto } from '../owner-audit/dto/list-audit-log.dto';
 import { ProfessionsService } from '../professionals/professions.service';
 import { CreateProfessionDto, UpdateProfessionDto } from '../professionals/dto/upsert-profession.dto';
+import { publicBaseUrl } from '../common/utils/base-url.util';
 
 @Controller('owner')
 @UseGuards(SessionGuard)
@@ -112,7 +113,7 @@ export class OwnerController {
   @Post('vendors/invite')
   async inviteVendor(@Body() dto: InviteVendorDto, @Req() req: Request, @AccountId() accountId: string) {
     const result = await this.ownerService.inviteVendor(dto.email, dto.businessId);
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = publicBaseUrl(req);
     await this.ownerService.sendVendorInviteEmail(result.email, result.inviteToken, baseUrl);
     await this.recordAudit(accountId, 'vendor.invite', 'Account', String(result.accountId), { email: result.email, businessId: dto.businessId });
     return { accountId: result.accountId, email: result.email };

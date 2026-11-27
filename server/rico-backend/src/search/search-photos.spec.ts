@@ -18,7 +18,7 @@ describe('SearchService photo resolution', () => {
 
   // Reports the Google budget as exhausted so the fallback bails out
   // immediately — these tests are about our own data, not about Google.
-  const apiUsage = { getUsage: async () => ({ period: '2026-09', count: 999 }), increment: async () => {} };
+  const apiUsage = { getUsage: async () => ({ period: '2026-09', count: 999 }), increment: async () => {}, tryConsume: async () => false };
   const businesses = { upsertBySource: async () => ({}) };
   const photos = { rememberPendingRef: () => {} };
 

@@ -107,6 +107,11 @@ describe('CustomersService', () => {
 
     it('lets an abandoned, never-verified signup start over', async () => {
       await register();
+      // Abandoned = its code has expired; until then the signup is in flight.
+      await customerModel.collection.updateOne(
+        { email: 'maher@example.com' },
+        { $set: { updatedAt: new Date(Date.now() - 60 * 60 * 1000) } },
+      );
       await expect(
         service.register({ ...REGISTRATION, name: 'ماهر الزعبي', password: 'a different one' }),
       ).resolves.toMatchObject({ status: 'otp_sent' });
@@ -117,6 +122,20 @@ describe('CustomersService', () => {
       });
       const session = await service.verifyEmail('maher@example.com', lastCode());
       expect(session.customer.name).toBe('ماهر الزعبي');
+    });
+  });
+
+  describe('a signup in flight', () => {
+    it("can't have its password replaced by a second registration", async () => {
+      await register();
+      await service.register({ ...REGISTRATION, name: 'someone else', password: 'attacker-password' });
+
+      // The owner types the newest code from their inbox…
+      const session = await service.verifyEmail('maher@example.com', lastCode());
+      expect(session.customer.name).toBe(REGISTRATION.name);
+      // …and only their own password opens the account.
+      await expect(service.login('maher@example.com', 'attacker-password')).rejects.toBeDefined();
+      await expect(service.login('maher@example.com', REGISTRATION.password)).resolves.toBeDefined();
     });
   });
 

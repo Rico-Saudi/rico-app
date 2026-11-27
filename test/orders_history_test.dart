@@ -63,7 +63,7 @@ void main() {
       expect(read('new'), OrderStatus.pending);
       expect(read('confirmed'), OrderStatus.handled);
       expect(read('ready'), OrderStatus.ready);
-      expect(read('completed'), OrderStatus.handled);
+      expect(read('completed'), OrderStatus.completed);
       expect(read('cancelled'), OrderStatus.cancelled);
     });
 
