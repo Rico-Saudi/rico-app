@@ -408,12 +408,13 @@ class _ProfessionSheetState extends State<ProfessionSheet> {
   }
 
   Future<String?> _pickPdf() async {
-    final result = await FilePicker.platform.pickFiles(
+    // ملف واحد فقط، فـ pickFile لا pickFiles. وما نطلب البايتات: نرفع من
+    // المسار، وتحميل PDF كامل في الذاكرة بلا داعٍ.
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['pdf'],
-      withData: false,
     );
-    return result?.files.single.path;
+    return file?.path;
   }
 
   /// اسم الملف المعروض: المختار الحين إن وُجد، وإلا المرفق المحفوظ.

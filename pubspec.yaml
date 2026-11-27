@@ -11,23 +11,23 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  cupertino_icons: ^1.0.6
-  geolocator: ^12.0.0
+  geolocator: ^14.1.2
   http: ^1.2.1
   http_parser: ^4.0.2
   url_launcher: ^6.2.6
-  intl: ^0.20.2
   shared_preferences: ^2.3.2
-  share_plus: ^10.0.2
+  # يبقى على 6.x لنفس سبب cached_network_image: الإصدار 7 يطلب Dart 3.12.
   record: ^6.2.1
   path_provider: ^2.1.4
   # يحفظ صور النتائج على القرص، فما تُطلب الصورة نفسها مرتين — هذا وحده
   # يقطع أغلب تكلفة Place Photos، لأن نفس المحلات تتكرر في كل بحث بالمدينة.
+  # يبقى على 3.x: الإصدار 4 يطلب Dart 3.12 وهذا المشروع على Flutter 3.41.1
+  # (Dart 3.11). ترقية Flutter قرار منفصل — تمسّ CI وسلسلة البناء.
   cached_network_image: ^3.4.1
   # لإرفاق السيرة الذاتية ببطاقة صاحب المهنة: file_picker لملف PDF،
   # وimage_picker للكاميرا والمعرض — لأن "السيرة الذاتية" عند أغلب أصحاب
   # المهن ورقة يصوّرونها لا ملفاً يصدّرونه.
-  file_picker: ^8.1.2
+  file_picker: ^13.4.1
   image_picker: ^1.1.2
   # في dependencies لا dev_dependencies: له فئة Android تُسجَّل في
   # GeneratedPluginRegistrant، وكإضافة تطوير كان الملف المولّد يختلف بين
@@ -37,7 +37,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
 flutter:
