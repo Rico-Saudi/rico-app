@@ -45,6 +45,7 @@ import '../widgets/message_bubble.dart';
 import '../widgets/price_comparison_card.dart';
 import '../widgets/welcome_hero.dart';
 import 'favorites_screen.dart';
+import '../utils/money.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -1783,7 +1784,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final first = webPrices.firstWhere((c) => c.offers.isNotEmpty);
     final best = first.offers.first;
     return 'ما لقيت $label عند المحلات القريبة المسجّلة عندنا، بس أرخص سعر لقيته أونلاين '
-        'عند ${best.store} بـ${formatPrice(best.price)} ${best.currencyLabel} 👇 '
+        'عند ${best.store} بـ${money(best.price)} ${best.currencyLabel} 👇 '
         'وإذا تبي تطلب من محل قريب، قل لي وش تبي ومن وين وأجهّزه لك.';
   }
 
@@ -1795,7 +1796,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     final comparison = comparisons.single;
     final best = comparison.offers.first;
-    final price = '${formatPrice(best.finalPrice)} ر.س';
+    final price = priceLabel(best.finalPrice);
     if (comparison.offers.length == 1) {
       return 'لقيت ${comparison.requested} عند ${best.businessName} بس، بـ$price 👇 اضغط «اطلبه» وأجهّزه لك.';
     }

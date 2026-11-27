@@ -5,10 +5,6 @@ import '../models/customer_order.dart';
 import '../theme/app_theme.dart';
 
 /// تنسيق سعر: بلا كسور حين يكون صحيحاً — نفس صياغة بطاقة المتجر.
-String money(double value) {
-  final rounded = value.roundToDouble();
-  return value == rounded ? rounded.toStringAsFixed(0) : value.toStringAsFixed(2);
-}
 
 /// العربية تجمع جمع قلة لما دون العشرة وتفرد التمييز بعدها.
 String piecesLabel(int count) {

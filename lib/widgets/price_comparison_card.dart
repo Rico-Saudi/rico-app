@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/price_comparison.dart';
 import '../theme/app_theme.dart';
 import 'rico_surfaces.dart';
+import '../utils/money.dart';
 
 /// "وين أرخص جبنة؟" — المحلات القريبة اللي تبيع الصنف، الأرخص أولاً.
 ///
@@ -114,7 +115,7 @@ class _ComparisonBlock extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'من ${offers.first.businessName} توفّر ${formatPrice(savings)} ر.س عن الأغلى',
+                      'من ${offers.first.businessName} توفّر ${priceLabel(savings)} عن الأغلى',
                       style: RicoText.caption.copyWith(color: RicoColors.primaryDeep),
                     ),
                   ),
@@ -184,12 +185,12 @@ class _OfferRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${formatPrice(offer.finalPrice)} ر.س',
+                priceLabel(offer.finalPrice),
                 style: RicoText.cardTitle.copyWith(color: cheapest ? RicoColors.primaryDeep : RicoColors.ink),
               ),
               if (offer.hasDiscount)
                 Text(
-                  '${formatPrice(offer.price)} ر.س',
+                  priceLabel(offer.price),
                   style: RicoText.caption.copyWith(
                     color: RicoColors.inkFaint,
                     decoration: TextDecoration.lineThrough,

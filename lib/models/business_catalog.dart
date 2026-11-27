@@ -1,3 +1,5 @@
+import '../utils/money.dart';
+
 /// منتج ضمن قائمة نشاط تجاري معيّن، كما يُرجعه GET /places/:id/catalog.
 class CatalogProduct {
   final String id;
@@ -69,7 +71,7 @@ class CatalogDeal {
       case 'percent':
         return value != null ? 'خصم ${value!.toStringAsFixed(0)}٪' : 'خصم';
       case 'fixed':
-        return value != null ? 'خصم ${value!.toStringAsFixed(0)} ر.س' : 'خصم';
+        return value != null ? 'خصم ${priceLabel(value!)}' : 'خصم';
       case 'bogo':
         return 'اشتري واحد واحصل على الثاني مجاناً';
       case 'free_item':

@@ -49,12 +49,18 @@ describe('shop registry', () => {
     expect(keywordClassify('الله يعطيك الشفاء')).toEqual([]);
   });
 
-  it('builds a city of shops fast enough to refresh in the background', () => {
+  // Guards the complexity of replaceAll, not its speed on any one machine:
+  // the build is quadratic or it is not. On an idle machine 30k shops take
+  // well under half a second, and a quadratic version takes minutes — so the
+  // budget is deliberately far above the real figure. It used to be 3s, which
+  // is inside the range a loaded machine reaches honestly, and the test went
+  // red in a full parallel run while passing alone.
+  it('builds a city of shops without going quadratic', () => {
     const many = Array.from({ length: 30_000 }, (_, i) => ({ name: `مطعم رقم ${i} الشامي`, category: 'restaurant', hasMenu: i % 3 === 0 }));
     const started = Date.now();
     shopRegistry.replaceAll(many, products, isGenericWord);
-    expect(Date.now() - started).toBeLessThan(3000);
+    expect(Date.now() - started).toBeLessThan(20_000);
     expect(shopRegistry.size).toBeGreaterThan(20_000);
     shopRegistry.replaceAll(shops, products, isGenericWord);
-  });
+  }, 30_000);
 });

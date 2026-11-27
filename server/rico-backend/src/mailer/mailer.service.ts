@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OtpPurpose } from '../customers/schemas/customer-otp.schema';
+import { brandFor } from '../common/constants/brands';
 
 const SUBJECT_BY_PURPOSE: Record<'invite' | 'reset', string> = {
   invite: 'دعوة لإدارة نشاطك التجاري في ريكو',
@@ -180,6 +181,7 @@ export class MailerService {
     customerPhone,
     items,
     total,
+    brand,
     dashboardUrl,
   }: {
     to: string;
@@ -189,8 +191,10 @@ export class MailerService {
     customerPhone: string;
     items: { label: string; quantity: number }[];
     total: number;
+    brand?: string;
     dashboardUrl: string;
   }): Promise<void> {
+    const { name: brandName, currency } = brandFor(brand);
     const lines = items
       .map(
         (i) =>
@@ -202,11 +206,11 @@ export class MailerService {
       subject: `طلب جديد #${reference} — ${shopName}`,
       html: `<div dir="rtl" style="margin:0;padding:24px;background:#FAF8F5;font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;color:#39424B">
   <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E3DA;border-radius:18px;overflow:hidden">
-    <div style="background:#006C35;padding:18px 22px;color:#FFFFFF;font-size:17px;font-weight:700">ريكو — ${escapeHtml(shopName)}</div>
+    <div style="background:#006C35;padding:18px 22px;color:#FFFFFF;font-size:17px;font-weight:700">${escapeHtml(brandName)} — ${escapeHtml(shopName)}</div>
     <div style="padding:24px 22px">
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7">وصلك طلب جديد <b style="direction:ltr;display:inline-block">#${escapeHtml(reference)}</b>:</p>
       <ul style="margin:0 0 14px;padding:0 18px 0 0">${lines}</ul>
-      ${total > 0 ? `<p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#00532A">الإجمالي: ${total} ر.س</p>` : ''}
+      ${total > 0 ? `<p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#00532A">الإجمالي: ${total} ${currency}</p>` : ''}
       <div style="margin:0 0 16px;padding:14px 16px;background:#EBF4EF;border:1px solid #D7E8DE;border-radius:12px">
         <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#00532A">${escapeHtml(customerName)}</p>
         <p style="margin:0;font-size:15px;color:#00532A;direction:ltr;text-align:right">${escapeHtml(customerPhone)}</p>

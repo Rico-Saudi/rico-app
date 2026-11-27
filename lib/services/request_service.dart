@@ -38,6 +38,8 @@ class RequestService {
             body: jsonEncode({
               'businessId': businessId,
               'items': items,
+              // يحدّد عملة كل سعر في الرد، واسم المرسل في إيميل المحل.
+              'brand': Brand.slug,
             }),
           )
           .timeout(const Duration(seconds: 8));

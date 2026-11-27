@@ -41,4 +41,17 @@ class Brand {
     'RICO_API',
     defaultValue: 'https://app.rico-go.com',
   );
+
+  /// رمز عملة السوق، مشتقٌّ من [slug] لا راية مستقلة: عملة لا تطابق السوق
+  /// عيبٌ لا إعداد، فلا نترك بناءً يقدر يخلطهما.
+  ///
+  /// كان «ر.س» مكتوباً حرفياً في عشرين موضعاً، فكل سعر رآه عميل «تدلل» في
+  /// الأردن كان مكتوباً بالريال السعودي.
+  static const Map<String, String> _currencyBySlug = {
+    'rico': 'ر.س',
+    'tadallal': 'د.أ',
+  };
+
+  /// سوقٌ لا نعرفه يُقرأ كالافتراضي، تماماً كما يفعل الخادم في brandFor.
+  static String get currency => _currencyBySlug[slug] ?? 'ر.س';
 }

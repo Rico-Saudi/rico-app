@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rico_app/brand.dart';
+import 'package:rico_app/utils/money.dart';
 
 void main() {
   group('إعداد النسخة الإقليمية', () {
@@ -23,5 +24,33 @@ void main() {
       expect(Brand.slug, isNotEmpty);
       expect(Brand.slug.trim(), Brand.slug);
     });
+  });
+
+  group('عملة السوق', () {
+    test('الافتراضي بالريال السعودي', () {
+      // كل نسخة ريكو مثبّتة عند الناس تبني بلا رايات، فلا يجوز أن تتغيّر
+      // عملتها تحت أيديهم.
+      expect(Brand.currency, 'ر.س');
+      expect(priceLabel(12), '12 ر.س');
+    });
+
+    test('الرقم بلا كسور حين يكون صحيحاً، وبكسرين حين لا', () {
+      // الكسور تُسقط فقط حين يكون الرقم صحيحاً تماماً — ما دون ذلك يُعرض
+      // بكسرين، لأن إخفاء هللات من سعر يُغيّره.
+      expect(money(10), '10');
+      expect(money(10.0), '10');
+      expect(money(10.5), '10.50');
+      expect(money(7), '7');
+    });
+
+    test('كل سعر يُلحق بعملة السوق الحالي، لا بثابت مكتوب', () {
+      // هذا التوكيد يصحّ تحت أي راية بناء، فهو يغطّي النسخة الأردنية أيضاً:
+      // لو عاد أحدٌ يكتب «ر.س» داخل priceLabel، يسقط هنا في بناء «تدلل».
+      expect(priceLabel(12), endsWith(Brand.currency));
+      expect(priceLabel(12), '${money(12)} ${Brand.currency}');
+      expect(Brand.currency, isNotEmpty);
+      expect(Brand.currency.trim(), Brand.currency);
+    });
+
   });
 }

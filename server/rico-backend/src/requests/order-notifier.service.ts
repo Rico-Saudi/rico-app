@@ -17,6 +17,10 @@ export interface NewOrderNotice {
   // Where the dashboard lives — the host the order came in on, the same way
   // vendor invite links are built.
   baseUrl: string;
+  // Which regional build the order came from. Decides the name the email
+  // signs itself with and the currency on its total: a تدلل order used to
+  // reach a Jordanian shop headed "ريكو" with a total in Saudi riyals.
+  brand?: string;
 }
 
 // Tells the people running a shop that it has a new order. Everyone with an
@@ -52,6 +56,7 @@ export class OrderNotifierService {
           customerPhone: notice.customerPhone,
           items: notice.items.map((i) => ({ label: i.label, quantity: i.quantity })),
           total: notice.total,
+          brand: notice.brand,
           dashboardUrl: `${notice.baseUrl}/vendor/dashboard?tab=requests`,
         });
         sent++;

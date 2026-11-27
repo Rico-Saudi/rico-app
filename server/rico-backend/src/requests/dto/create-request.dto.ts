@@ -1,18 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  ArrayMinSize,
-  IsArray,
-  IsIn,
-  IsInt,
-  IsMongoId,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsMongoId, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { REQUEST_ITEM_TYPES, RequestItemType } from '../schemas/request.schema';
 
 // Only what identifies the line and how many: the label, price and image are
@@ -68,4 +55,12 @@ export class CreateRequestDto {
   @IsOptional()
   @IsMongoId()
   itemId?: string;
+
+  // Which regional build is ordering — decides the currency on every price
+  // label in the answer. Not validated against the known slugs, for the same
+  // reason as in ClassifyRequestDto: brandFor() falls back to the default.
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  brand?: string;
 }

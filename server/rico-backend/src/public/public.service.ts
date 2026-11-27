@@ -26,6 +26,7 @@ import {
 import { PickPreference, readGenericItem } from './generic-order.util';
 import { CustomerRequest, CustomerRequestDocument } from '../requests/schemas/request.schema';
 import { haversineMeters } from '../common/utils/geo.util';
+import { priceLabel } from '../common/constants/brands';
 
 // Deliberately stricter than the per-dish threshold. Nearly every shop name
 // carries a category word — مطعم, كافيه, صيدلية — so sharing one is worth
@@ -207,7 +208,7 @@ export class PublicService {
               itemType: 'product',
               itemId: String(picked.product.id),
               label: picked.product.name,
-              detail: `${picked.product.finalPrice} ر.س`,
+              detail: priceLabel(picked.product.finalPrice, dto.brand),
               unitPrice: picked.product.finalPrice,
               imageUrl: picked.product.imageUrl ?? null,
               quantity,
@@ -258,7 +259,7 @@ export class PublicService {
               itemType: 'product',
               itemId: hit.item.id,
               label: hit.item.row.name,
-              detail: `${hit.item.row.finalPrice} ر.س`,
+              detail: priceLabel(hit.item.row.finalPrice, dto.brand),
               unitPrice: hit.item.row.finalPrice,
               imageUrl: hit.item.row.imageUrl ?? null,
               quantity,

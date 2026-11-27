@@ -8,6 +8,7 @@ import '../utils/arabic_dates.dart';
 import '../widgets/order_widgets.dart';
 import '../widgets/rico_surfaces.dart';
 import 'order_details_screen.dart';
+import '../utils/money.dart';
 
 /// سجلّ طلبات العميل — الطرف المقابل لصندوق "طلبات وصلتني": كل ما أرسله
 /// المستخدم للمحلات من داخل المحادثة، مجموعاً بالزمن ومفتوحاً على تفاصيله.
@@ -194,7 +195,7 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       '${order.itemCount} ${piecesLabel(order.itemCount)}'
-                      '${order.total > 0 ? '  ·  ${money(order.total)} ر.س' : ''}',
+                      '${order.total > 0 ? '  ·  ${priceLabel(order.total)}' : ''}',
                       style: RicoText.caption.copyWith(color: RicoColors.primaryDeep, fontWeight: FontWeight.w600),
                     ),
                   ],

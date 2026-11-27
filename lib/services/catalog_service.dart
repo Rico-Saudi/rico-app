@@ -67,6 +67,8 @@ class CatalogService {
               if (categorySlug != null) 'categorySlug': categorySlug,
               if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
               'items': items.map((i) => i.toJson()).toList(),
+              // يحدّد عملة كل سعر في السلّة المرجَعة.
+              'brand': Brand.slug,
             }),
           )
           .timeout(const Duration(seconds: 8));
