@@ -312,6 +312,52 @@ function OrderAlerts({ authedFetch, me, onSaved }) {
     }
   }
 
+  // Push with the dashboard closed: a service worker the browser wakes when
+  // the server pushes (see public/sw.js and the server's PushService).
+  const pushSupported = supported && 'serviceWorker' in navigator && 'PushManager' in window;
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState(null);
+
+  useEffect(() => {
+    if (!pushSupported) return;
+    navigator.serviceWorker
+      .getRegistration('/')
+      .then((reg) => reg?.pushManager.getSubscription())
+      .then((sub) => setPushOn(Boolean(sub)))
+      .catch(() => setPushOn(false));
+  }, [pushSupported]);
+
+  async function togglePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const existing = await reg.pushManager.getSubscription();
+      if (pushOn && existing) {
+        await authedFetch('/vendor/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: existing.endpoint }) });
+        await existing.unsubscribe();
+        setPushOn(false);
+        return;
+      }
+      const granted = permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      setPermission(granted);
+      if (granted !== 'granted') return;
+      const keyRes = await authedFetch('/vendor/push/key');
+      const { publicKey } = await keyRes.json();
+      const sub =
+        existing ||
+        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(publicKey) }));
+      const res = await authedFetch('/vendor/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint }) });
+      if (!res?.ok) throw new Error('subscribe_failed');
+      setPushOn(true);
+    } catch {
+      setPushError('ما قدرت أفعّلها على هالمتصفح. جرّب كروم أو إيدج، أو بآيفون أضف اللوحة للشاشة الرئيسية أول.');
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <label className="flex items-center justify-between gap-4">
@@ -356,8 +402,37 @@ function OrderAlerts({ authedFetch, me, onSaved }) {
           </button>
         )}
       </div>
+
+      {pushSupported && permission !== 'denied' && (
+        <label className="flex items-center justify-between gap-4">
+          <span>
+            <span className="block text-sm font-semibold">تنبيه فوري واللوحة مسكّرة</span>
+            <span className="block text-xs text-on-surface-variant mt-0.5">
+              {pushError || 'يوصلك تنبيه على هالجهاز لحظة ما يوصل طلب، حتى لو المتصفح مسكّر.'}
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={pushOn}
+            disabled={pushBusy}
+            onClick={togglePush}
+            className={`relative w-10 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${
+              pushOn ? 'bg-primary' : 'bg-surface-container-highest'
+            }`}
+          >
+            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${pushOn ? 'start-5' : 'start-1'}`} />
+          </button>
+        </label>
+      )}
     </div>
   );
+}
+
+// The VAPID public key arrives base64url; PushManager wants the bytes.
+function base64UrlToBytes(value) {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4);
+  return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
 export default function SettingsTab({ authedFetch, me, onClaimed }) {

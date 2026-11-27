@@ -16,21 +16,43 @@ import { LlmService } from '../src/llm/llm.service';
 import { LearningService } from '../src/learning/learning.service';
 
 export interface Expected {
-  kind: 'place' | 'deals' | 'professional';
+  kind: 'place' | 'deals' | 'professional' | 'order' | 'call';
   category?: string;
   profession?: string;
   rank?: string;
+  placeName?: string;
+  /** Matched as a substring: "مندي" passes for "مندي لحم". */
+  keyword?: string;
+  area?: string;
+  referencedPosition?: number;
+  /** Item names that must all be in the basket, at these quantities. */
+  orderItems?: { name: string; quantity?: number }[];
 }
 
 interface Case {
   /** What a user actually types. Dialect, not textbook Arabic. */
   message: string;
   brand?: 'rico' | 'tadallal';
+  /** The conversation before it, as the app sends it. */
+  history?: { role: 'user' | 'assistant'; content: string }[];
+  lastResults?: { label: string; items: { position: number; name: string }[] };
+  basket?: { placeName: string; items: { name: string; quantity: number }[] };
   /** Empty means: this should be recognised as off-topic. */
   expect: Expected[];
+  /** Checked only when given. */
+  mood?: 'neutral' | 'urgent' | 'angry' | 'hesitant' | 'happy';
   /** Why this case exists — printed when it fails. */
   note: string;
 }
+
+const THREE_RESTAURANTS = {
+  label: 'مطاعم',
+  items: [
+    { position: 1, name: 'مطعم الماهر' },
+    { position: 2, name: 'البيك' },
+    { position: 3, name: 'شاورمر' },
+  ],
+};
 
 export const CASES: Case[] = [
   // --- the ordinary path -------------------------------------------------
@@ -101,6 +123,53 @@ export const CASES: Case[] = [
   { message: 'جوووعان', expect: [{ kind: 'place', category: 'restaurant' }], note: 'elongated hunger' },
   { message: 'أقرب كوفى', expect: [{ kind: 'place', category: 'cafe' }], note: 'misspelled loanword' },
   { message: 'وين اقرب بنزين؟؟', brand: 'tadallal', expect: [{ kind: 'place', category: 'fuel' }], note: 'no hamza, doubled punctuation' },
+
+  // --- inside a category: dish, feature, negation, budget, area -----------
+  { message: 'ابي مطعم مندي', expect: [{ kind: 'place', category: 'restaurant', keyword: 'مندي' }], note: 'a dish narrows the restaurant search' },
+  { message: 'مش بدي شاورما بدي بيتزا', brand: 'tadallal', expect: [{ kind: 'place', category: 'restaurant', keyword: 'بيتزا' }], note: 'negation: search what they want, never what they refused' },
+  { message: 'كافيه فيه جلسات خارجية', expect: [{ kind: 'place', category: 'cafe', keyword: 'جلسات' }], note: 'a feature, not a dish' },
+  { message: 'مطعم تحت ٢٠ ريال', expect: [{ kind: 'place', category: 'restaurant', rank: 'cheapest' }], note: 'a budget is cheapest — not an order for twenty «ريال»' },
+  { message: 'صيدلية في حي النرجس', expect: [{ kind: 'place', category: 'pharmacy', area: 'النرجس' }], note: 'a named district instead of GPS' },
+  { message: 'مطعم مفتوح الحين', expect: [{ kind: 'place', category: 'restaurant', rank: 'open_now' }], mood: 'neutral', note: '«الحين» is a time, not urgency — urgent shows one place only' },
+  { message: 'تمام', expect: [], mood: 'neutral', note: '«تمام» alone is agreement, not happiness' },
+  { message: 'ابي سباك بسرعة عندي تسريب', expect: [{ kind: 'professional', profession: 'plumber' }], mood: 'urgent', note: 'real urgency still reads as urgent' },
+
+  // --- orders and calls ---------------------------------------------------
+  {
+    message: 'اطلب لي ٢ شاورما من البيك',
+    expect: [{ kind: 'order', placeName: 'البيك', orderItems: [{ name: 'شاورما', quantity: 2 }] }],
+    note: 'shop named, item with a count',
+  },
+  {
+    message: 'من البيك',
+    history: [
+      { role: 'user', content: 'ابي اطلب عشا' },
+      { role: 'assistant', content: 'من وين؟' },
+    ],
+    expect: [{ kind: 'order', placeName: 'البيك' }],
+    note: 'answering «من وين؟» names the shop of the order already started',
+  },
+  { message: 'اتصل على مطعم الماهر', expect: [{ kind: 'call', placeName: 'مطعم الماهر' }], note: 'call by name' },
+
+  // --- the last list ------------------------------------------------------
+  { message: 'الثاني', lastResults: THREE_RESTAURANTS, expect: [{ kind: 'place', referencedPosition: 2 }], note: 'a bare position shows that place' },
+  { message: 'بدي اطلب من التاني', brand: 'tadallal', lastResults: THREE_RESTAURANTS, expect: [{ kind: 'order', referencedPosition: 2 }], note: 'an order verb with a position is an order from it' },
+  { message: 'اتصل على الأول', lastResults: THREE_RESTAURANTS, expect: [{ kind: 'call', referencedPosition: 1 }], note: 'call by position' },
+  { message: 'فيه مثله بس أرخص؟', lastResults: THREE_RESTAURANTS, expect: [{ kind: 'place', category: 'restaurant', rank: 'cheapest' }], note: 'similar, cheaper — same category, no position' },
+
+  // --- the open basket ----------------------------------------------------
+  {
+    message: 'شيل البيبسي',
+    basket: { placeName: 'البيك', items: [{ name: 'شاورما', quantity: 2 }, { name: 'بيبسي', quantity: 1 }] },
+    expect: [{ kind: 'order', placeName: 'البيك', orderItems: [{ name: 'شاورما', quantity: 2 }] }],
+    note: 'an edit answers with the whole basket after it',
+  },
+  {
+    message: 'زيدها واحد',
+    basket: { placeName: 'البيك', items: [{ name: 'شاورما', quantity: 2 }] },
+    expect: [{ kind: 'order', placeName: 'البيك', orderItems: [{ name: 'شاورما', quantity: 3 }] }],
+    note: '«زيدها واحد» with no item = the last line, plus one',
+  },
 ];
 
 /** One expectation is met if every field it names matches. Fields it omits
@@ -111,6 +180,18 @@ export function matches(actual: any, expected: Expected): boolean {
   if (expected.category && actual.category !== expected.category) return false;
   if (expected.profession && actual.profession !== expected.profession) return false;
   if (expected.rank && actual.rank !== expected.rank) return false;
+  if (expected.placeName && !(actual.placeName ?? '').includes(expected.placeName)) return false;
+  if (expected.keyword && !(actual.keyword ?? '').includes(expected.keyword)) return false;
+  if (expected.area && !(actual.area ?? '').includes(expected.area)) return false;
+  if (expected.referencedPosition && actual.referencedPosition !== expected.referencedPosition) return false;
+  if (expected.orderItems) {
+    const got: { name: string; quantity: number }[] = actual.orderItems ?? [];
+    if (got.length !== expected.orderItems.length) return false;
+    for (const want of expected.orderItems) {
+      const line = got.find((g) => g.name.includes(want.name));
+      if (!line || (want.quantity && line.quantity !== want.quantity)) return false;
+    }
+  }
   return true;
 }
 
@@ -148,8 +229,12 @@ async function runModel(model: string | null): Promise<void> {
       const result = await service.classify({
         message: testCase.message,
         brand: testCase.brand ?? 'rico',
+        history: testCase.history,
+        lastResults: testCase.lastResults,
+        basket: testCase.basket,
       } as any);
       intents = result.offTopic ? [] : result.intents;
+      if (testCase.mood && result.mood !== testCase.mood) errored = `mood ${result.mood}, want ${testCase.mood}`;
     } catch (e: any) {
       // invalid_intents is thrown for a response with nothing usable in it,
       // which for an off-topic case is the right answer arriving the wrong way.

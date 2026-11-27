@@ -37,6 +37,11 @@ export class Account {
   @Prop({ type: Date, default: null })
   lastLoginAt: Date | null;
 
+  // Set whenever the password is (re)set. SessionGuard rejects any session
+  // issued before it, so a reset logs out every other open dashboard.
+  @Prop({ type: Date, default: null })
+  passwordChangedAt: Date | null;
+
   // Vendor accounts only: an email for every new order on their shops. On by
   // default — an order nobody sees is a customer left waiting.
   @Prop({ type: Boolean, default: true })

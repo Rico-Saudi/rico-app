@@ -154,6 +154,16 @@ const BRANDS = ORDER_BRANDS.map((b) => fold(b).split(' ')).sort((a, b) => b.leng
  * placed — never a new one. */
 const COMPLAINT_RE = /(?:^|\s)(?:الغي|الغاء|استرجع|ارجع فلوسي|ارجعهن|ارجعه|ارجعها|ارجع|رجعلي|طلبي|طلبت|طلبيتي|وصلني بارد|وصلت بارده|تاخر|متاخر|ما وصل|الطلب اللي|اللي جاني|ناقص|اجاني الطلب|جاني الطلب|تاخر الطلب)(?=\s|$)/u;
 /** Asking about an order rather than placing it: its price, delivery time, or Rico's opinion. */
+/** A spending limit: "تحت ٢٠ ريال", "بأقل من 15", "بحدود ١٠ دنانير". The
+ * folded text has Western digits and no hamza. Without this, "مطعم تحت ٢٠
+ * ريال" parsed as an order from a shop called «مطعم تحت» for twenty «ريال». */
+export const BUDGET_RE = /(?:^|\s)(?:تحت|اقل من|باقل من|ما يزيد عن|ما يتعدى|بحدود|حدود|ميزانيتي|ميزانيه|بسعر|سعره)\s*\d+(?:\s*(?:ريال|ريالات|رس|دينار|دنانير|ليره|jd|sar))?(?=\s|$)/u;
+
+/** BUDGET_RE on the unfolded message, to cut the phrase out of the text
+ * the basket is read from — "وجبة تحت ٣٠ ريال" is one «وجبة», not an item
+ * called «تحت 30 ريال». */
+const BUDGET_RAW_RE = /(?:^|\s)(?:تحت|[أا]قل من|ب[أا]قل من|ما يزيد عن|ما يتعدى|بحدود|حدود|ميزانيتي|ميزانية|بسعر|سعره)\s*[0-9٠-٩۰-۹]+(?:\s*(?:ريال|ريالات|ر\.?\s?س|دينار|دنانير|ليرة|jd|sar))?(?=\s|$|[،,.!؟?])/giu;
+
 const QUESTION_RE = /(?:^|\s)(?:كم ياخذ|كم بياخذ|كم سعر|بكم|وش رايك|شو رايك|برايك|تكفي|بتكفي|كم يكلف)(?=\s|$)/u;
 
 /** "طلبي من البيك تأخر", "الغي طلبي": about an order already placed. The
@@ -559,6 +569,7 @@ export function parseOrder(message: string, deps: OrderDeps): ParsedOrder | null
     colonShop = true;
   }
 
+  text = text.replace(BUDGET_RAW_RE, ' ');
   const tok = tokenize(text);
   const { raw, folded } = tok;
   if (!folded.length) return null;
@@ -580,6 +591,9 @@ export function parseOrder(message: string, deps: OrderDeps): ParsedOrder | null
   while (leadAt < folded.length && (OPENERS.has(folded[leadAt]) || folded[leadAt] === 'و')) leadAt++;
   if (complaint && (verbAt < 0 || complaint.index < folded.slice(0, verbAt).join(' ').length)) return null;
   if (verbAt < 0 && QUESTION_RE.test(folded0)) return null;
+  // A budget is a search filter, not a basket — unless they also said
+  // "اطلب" ("اطلب لي من البيك وجبة تحت ٣٠ ريال" is still an order).
+  if (verbAt < 0 && BUDGET_RE.test(folded0)) return null;
 
   // "من" followed by something that reads as a shop.
   let fromAt = -1;

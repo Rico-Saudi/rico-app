@@ -8,6 +8,7 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -68,4 +69,10 @@ export class CreateRequestDto {
   @IsOptional()
   @IsMongoId()
   itemId?: string;
+
+  // Same value on a retry of the same tap — see CustomerRequest.clientRef.
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9-]{8,64}$/)
+  clientRef?: string;
 }

@@ -220,6 +220,46 @@ export class MailerService {
     });
   }
 
+  // The shop moved the customer's order on — or nobody answered it in time.
+  // The app shows this too while it's open; the email is what reaches a
+  // customer who closed the app after ordering, which is most of them.
+  async sendOrderStatusEmail({
+    to,
+    customerName,
+    shopName,
+    reference,
+    headline,
+    detail,
+    note,
+  }: {
+    to: string;
+    customerName: string;
+    shopName: string;
+    reference: string;
+    headline: string;
+    detail: string;
+    note: string | null;
+  }): Promise<void> {
+    await this.send({
+      email: to,
+      subject: `${headline} — ${shopName} #${reference}`,
+      html: `<div dir="rtl" style="margin:0;padding:24px;background:#FAF8F5;font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;color:#39424B">
+  <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E3DA;border-radius:18px;overflow:hidden">
+    <div style="background:#006C35;padding:18px 22px;color:#FFFFFF;font-size:17px;font-weight:700">${escapeHtml(shopName)}</div>
+    <div style="padding:24px 22px">
+      <p style="margin:0 0 12px;font-size:15px;color:#131A20">هلا ${escapeHtml(customerName)}،</p>
+      <p style="margin:0 0 8px;font-size:17px;font-weight:700;color:#00532A">${escapeHtml(headline)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.7">${escapeHtml(detail)} <span style="direction:ltr;display:inline-block">#${escapeHtml(reference)}</span></p>
+      ${note ? `<div style="margin:0 0 16px;padding:14px 16px;background:#EBF4EF;border:1px solid #D7E8DE;border-radius:12px;font-size:14px;line-height:1.7">«${escapeHtml(note)}»</div>` : ''}
+      <p style="margin:0;font-size:13px;color:#6E7883">تقدر تتابع طلباتك من التطبيق، صفحة «طلباتي».</p>
+    </div>
+    <div style="border-top:1px solid #E8E3DA;padding:14px 22px;font-size:12px;color:#A0A8B1">لا ترد على هذه الرسالة.</div>
+  </div>
+</div>`,
+      devLine: `order status for ${to}: ${headline} (${shopName} #${reference})`,
+    });
+  }
+
   private async send({
     email,
     subject,
@@ -234,6 +274,13 @@ export class MailerService {
     const apiKey = process.env.RESEND_API_KEY;
 
     if (!apiKey) {
+      // devLine carries the live code or reset link. Fine in a local
+      // terminal; in production it would put working credentials in the
+      // hosted log, readable by anyone with dashboard access there.
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[mailer] RESEND_API_KEY is not set — "${subject}" to ${email} was not sent`);
+        return;
+      }
       console.log(`[dev email fallback] ${devLine}`);
       return;
     }

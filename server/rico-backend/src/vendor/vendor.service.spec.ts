@@ -23,6 +23,7 @@ import { PriceCalcService } from '../pricing/price-calc.service';
 import { OrderNotifierService } from '../requests/order-notifier.service';
 import { PublicService } from '../public/public.service';
 import { SearchGap, SearchGapSchema } from '../public/schemas/search-gap.schema';
+import { Customer, CustomerSchema } from '../customers/schemas/customer.schema';
 
 // What these features promise is about data across collections — a bulk
 // import matching existing rows, a discount surviving a price edit, stats
@@ -71,12 +72,13 @@ describe('VendorService — dashboard for every kind of shop', () => {
     // A mailer that records instead of sending — and fails for one address,
     // to prove one bad inbox doesn't stop the rest.
     const mailer = {
+      sendOrderStatusEmail: async () => {},
       sendNewOrderEmail: async (args: any) => {
         if (args.to === 'broken@example.com') throw new Error('bounce');
         sentEmails.push(args);
       },
     };
-    const notifier = new OrderNotifierService(claimModel, accountModel, mailer as any);
+    const notifier = new OrderNotifierService(claimModel, accountModel, mailer as any, model(Customer.name, CustomerSchema) as any);
     requestsService = new RequestsService(requestModel, businessModel, productModel, dealModel, notifier);
     publicService = new PublicService(
       businessModel,

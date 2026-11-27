@@ -61,10 +61,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
-  void _openDetails(CustomerOrder order) {
-    Navigator.of(context).push(
+  Future<void> _openDetails(CustomerOrder order) async {
+    final updated = await Navigator.of(context).push<CustomerOrder>(
       MaterialPageRoute(builder: (_) => OrderDetailsScreen(order: order)),
     );
+    // ألغاه من التفاصيل: القائمة تعكسه بلا سحب للتحديث.
+    if (updated != null && mounted && _orders != null) {
+      setState(() => _orders = [for (final o in _orders!) o.id == updated.id ? updated : o]);
+    }
   }
 
   @override

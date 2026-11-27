@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
+  CancelledBy,
   CustomerRequest,
   CustomerRequestDocument,
   NEXT_STAGES,
@@ -15,6 +16,7 @@ import { CreateRequestDto, CreateRequestItemDto } from './dto/create-request.dto
 import { CustomerDocument } from '../customers/schemas/customer.schema';
 import { OrderNotifierService } from './order-notifier.service';
 import { ordersPauseState } from '../businesses/orders-pause.util';
+import { PriceCalcService } from '../pricing/price-calc.service';
 
 // Same wording as the Flutter Deal.typeLabel getter and the owner dashboard's
 // DEAL_TYPE_LABELS — kept in sync by hand since this is the one place a deal's
@@ -36,19 +38,51 @@ function dealDetailLabel(deal: DealDocument): string {
   }
 }
 
+/// How long an order may sit unanswered before it is called off for the
+/// customer (RequestsService.expireUnanswered). A customer who ordered dinner
+/// and heard nothing for half an hour has given up — they deserve to be told
+/// to try somewhere else, not to keep waiting. ORDER_RESPONSE_MINUTES
+/// overrides it; 0 turns the sweep off.
+const DEFAULT_ORDER_RESPONSE_MINUTES = 30;
+const EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
+
+function orderResponseMinutes(): number {
+  const raw = process.env.ORDER_RESPONSE_MINUTES;
+  if (raw === undefined || raw === '') return DEFAULT_ORDER_RESPONSE_MINUTES;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_ORDER_RESPONSE_MINUTES;
+}
+
 @Injectable()
-export class RequestsService {
+export class RequestsService implements OnModuleInit, OnModuleDestroy {
+  private sweepTimer: NodeJS.Timeout | null = null;
+
   constructor(
     @InjectModel(CustomerRequest.name) private readonly requestModel: Model<CustomerRequestDocument>,
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
     private readonly orderNotifier: OrderNotifierService,
+    // Optional so specs that only test basket rules can leave pricing out;
+    // the running server always injects it.
+    @Optional() private readonly priceCalc?: PriceCalcService,
   ) {}
 
   // The latest new-order notification, kept so tests can wait for the email
   // that create() deliberately doesn't wait for.
   notifyWrite: Promise<unknown> = Promise.resolve();
+
+  onModuleInit(): void {
+    if (orderResponseMinutes() === 0) return;
+    this.sweepTimer = setInterval(() => {
+      this.expireUnanswered().catch((e) => console.error('[requests] expiry sweep failed:', e?.message || e));
+    }, EXPIRY_SWEEP_INTERVAL_MS);
+    this.sweepTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+  }
 
   async create(dto: CreateRequestDto, customer?: CustomerDocument, baseUrl = 'https://app.rico-go.com') {
     const business = await this.businessModel.findById(dto.businessId).lean();
@@ -64,23 +98,47 @@ export class RequestsService {
     // A logged-in customer's own name/phone win over anything the client
     // sent: the vendor calls this number back, so it has to be the one tied
     // to a verified account, not a per-order free-text field.
+    // ALLOW_ANONYMOUS_ORDERS=false closes the old no-account path once the
+    // builds that need it are gone from users' phones.
+    if (!customer && process.env.ALLOW_ANONYMOUS_ORDERS === 'false') {
+      throw new UnauthorizedException({ error: 'sign_in_required' });
+    }
+
     const customerName = customer ? customer.name : dto.customerName?.trim();
     const customerPhone = customer ? customer.phone : dto.customerPhone?.trim();
     if (!customerName || !customerPhone) {
       throw new BadRequestException({ error: 'customer_details_required' });
     }
 
+    // A retry of a tap that already went through: hand back that order.
+    const clientRef = customer && dto.clientRef ? dto.clientRef : null;
+    if (clientRef) {
+      const existing = await this.requestModel.findOne({ customerId: customer!._id, clientRef }).lean();
+      if (existing) return this.createdAnswer(existing);
+    }
+
     const items = await this.resolveItems(dto);
     const total = items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
 
-    const request = await this.requestModel.create({
-      businessId: dto.businessId,
-      customerId: customer?._id ?? null,
-      customerName,
-      customerPhone,
-      items,
-      total,
-    });
+    let request: CustomerRequestDocument;
+    try {
+      request = await this.requestModel.create({
+        businessId: dto.businessId,
+        customerId: customer?._id ?? null,
+        customerName,
+        customerPhone,
+        items,
+        total,
+        clientRef,
+      });
+    } catch (e) {
+      // Two copies of the same tap racing: the unique index let one in.
+      if (clientRef && (e as { code?: number }).code === 11000) {
+        const existing = await this.requestModel.findOne({ customerId: customer!._id, clientRef }).lean();
+        if (existing) return this.createdAnswer(existing);
+      }
+      throw e;
+    }
 
     // Not awaited: the customer's confirmation shouldn't wait on an email
     // provider, and a failed email mustn't undo an order that's saved.
@@ -97,7 +155,100 @@ export class RequestsService {
       })
       .catch((e) => console.error('[requests] new-order notification failed:', e?.message || e));
 
-    return { requestId: request._id, status: request.status, itemCount: items.length, total };
+    return this.createdAnswer(request);
+  }
+
+  private createdAnswer(request: { _id: unknown; status: string; items: unknown[]; total: number }) {
+    return { requestId: request._id, status: request.status, itemCount: request.items.length, total: request.total };
+  }
+
+  /// The customer calls off their own order — only while the shop hasn't
+  /// picked it up. Once confirmed the shop may already be cooking it, and
+  /// the customer is told to call the shop instead.
+  async cancelByCustomer(id: string, customerId: string) {
+    const request = await this.requestModel.findOne({ _id: id, customerId });
+    if (!request) throw new NotFoundException({ error: 'request_not_found' });
+    const current = this.readStage(request);
+    if (current !== 'new') throw new ConflictException({ error: 'too_late_to_cancel', stage: current });
+
+    request.stage = 'cancelled';
+    request.cancelledBy = 'customer';
+    request.stageUpdatedAt = new Date();
+    // Off the shop's "new" count: nothing is waiting for them any more.
+    request.status = 'handled';
+    await request.save();
+    return { id: request._id, stage: request.stage, cancelledBy: request.cancelledBy };
+  }
+
+  /// The customer rates an order they got. Only once the shop took it on —
+  /// a rating for an order nobody answered is a rating of Rico's timeout,
+  /// not of the shop. Re-rating replaces the earlier verdict.
+  async rate(id: string, customerId: string, stars: number, comment?: string) {
+    const request = await this.requestModel.findOne({ _id: id, customerId });
+    if (!request) throw new NotFoundException({ error: 'request_not_found' });
+    const stage = this.readStage(request);
+    if (stage === 'new' || stage === 'cancelled') throw new ConflictException({ error: 'not_rateable', stage });
+
+    request.rating = { stars, comment: comment?.trim() || null, ratedAt: new Date() };
+    await request.save();
+    await this.rollUpRating(String(request.businessId));
+    return { id: request._id, rating: request.rating };
+  }
+
+  /// Recomputes the shop's average from every rated order — cheap at this
+  /// scale, and it can't drift the way an incremental average does.
+  private async rollUpRating(businessId: string): Promise<void> {
+    const [agg] = await this.requestModel.aggregate<{ avg: number; count: number }>([
+      { $match: { businessId: new Types.ObjectId(businessId), 'rating.stars': { $gte: 1 } } },
+      { $group: { _id: null, avg: { $avg: '$rating.stars' }, count: { $sum: 1 } } },
+    ]);
+    await this.businessModel.updateOne(
+      { _id: businessId },
+      { $set: { ricoRatingAvg: agg ? Math.round(agg.avg * 10) / 10 : null, ricoRatingCount: agg?.count ?? 0 } },
+    );
+  }
+
+  /// Calls off orders nobody answered in time, and tells their customers.
+  /// Conditional on stage 'new' in the update itself, so an order the shop
+  /// confirms in the same second is never cancelled under it.
+  async expireUnanswered(now = new Date()): Promise<number> {
+    const minutes = orderResponseMinutes();
+    if (minutes === 0) return 0;
+    const cutoff = new Date(now.getTime() - minutes * 60_000);
+    const stale = await this.requestModel
+      .find({ stage: 'new', status: 'new', createdAt: { $lt: cutoff } }, '_id')
+      .limit(200)
+      .lean();
+
+    let expired = 0;
+    for (const { _id } of stale) {
+      const request = await this.requestModel
+        .findOneAndUpdate(
+          { _id, stage: 'new', status: 'new' },
+          { $set: { stage: 'cancelled', cancelledBy: 'timeout', status: 'handled', stageUpdatedAt: now } },
+          { new: true },
+        )
+        .populate('businessId', 'name nameAr')
+        .lean();
+      if (!request) continue;
+      expired++;
+      this.notifyStage(request as any, null);
+    }
+    return expired;
+  }
+
+  private notifyStage(request: any, note: string | null): void {
+    const business = request.businessId;
+    this.notifyWrite = this.orderNotifier
+      .notifyCustomerStage({
+        requestId: String(request._id),
+        customerId: request.customerId ? String(request.customerId) : null,
+        shopName: business?.nameAr || business?.name || 'المحل',
+        stage: request.stage,
+        cancelledBy: (request.cancelledBy ?? null) as CancelledBy | null,
+        note,
+      })
+      .catch(() => false);
   }
 
   // Every label, price and image is read here from the real Product/Deal, never
@@ -107,9 +258,27 @@ export class RequestsService {
     const requested = this.normalizeRequestedItems(dto);
 
     const idsOfType = (type: string) => requested.filter((i) => i.itemType === type).map((i) => i.itemId);
+    // A discount that ended (or started) by date alone leaves a stale
+    // finalPrice until something writes to the product — refresh exactly the
+    // lines being bought, so the total is what the price is right now.
+    await this.priceCalc?.recomputeForProducts(idsOfType('product'));
+    // Only what a customer could actually see: a soft-deleted product, or a
+    // deal still waiting for review, rejected or past its end, is "not found"
+    // rather than orderable by anyone who kept its id.
+    const now = new Date();
     const [products, deals] = await Promise.all([
-      this.productModel.find({ _id: { $in: idsOfType('product') }, businessId: dto.businessId }).lean(),
-      this.dealModel.find({ _id: { $in: idsOfType('deal') }, businessId: dto.businessId }).lean(),
+      this.productModel.find({ _id: { $in: idsOfType('product') }, businessId: dto.businessId, isActive: { $ne: false } }).lean(),
+      this.dealModel
+        .find({
+          _id: { $in: idsOfType('deal') },
+          businessId: dto.businessId,
+          status: 'active',
+          $and: [
+            { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
+            { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] },
+          ],
+        })
+        .lean(),
     ]);
 
     const productById = new Map(products.map((p: any) => [String(p._id), p]));
@@ -185,12 +354,18 @@ export class RequestsService {
         businessName: r.businessId ? r.businessId.nameAr || r.businessId.name : null,
         customerName: r.customerName,
         customerPhone: r.customerPhone,
+        // False for an order from an app build without accounts: the name and
+        // number were typed, not verified, and the shop should know that
+        // before it starts cooking.
+        verified: Boolean(r.customerId),
         items,
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
         stage: this.readStage(r),
+        cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
         stageUpdatedAt: r.stageUpdatedAt ?? null,
+        rating: r.rating ?? null,
         createdAt: r.createdAt,
       };
     });
@@ -221,7 +396,10 @@ export class RequestsService {
         total: r.total ?? items.reduce((sum: number, i: any) => sum + (i.unitPrice ?? 0) * i.quantity, 0),
         status: r.status,
         stage: this.readStage(r),
+        cancelledBy: r.cancelledBy ?? null,
         vendorNote: r.vendorNote ?? null,
+        stageUpdatedAt: r.stageUpdatedAt ?? null,
+        rating: r.rating ?? null,
         createdAt: r.createdAt,
       };
     });
@@ -283,8 +461,15 @@ export class RequestsService {
     request.stage = stage;
     request.stageUpdatedAt = new Date();
     request.status = 'handled';
+    if (stage === 'cancelled') request.cancelledBy = 'shop';
     if (note !== undefined) request.vendorNote = note?.trim() || null;
     await request.save();
+
+    // Not awaited, same as the new-order email: the vendor's click
+    // shouldn't wait on an email provider.
+    const populated = await request.populate('businessId', 'name nameAr');
+    this.notifyStage(populated.toObject(), request.vendorNote ?? null);
+
     return { id: request._id, status: request.status, stage: request.stage, vendorNote: request.vendorNote };
   }
 }

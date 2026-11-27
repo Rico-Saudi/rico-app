@@ -18,6 +18,15 @@ const FILTERS = [
   { id: 'all', label: 'الكل', match: () => true },
 ];
 
+// Why a cancelled order is cancelled, when it wasn't the shop. An order the
+// customer withdrew, or one nobody answered in time (the server calls those
+// off after ORDER_RESPONSE_MINUTES), needs no apology call — but the second
+// is worth noticing, because it's a customer the shop lost by not looking.
+const CANCELLED_BY_LABELS = {
+  customer: 'ألغاه العميل قبل ما ترد',
+  timeout: 'انلغى تلقائياً: ما انرد عليه بالوقت',
+};
+
 function StageBadge({ stage }) {
   const s = STAGE_BY_ID[stage] || STAGE_BY_ID.new;
   return <span className={`shrink-0 text-xs font-bold px-3 py-1 rounded-full ${s.badge}`}>{s.label}</span>;
@@ -70,7 +79,7 @@ export default function RequestsTab({ authedFetch, activeClaims = [] }) {
       return;
     }
     const updated = await res.json();
-    setRequests((list) => list.map((r) => (r.id === id ? { ...r, stage: updated.stage, status: updated.status, vendorNote: updated.vendorNote } : r)));
+    setRequests((list) => list.map((r) => (r.id === id ? { ...r, stage: updated.stage, status: updated.status, vendorNote: updated.vendorNote, cancelledBy: updated.stage === 'cancelled' ? 'shop' : r.cancelledBy } : r)));
     setCancelling(null);
   }
 
@@ -166,6 +175,14 @@ export default function RequestsTab({ authedFetch, activeClaims = [] }) {
                     <span className="flex items-center gap-1 font-bold">
                       <User className="w-4 h-4" /> {r.customerName}
                     </span>
+                    {r.verified === false && (
+                      <span
+                        className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                        title="الطلب من نسخة قديمة من التطبيق بلا حساب — الاسم والرقم ما انتحقق منهم. تأكد بمكالمة قبل التجهيز."
+                      >
+                        رقم غير موثّق
+                      </span>
+                    )}
                     <a href={`tel:${r.customerPhone}`} className="flex items-center gap-1 text-primary font-semibold" dir="ltr">
                       <Phone className="w-3.5 h-3.5" /> {r.customerPhone}
                     </a>
@@ -212,6 +229,20 @@ export default function RequestsTab({ authedFetch, activeClaims = [] }) {
                 ))}
                 {r.total > 0 && <div className="text-sm font-extrabold text-primary pt-1">الإجمالي: {r.total} ر.س</div>}
               </div>
+
+              {r.rating && (
+                <div className="text-sm">
+                  <span className="font-bold" style={{ color: '#C9A24A' }} aria-label={`تقييم العميل ${r.rating.stars} من 5`}>
+                    {'★'.repeat(r.rating.stars)}
+                    <span className="text-on-surface-variant/40">{'★'.repeat(5 - r.rating.stars)}</span>
+                  </span>
+                  {r.rating.comment && <span className="text-xs text-on-surface-variant mr-2">«{r.rating.comment}»</span>}
+                </div>
+              )}
+
+              {r.stage === 'cancelled' && CANCELLED_BY_LABELS[r.cancelledBy] && (
+                <p className="text-xs font-semibold text-error">{CANCELLED_BY_LABELS[r.cancelledBy]}</p>
+              )}
 
               {r.vendorNote && (
                 <p className="text-xs text-on-surface-variant">

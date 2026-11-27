@@ -45,6 +45,11 @@ import '../widgets/message_bubble.dart';
 import '../widgets/price_comparison_card.dart';
 import '../widgets/welcome_hero.dart';
 import 'favorites_screen.dart';
+import '../models/customer_order.dart';
+import '../services/chat_inbox.dart';
+import '../services/order_watcher.dart';
+import '../services/manual_cities.dart';
+import '../brand.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -74,7 +79,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
   Position? _cachedPosition;
+  DateTime? _cachedPositionAt;
+
+  /// موقع GPS أقدم من هذا يُعاد جلبه: العميل اللي تحرّك بالسيارة لحي ثاني
+  /// كان يظل يشوف نتائج حول مكانه الأول طول ما الشاشة مفتوحة.
+  static const Duration _positionStaleAfter = Duration(minutes: 5);
+
+  /// مدينة اختارها العميل بنفسه لما ما كان GPS متاح — بديل يكفي للبحث بدل
+  /// ما يوقف ريكو كله لأن الإذن مرفوض.
+  ({double lat, double lng, String name})? _manualOrigin;
+
   bool _sending = false;
+
+  /// يُرفع من أول سطر بالإرسال، قبل أي انتظار — [_sending] ما يتفعّل إلا
+  /// بعد فحوصات فيها await، وضغطتين سريعتين كانتا تمرّان قبله وترسلان
+  /// الرسالة مرتين.
+  bool _sendClaimed = false;
+
+  late final OrderWatcher _orderWatcher = OrderWatcher(onChange: _onOrderChanged);
 
   /// حالة الجو المعروضة في شاشة الترحيب، و null قبل وصولها أو إذا تعذّرت.
   WeatherInfo? _weather;
@@ -120,20 +142,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     BackendWarmup.ping();
     _controller.addListener(BackendWarmup.ping);
     WidgetsBinding.instance.addObserver(this);
+    ChatInbox.pending.addListener(_onInbox);
     _restoreConversation();
     _refreshWeather();
+    _orderWatcher.watch();
+  }
+
+  /// رسالة جاية من شاشة ثانية («اطلب نفسه مرة ثانية») — تنرسل كأن العميل
+  /// كتبها. ننتظر الإطار الجاي: الشاشات فوقنا لسا تنقفل.
+  void _onInbox() {
+    if (ChatInbox.pending.value == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _sending) return;
+      final text = ChatInbox.take();
+      if (text == null) return;
+      _controller.text = text;
+      _handleSend();
+    });
+  }
+
+  /// المحل حرّك طلباً للعميل (أو انتهت مهلته): سطر بالمحادثة بدل ما يكتشفه
+  /// العميل صدفة من «طلباتي».
+  void _onOrderChanged(CustomerOrder order, CustomerOrder before) {
+    final text = OrderWatcher.describe(order);
+    if (text == null || !mounted) return;
+    final offerElsewhere = order.status == OrderStatus.cancelled && order.lines.isNotEmpty;
+    setState(() {
+      _messages.add(ChatMessage(
+        text: text,
+        sender: MessageSender.bot,
+        actionLabel: offerElsewhere ? 'إيه، دوّر لي' : null,
+        onAction: offerElsewhere
+            ? () {
+                if (_sending) return;
+                _controller.text = OrderWatcher.elsewhereText(order);
+                _handleSend();
+              }
+            : null,
+      ));
+    });
+    _scrollToBottom();
+    unawaited(_sessionMemory.saveTranscript(_persistableMessages));
   }
 
   /// يُعاد الجلب عند العودة من الخلفية لا بمؤقّت: المستخدم اللي يفتح ريكو بعد
   /// ساعات يستاهل قراءة جديدة، واللي تاركه مفتوح ما يستفيد من واحدة كل دقيقة.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshWeather();
+    if (state == AppLifecycleState.resumed) {
+      _refreshWeather();
+      _orderWatcher.resume();
+    } else if (state == AppLifecycleState.paused) {
+      _orderWatcher.pause();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ChatInbox.pending.removeListener(_onInbox);
+    _orderWatcher.dispose();
     _scrollController.removeListener(_onScroll);
     _controller.removeListener(BackendWarmup.ping);
     _scrollController.dispose();
@@ -180,16 +248,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<Position> _getPosition() async {
-    if (_cachedPosition != null) return _cachedPosition!;
-    final pos = await _locationService.getCurrentLocation();
-    _cachedPosition = pos;
-    return pos;
+    final cached = _cachedPosition;
+    final at = _cachedPositionAt;
+    if (cached != null && at != null && DateTime.now().difference(at) < _positionStaleAfter) return cached;
+    try {
+      final pos = await _locationService.getCurrentLocation();
+      _cachedPosition = pos;
+      _cachedPositionAt = DateTime.now();
+      return pos;
+    } on LocationException {
+      // قراءة قديمة شوي أحسن من لا شي: الإذن ما انسحب، بس GPS تأخر.
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   /// يحدد نقطة انطلاق البحث: يستخدم موقع "بيتي" المحفوظ إذا ذكره المستخدم
   /// وكان محفوظاً، وإلا يستخدم GPS الحالي (ويعرض حفظه كـ"بيتي" لاحقاً إذا
   /// كانت هذه أول مرة يذكر فيها بيته ولا يوجد موقع محفوظ).
   Future<({double lat, double lng, bool offerSaveHome})> _resolveOrigin(String text) async {
+    try {
+      return await _resolveGpsOrigin(text);
+    } on LocationException {
+      final manual = _manualOrigin;
+      if (manual != null) return (lat: manual.lat, lng: manual.lng, offerSaveHome: false);
+      rethrow;
+    }
+  }
+
+  /// يعرض المدن ويرجع اللي اختارها العميل، ثم يعيد إرسال رسالته — بديل
+  /// GPS لما يكون مرفوض أو مطفّي.
+  Future<void> _pickCity(String retryText) async {
+    final city = await showModalBottomSheet<({double lat, double lng, String name})>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('وين أنت؟', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            for (final c in ManualCities.forBrand(Brand.slug))
+              ListTile(
+                leading: const Icon(Icons.location_city_rounded),
+                title: Text(c.name),
+                onTap: () => Navigator.of(context).pop(c),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (city == null || !mounted) return;
+    setState(() => _manualOrigin = city);
+    if (_sending) return;
+    _controller.text = retryText;
+    await _handleSend();
+  }
+
+  Future<({double lat, double lng, bool offerSaveHome})> _resolveGpsOrigin(String text) async {
     if (_homeMention.hasMatch(text)) {
       final home = await _sessionMemory.getHome();
       if (home != null) {
@@ -216,10 +334,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return recent
         .map((m) => {
               'role': m.sender == MessageSender.user ? 'user' : 'assistant',
-              'content': m.text,
+              // الخادم يقصّ لنفس الطول؛ القص هنا يوفّر الحجم على الشبكة فقط.
+              'content': m.text.length > _maxHistoryChars ? m.text.substring(0, _maxHistoryChars) : m.text,
             })
         .toList();
   }
+
+  static const _maxHistoryChars = 300;
+
+  /// أقصى عدد عناصر يقبله الخادم بـ lastResults. أكثر منه كان يرجّع 400،
+  /// والتطبيق يقرأ أي رد غير 200 كعطل ويسقط لأضعف قاموس محلي.
+  static const _maxLastResults = 30;
 
   /// يبحث عن آخر رسالة عرضت نتائج فعلية (أماكن أو عروض) بترتيبها المعروض
   /// للمستخدم، لدعم إشارات مثل "الثاني" أو "مثله بس أرخص". يُحسب من ترتيب
@@ -243,14 +368,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _buildLastResultsPayload() {
     final last = _findLastShown();
     if (last == null) return null;
-    final items = last.places != null
-        ? [
-            for (var j = 0; j < last.places!.length; j++) {'position': j + 1, 'name': last.places![j].name}
-          ]
-        : [
-            for (var j = 0; j < last.deals!.length; j++) {'position': j + 1, 'name': last.deals![j].placeName}
-          ];
+    final count = last.places?.length ?? last.deals!.length;
+    final items = [
+      for (var j = 0; j < count && j < _maxLastResults; j++)
+        {'position': j + 1, 'name': last.places != null ? last.places![j].name : last.deals![j].placeName}
+    ];
     return {'label': last.label, 'items': items};
+  }
+
+  /// السلة المفتوحة الحين (آخر بطاقة طلب ما انرسلت وفيها أصناف)، كما هي
+  /// بالبطاقة — بما فيها تعديلات أزرار + و− اللي ما تظهر بنص المحادثة. بدونها
+  /// "شيل البيبسي" كانت تُفهم من آخر رسائل مكتوبة بس.
+  Map<String, dynamic>? _buildBasketPayload() {
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final flow = _messages[i].requestFlow;
+      if (flow == null) continue;
+      if (flow.stage == RequestFlowStage.submitted || flow.cart.isEmpty) return null;
+      return {
+        'placeName': flow.catalog.businessName,
+        'items': [
+          for (final line in flow.cart.lines.where((l) => l.label.trim().isNotEmpty).take(30))
+            {'name': line.label.length > 80 ? line.label.substring(0, 80) : line.label, 'quantity': line.quantity.clamp(1, 99)}
+        ],
+      };
+    }
+    return null;
   }
 
   void _scrollToBottom() {
@@ -525,6 +667,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // يمرره لـGoogle Text Search. الفئات الثابتة لها نوع Google خاص فما
         // تحتاجه.
         label: intent.slug == null || IntentService.byCategorySlug(intent.slug!) == null ? intent.label : null,
+        keyword: intent.keyword,
+        area: intent.area,
       );
 
       if (places.isEmpty) {
@@ -534,7 +678,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
         }
         return ChatMessage(
-          text: 'ما لقيت ${intent.label} قريب منك الحين 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
+          text: intent.area != null
+              ? 'ما لقيت ${intent.displayLabel} الحين 😕 جرّب حي قريب منه أو نوع ثاني.'
+              : 'ما لقيت ${intent.displayLabel} قريب منك الحين 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
           sender: MessageSender.bot,
         );
       }
@@ -843,7 +989,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _sending || _sendClaimed) return;
+    _sendClaimed = true;
+    try {
+      await _send(text);
+    } finally {
+      _sendClaimed = false;
+    }
+  }
+
+  Future<void> _send(String text) async {
 
     // تعديل رسالة سابقة: نرمي الرسالة القديمة وكل ما تفرّع عنها، ثم نكمل
     // بالمسار الطبيعي — فالنص المعدّل يمر بنفس التصنيف والبحث ويدخل نفس
@@ -901,6 +1056,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final voice = _pendingVoice;
     _pendingVoice = null;
 
+    // يُبنى السياق قبل إضافة فقاعة المستخدم: بعدها يصير آخر سطر بالسجل هو
+    // الرسالة نفسها، والخادم يضيفها مرة ثانية — فيشوفها النموذج مكررة،
+    // ويحسبها القاموس "الرسالة السابقة" ("من البيك" بعد "من وين؟" تصير
+    // بحث بدل طلب).
+    final history = _buildHistory();
+    final lastResults = _buildLastResultsPayload();
+    final basket = _buildBasketPayload();
+
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
@@ -913,8 +1076,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final classification = await LlmIntentService.classify(
         text,
-        history: _buildHistory(),
-        lastResults: _buildLastResultsPayload(),
+        history: history,
+        lastResults: lastResults,
+        basket: basket,
         voice: voice,
       );
 
@@ -1084,19 +1248,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } on LocationException catch (e) {
       // فشل تحديد نقطة الانطلاق نفسها (قبل إنشاء فقاعات النوايا) — يوقف
-      // الرد كاملاً لأن كل النوايا تعتمد على الموقع.
+      // الرد كاملاً لأن كل النوايا تعتمد على الموقع. البديل اللي ما يحتاج
+      // إعدادات: يختار مدينته ونكمل البحث منها.
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
-          text: e.message,
+          text: '${e.message}\nأو اختر مدينتك وأدوّر لك منها 👇',
           sender: MessageSender.bot,
-          actionLabel: e.type == LocationErrorType.unknown ? null : 'فتح الإعدادات',
-          onAction: switch (e.type) {
-            LocationErrorType.serviceDisabled => () => Geolocator.openLocationSettings(),
-            LocationErrorType.permissionDenied || LocationErrorType.permissionDeniedForever => () =>
-                Geolocator.openAppSettings(),
-            LocationErrorType.unknown => null,
-          },
+          actionLabel: 'اختر مدينتك',
+          onAction: () => _pickCity(text),
         ));
       });
     } catch (e) {
@@ -1108,8 +1268,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ));
       });
     } finally {
-      setState(() => _sending = false);
-      _scrollToBottom();
+      if (mounted) {
+        setState(() => _sending = false);
+        _scrollToBottom();
+      }
       unawaited(_sessionMemory.saveTranscript(_persistableMessages));
     }
   }
@@ -1878,7 +2040,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// بالسلّة نفسها — بنفس الموضع، فما تتراكم فقاعتان لطلب واحد.
   Future<void> _pickOrderShop(int index, OrderShopOption option, QueryIntent intent) async {
     if (index >= _messages.length) return;
-    setState(() => _messages[index] = _messages[index].copyWith(busyShopId: option.id));
+    final busy = _messages[index].copyWith(busyShopId: option.id);
+    setState(() => _messages[index] = busy);
     _scrollToBottom();
 
     ChatMessage message;
@@ -1894,8 +2057,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       message = ChatMessage(text: 'ما قدرت أجهّز طلبك من ${option.name} الحين 😕', sender: MessageSender.bot);
     }
 
-    if (!mounted) return;
-    setState(() => _messages[index] = message);
+    // الفقاعة نفسها لا موضعها: تعديل رسالة سابقة أثناء الانتظار يقص
+    // المحادثة، والموضع القديم يصير فقاعة ثانية أو خارج القائمة.
+    final at = _messages.indexOf(busy);
+    if (!mounted || at == -1) return;
+    setState(() => _messages[at] = message);
     _scrollToBottom();
     if (_confirmWhenPicked.remove(index)) await _autoConfirm(index);
     unawaited(_sessionMemory.saveTranscript(_persistableMessages));
@@ -1963,49 +2129,48 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
 
-    setState(() {
-      _messages[index] = current.copyWith(
-        requestFlow: flow.copyWith(
-          stage: RequestFlowStage.submitting,
-          customerName: customer.name,
-          customerPhone: customer.phone,
-          clearError: true,
-        ),
-      );
-    });
+    var submitting = current.copyWith(
+      requestFlow: flow.copyWith(
+        stage: RequestFlowStage.submitting,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        clearError: true,
+      ),
+    );
+    setState(() => _messages[index] = submitting);
+
+    // بعد الانتظار ندوّر على الفقاعة نفسها لا على موضعها: تعديل رسالة
+    // سابقة أثناء الإرسال يقص المحادثة، والموضع القديم يصير فقاعة ثانية
+    // (أو خارج القائمة).
+    void settle(RequestFlow Function(RequestFlow) change) {
+      final i = _messages.indexOf(submitting);
+      if (i == -1 || _messages[i].requestFlow == null) return;
+      setState(() {
+        submitting = _messages[i].copyWith(requestFlow: change(_messages[i].requestFlow!));
+        _messages[i] = submitting;
+      });
+    }
 
     try {
       await _requestService.submitRequest(
         businessId: flow.catalog.businessId,
         token: token,
         items: flow.cart.toRequestItems(),
+        clientRef: flow.clientRef,
       );
       if (!mounted) return;
-      setState(() {
-        final latest = _messages[index];
-        _messages[index] = latest.copyWith(
-          requestFlow: latest.requestFlow!.copyWith(stage: RequestFlowStage.submitted),
-        );
-      });
+      settle((f) => f.copyWith(stage: RequestFlowStage.submitted));
+      // من هنا نتابع ردّ المحل ونقوله بالمحادثة أول ما يصير.
+      _orderWatcher.watch();
     } on RequestException catch (e) {
       if (!mounted) return;
-      setState(() {
-        final latest = _messages[index];
-        _messages[index] = latest.copyWith(
-          requestFlow: latest.requestFlow!.copyWith(stage: RequestFlowStage.confirming, errorMessage: e.message),
-        );
-      });
+      settle((f) => f.copyWith(stage: RequestFlowStage.confirming, errorMessage: e.message));
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        final latest = _messages[index];
-        _messages[index] = latest.copyWith(
-          requestFlow: latest.requestFlow!.copyWith(
+      settle((f) => f.copyWith(
             stage: RequestFlowStage.confirming,
             errorMessage: 'ما قدرت أرسل طلبك الحين، حاول مرة ثانية.',
-          ),
-        );
-      });
+          ));
     } finally {
       _scrollToBottom();
     }
