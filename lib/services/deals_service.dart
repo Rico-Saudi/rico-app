@@ -11,7 +11,7 @@ class DealsException implements Exception {
 }
 
 /// يجلب العروض/الخصومات القريبة من rico-backend (خادم NestJS، انظر
-/// server/rico-backend — يستبدل rico-api/groq-proxy القديمة).
+/// server/rico-backend).
 class DealsService {
   static const String _baseUrl = Brand.apiBaseUrl;
 
