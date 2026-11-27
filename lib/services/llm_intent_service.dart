@@ -184,9 +184,7 @@ class LlmClassification {
 class LlmIntentService {
   // rico-backend (NestJS، يستبدل rico-intent-proxy القديم) يعرض هذا التصنيف
   // على المسار /classify (وليس الجذر كما كان الحال في الـ Worker القديم).
-  // للتجربة المحلية بدّلها لـ http://localhost:3000/classify (iOS
-  // Simulator/سطح المكتب) أو http://10.0.2.2:3000/classify (Android Emulator).
-  static const String _proxyUrl = 'https://app.rico-go.com/classify';
+  static const String _proxyUrl = '${Brand.apiBaseUrl}/classify';
 
   /// مهلتان: الأولى قصيرة للخادم الصاحي، والثانية طويلة لأن فشل الأولى غالباً
   /// معناه إن الخادم كان نايم (Render) وللتو بدأ يصحى — إيقاظه يحتاج ١٠-٢٠

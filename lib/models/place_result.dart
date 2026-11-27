@@ -9,8 +9,8 @@ class PlaceResult {
   final double? distanceMeters;
   final double lat;
   final double lng;
-  final int? priceLevel; // 1-4، من rico-api فقط (Overpass لا يوفرها)
-  final double? rating; // 0-5، من rico-api فقط
+  final int? priceLevel; // 1-4، من الخادم فقط (Overpass لا يوفرها)
+  final double? rating; // 0-5، من الخادم فقط
   final int? ratingCount;
 
   /// حالة الفتح كما جاءت من الخادم (مصدرها Google) — أدق من تحليل نص
@@ -53,7 +53,7 @@ class PlaceResult {
     this.categorySlug,
   });
 
-  /// يبني عنصر مكان من استجابة rico-api (GET /search) — قد تحتوي بيانات سعر
+  /// يبني عنصر مكان من استجابة الخادم (GET /search) — قد تحتوي بيانات سعر
   /// وتقييم حقيقية من قاعدتنا أو من Google Places حسب source.
   /// [baseUrl] أصل خادم ريكو — الخادم يرسل مسار الصورة نسبياً (`/places/…`)
   /// لا رابطاً كاملاً، عشان يشتغل نفس الرد محلياً وفي الإنتاج بلا ما يعرف

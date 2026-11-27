@@ -9,9 +9,7 @@ import '../models/weather_info.dart';
 /// لا يُلقي أي استثناء أبداً: الجو زينة لا أساس، وفشل جلبه يعني إخفاء سطر
 /// اقتراح — ما يعني تعطيل شاشة ولا إظهار خطأ للمستخدم.
 class WeatherService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
-  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _baseUrl = 'https://app.rico-go.com';
+  static const String _baseUrl = Brand.apiBaseUrl;
 
   /// أقصر من مهلة البحث عمداً: لا يصح أن ينتظر فتح الشاشة جلب الجو.
   static const Duration _timeout = Duration(seconds: 4);

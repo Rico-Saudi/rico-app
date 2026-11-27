@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/deal.dart';
+import '../brand.dart';
 
 class DealsException implements Exception {
   final String message;
@@ -10,12 +11,9 @@ class DealsException implements Exception {
 }
 
 /// يجلب العروض/الخصومات القريبة من rico-backend (خادم NestJS، انظر
-/// server/rico-backend — يستبدل rico-api/groq-proxy القديمة).
+/// server/rico-backend).
 class DealsService {
-  // للتجربة المحلية استخدم http://localhost:3000 على iOS Simulator/سطح
-  // المكتب، أو http://10.0.2.2:3000 على Android Emulator (localhost يشير
-  // لجهاز المحاكي نفسه لا لجهازك).
-  static const String _baseUrl = 'https://app.rico-go.com';
+  static const String _baseUrl = Brand.apiBaseUrl;
 
   Future<List<Deal>> fetchNearby({
     required double lat,

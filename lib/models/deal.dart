@@ -1,4 +1,4 @@
-/// خصم/عرض على مكان معيّن، كما يُرجعه رأس النهاية GET /deals في rico-api.
+/// خصم/عرض على مكان معيّن، كما يُرجعه رأس النهاية GET /deals في الخادم.
 class Deal {
   final String id;
   final String placeId;

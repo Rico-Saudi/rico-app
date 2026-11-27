@@ -4,9 +4,9 @@ import { ClassifyRequestDto } from './dto/classify-request.dto';
 
 @Controller()
 export class ClassifyController {
-  // Exposed at POST /classify (the live groq-proxy Worker exposed this at
-  // its root path instead — Flutter's base URL constant is updated to
-  // append `/classify` as part of this rewrite).
+  // Exposed at POST /classify. The Cloudflare Worker this replaced served
+  // it from its root path instead, which is why Flutter's constant appends
+  // `/classify` to the API host.
   constructor(private readonly classifyService: ClassifyService) {}
 
   // Nest defaults POST handlers to 201 Created — override to 200 since

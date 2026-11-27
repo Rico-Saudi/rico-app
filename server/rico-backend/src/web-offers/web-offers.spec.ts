@@ -137,10 +137,30 @@ describe('WebOffersService', () => {
     { title: 'مهاجم', link: 'javascript:alert(1)', snippet: 'عروض' },
   ];
 
+  const AR_MONTHS = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+  ];
+
+  /**
+   * An end date the offer filter will read as still ahead of us, written the
+   * way a flyer writes it. Computed, and always with its year: a bare
+   * "15 أكتوبر" in here passed in October and failed every month after,
+   * because the pipeline reads a yearless date as this year's and drops the
+   * offer once that day is behind us. Date *parsing* is pinned to a fixed
+   * `today` in the helpers describe above; these tests are about the rest of
+   * the pipeline and should not rot with the calendar.
+   */
+  function stillOn(): string {
+    const d = new Date(Date.now() + 10 * 86_400_000);
+    return `${d.getUTCDate()} ${AR_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  }
+
   it('searches this month\'s offers in the customer\'s city, in the brand\'s country', async () => {
     serperReply = () => ({ organic });
+    const endsSoon = stillOn();
     llm.complete.mockResolvedValue({
-      content: JSON.stringify({ offers: [{ i: 0, store: 'بنده', headline: 'عروض الأسبوع', discount: 'حتى 50%', validUntil: '15 أكتوبر' }] }),
+      content: JSON.stringify({ offers: [{ i: 0, store: 'بنده', headline: 'عروض الأسبوع', discount: 'حتى 50%', validUntil: endsSoon }] }),
     });
 
     const res = await service().findDeals({ ...HERE, brand: 'rico', topic: 'العروض' });
@@ -153,7 +173,7 @@ describe('WebOffersService', () => {
         store: 'بنده',
         headline: 'عروض الأسبوع',
         discount: 'حتى 50%',
-        validUntil: '15 أكتوبر',
+        validUntil: endsSoon,
         url: 'https://panda.com.sa/offers',
         source: 'panda.com.sa',
         date: 'قبل يومين',

@@ -1,7 +1,8 @@
-// Multi-intent LLM classifier constants — ported from server/groq-proxy.
+// Multi-intent LLM classifier constants — ported from the Cloudflare
+// Worker this backend replaced (removed; see git history for it).
 // CATEGORIES intentionally excludes 'clothing_store': that slug was a
 // porting bug introduced in the old rico-backend Express port (present
-// neither in the live groq-proxy Worker nor in Flutter's local category
+// neither in that Worker nor in Flutter's local category
 // enum), so any category the model returns is guaranteed to resolve on the
 // client instead of being silently dropped.
 

@@ -45,10 +45,15 @@ class LocationService {
 
     // بلا حد زمني كان الطلب يعلّق للأبد داخل مبنى أو بإشارة ضعيفة، و«ريكو
     // يدوّر لك الحين…» ما يتغيّر. بعد ١٠ ثواني نرضى بآخر موقع معروف للجهاز.
+    //
+    // الحد الزمني داخل LocationSettings: في geolocator 14 صار timeLimit
+    // و desiredAccuracy كلاهما داخلها، والقديمان مهجوران.
     try {
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
     } on TimeoutException {
       final last = await Geolocator.getLastKnownPosition();

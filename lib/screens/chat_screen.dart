@@ -730,7 +730,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         lng: _mood.allowsWeatherLine ? origin.lng : null,
       );
 
-      // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
+      // نميّز بين ترتيب حقيقي فعلاً (وصل من الخادم ومعه بيانات سعر/تقييم)
       // وبين رجوع Overpass الاحتياطي (بلا هذه البيانات) — حتى لا نوهم
       // المستخدم بترتيب حقيقي غير موجود فعلياً.
       var introText = composedReply;
