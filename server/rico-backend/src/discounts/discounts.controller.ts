@@ -4,6 +4,7 @@ import { CreateDiscountDto } from './dto/create-discount.dto';
 import { UpdateDiscountDto } from './dto/update-discount.dto';
 import { SessionGuard } from '../common/guards/session.guard';
 import { RequireApp } from '../common/decorators/require-app.decorator';
+import { MongoIdPipe } from '../common/pipes/mongo-id.pipe';
 
 @Controller('discounts')
 export class DiscountsController {
@@ -17,7 +18,7 @@ export class DiscountsController {
   }
 
   @Get()
-  findAll(@Query('productId') productId?: string) {
+  findAll(@Query('productId', new MongoIdPipe({ optional: true })) productId?: string) {
     return this.discountsService.findAll(productId);
   }
 

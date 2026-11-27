@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { RateRequestDto } from './dto/rate-request.dto';
 import { CustomerAuthGuard, OptionalCustomerAuthGuard } from '../customers/customer-auth.guard';
 import { CurrentCustomer } from '../common/decorators/current-customer.decorator';
 import { CustomerDocument } from '../customers/schemas/customer.schema';
+import { publicBaseUrl } from '../common/utils/base-url.util';
+import { MongoIdPipe } from '../common/pipes/mongo-id.pipe';
 
 @Controller('requests')
 export class RequestsController {
@@ -18,11 +21,26 @@ export class RequestsController {
   @UseGuards(OptionalCustomerAuthGuard)
   @Post()
   create(@Req() req: Request, @Body() dto: CreateRequestDto, @CurrentCustomer() customer?: CustomerDocument) {
-    return this.requestsService.create(dto, customer, `${req.protocol}://${req.get('host')}`);
+    return this.requestsService.create(dto, customer, publicBaseUrl(req));
   }
 
   // The customer's own history. Full auth here, not the optional guard: there
   // is no anonymous reading of someone's past orders.
+  // The customer changing their mind before the shop has answered.
+  @UseGuards(CustomerAuthGuard)
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  cancel(@Param('id', new MongoIdPipe()) id: string, @CurrentCustomer() customer: CustomerDocument) {
+    return this.requestsService.cancelByCustomer(id, String(customer._id));
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post(':id/rate')
+  @HttpCode(HttpStatus.OK)
+  rate(@Param('id', new MongoIdPipe()) id: string, @Body() dto: RateRequestDto, @CurrentCustomer() customer: CustomerDocument) {
+    return this.requestsService.rate(id, String(customer._id), dto.stars, dto.comment);
+  }
+
   @UseGuards(CustomerAuthGuard)
   @Get('mine')
   async mine(@CurrentCustomer() customer: CustomerDocument) {

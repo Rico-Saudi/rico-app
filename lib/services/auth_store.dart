@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/customer.dart';
 import 'auth_service.dart';
@@ -11,10 +12,14 @@ import 'auth_service.dart';
 /// نسخة وحيدة ([instance]) بدل حزمة إدارة حالة: التطبيق ما فيه إلا هذه
 /// الحالة العامة، وإضافة اعتمادية كاملة لأجلها مبالغة.
 ///
-/// الرمز يُحفظ في SharedPreferences: تخزين خاص بالتطبيق (لا يصل له تطبيق
-/// آخر على جهاز غير مكسور الحماية) لكنه ليس مخزن مفاتيح النظام — إذا لزم
-/// لاحقاً تشديده، البديل هو flutter_secure_storage وهذه هي النقطة الوحيدة
-/// التي يُقرأ ويُكتب فيها.
+/// الرمز يُحفظ في مخزن مفاتيح النظام (Keychain بآيفون، وتخزين مشفّر
+/// بأندرويد) لا في SharedPreferences: ملف التفضيلات نص صريح يطلع بنسخة
+/// احتياطية للجهاز أو بجهاز مكسور الحماية، والرمز يفتح طلبات العميل ورقمه.
+/// الملف الشخصي (الاسم والرقم المعروضين) يظل بالتفضيلات — مو سرّ.
+///
+/// الرموز المحفوظة قبل هذا بالتفضيلات تنتقل بصمت عند أول تشغيل، فما يطلع
+/// أحد من حسابه بسبب التحديث. ولو مخزن النظام نفسه تعطّل (يصير ببعض أجهزة
+/// أندرويد) نرجع للتفضيلات بدل ما نضيّع الجلسة.
 class AuthStore extends ChangeNotifier {
   AuthStore._();
 
@@ -24,6 +29,38 @@ class AuthStore extends ChangeNotifier {
   static const _customerKey = 'customer_auth_profile';
 
   final AuthService _service = AuthService();
+
+  static const FlutterSecureStorage _vault = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  /// يقرأ الرمز من المخزن الآمن، وينقل أي رمز قديم من التفضيلات له.
+  Future<String?> _readToken(SharedPreferences prefs) async {
+    final legacy = prefs.getString(_tokenKey);
+    try {
+      final secure = await _vault.read(key: _tokenKey);
+      if (secure != null) {
+        if (legacy != null) await prefs.remove(_tokenKey);
+        return secure;
+      }
+      if (legacy != null) {
+        await _vault.write(key: _tokenKey, value: legacy);
+        await prefs.remove(_tokenKey);
+      }
+      return legacy;
+    } catch (_) {
+      return legacy;
+    }
+  }
+
+  Future<void> _writeToken(SharedPreferences prefs, String token) async {
+    try {
+      await _vault.write(key: _tokenKey, value: token);
+      await prefs.remove(_tokenKey);
+    } catch (_) {
+      await prefs.setString(_tokenKey, token);
+    }
+  }
 
   String? _token;
   Customer? _customer;
@@ -49,7 +86,7 @@ class AuthStore extends ChangeNotifier {
     if (_restored) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_tokenKey);
+    final token = await _readToken(prefs);
     final rawCustomer = prefs.getString(_customerKey);
 
     if (token != null && rawCustomer != null) {
@@ -74,7 +111,7 @@ class AuthStore extends ChangeNotifier {
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, session.token);
+    await _writeToken(prefs, session.token);
     await prefs.setString(_customerKey, jsonEncode(session.customer.toJson()));
   }
 
@@ -155,5 +192,10 @@ class AuthStore extends ChangeNotifier {
   Future<void> _clear(SharedPreferences prefs) async {
     await prefs.remove(_tokenKey);
     await prefs.remove(_customerKey);
+    try {
+      await _vault.delete(key: _tokenKey);
+    } catch (_) {
+      // المخزن معطّل: ما فيه شي محفوظ فيه أصلاً.
+    }
   }
 }

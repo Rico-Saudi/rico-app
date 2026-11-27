@@ -11,7 +11,9 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  geolocator: ^14.1.2
+  # 14.0.2 لا 14.1.x: الأحدث يتعارض مع flutter_secure_storage 9، وLocationSettings
+  # موجود في كليهما فالترقية من 12 قائمة كما هي.
+  geolocator: ^14.0.2
   http: ^1.2.1
   http_parser: ^4.0.2
   url_launcher: ^6.2.6
@@ -27,12 +29,16 @@ dependencies:
   # لإرفاق السيرة الذاتية ببطاقة صاحب المهنة: file_picker لملف PDF،
   # وimage_picker للكاميرا والمعرض — لأن "السيرة الذاتية" عند أغلب أصحاب
   # المهن ورقة يصوّرونها لا ملفاً يصدّرونه.
-  file_picker: ^13.4.1
+  # يبقى على 8.x: الإصدار 13 يسحب win32 ^6 بينما flutter_secure_storage 9
+  # يثبّت win32 ^5، والخروج من ذلك يعني ترقية مخزن الرموز الآمن مجازفةً
+  # بترحيل رموز المستخدمين — ترقية تستحق قرارها واختبارها على جهاز.
+  file_picker: ^8.1.2
   image_picker: ^1.1.2
   # في dependencies لا dev_dependencies: له فئة Android تُسجَّل في
   # GeneratedPluginRegistrant، وكإضافة تطوير كان الملف المولّد يختلف بين
   # debug وrelease فينكسر بناء الإصدار أو يخرج بلا أي إضافة مسجّلة.
   flutter_native_splash: ^2.4.7
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:

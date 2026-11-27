@@ -14,6 +14,12 @@ import { createHmac, timingSafeEqual } from 'crypto';
 export class StateError extends Error {}
 
 function secret(): string {
+  // main.ts refuses to boot in production without SESSION_SECRET; this
+  // guard keeps the public fallback from ever signing a real state even if
+  // this module is reached some other way.
+  if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET must be set in production.');
+  }
   return process.env.SESSION_SECRET || 'dev-secret';
 }
 

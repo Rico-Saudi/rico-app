@@ -20,6 +20,7 @@ import { UpdateRequestStageDto } from './dto/update-request-stage.dto';
 import { VendorStatsDto } from './dto/vendor-stats.dto';
 import { PauseOrdersDto } from './dto/pause-orders.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { MongoIdPipe } from '../common/pipes/mongo-id.pipe';
 
 @Controller('vendor')
 @UseGuards(SessionGuard)
@@ -136,7 +137,7 @@ export class VendorController {
   }
 
   @Get('discounts')
-  listDiscounts(@AccountId() accountId: string, @Query('productId') productId: string) {
+  listDiscounts(@AccountId() accountId: string, @Query('productId', new MongoIdPipe()) productId: string) {
     return this.vendorService.listOwnDiscounts(accountId, productId);
   }
 

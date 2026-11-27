@@ -94,6 +94,9 @@ export async function parseCaption(llm: LlmService, caption: string): Promise<Pa
       // should not become a different offer on a second import.
       temperature: 0,
       maxTokens: 300,
+      // A background import, not a customer waiting — the classify deadline
+      // is tuned for the chat and would drop captions on a slow minute.
+      timeoutMs: 20000,
     });
     return validateParsed(JSON.parse(content));
   } catch {
