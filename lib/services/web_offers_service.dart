@@ -10,7 +10,7 @@ import 'intent_service.dart';
 /// ما يرمي استثناء أبداً: فشله (شبكة، سقف شهري، مفتاح ناقص) معناه إن القسم
 /// ما يطلع، وعروض ريكو نفسها تكفي جواباً. خطأ هنا ما يستاهل يخرّب ردّاً صحيحاً.
 class WebOffersService {
-  static const String _baseUrl = 'https://app.rico-go.com';
+  static const String _baseUrl = Brand.apiBaseUrl;
 
   // أطول من باقي النداءات: الخادم يبحث بـGoogle ثم يقرا النتائج بالنموذج.
   static const Duration _timeout = Duration(seconds: 12);

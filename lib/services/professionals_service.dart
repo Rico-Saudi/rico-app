@@ -23,9 +23,7 @@ class ProfessionalsException implements Exception {
 /// صاحب المهنة يتصل بالرقم المرتبط بحساب موثّق، فطلب من زائر ما فيه شي
 /// يُسلّم أصلاً.
 class ProfessionalsService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
-  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _baseUrl = 'https://app.rico-go.com';
+  static const String _baseUrl = Brand.apiBaseUrl;
 
   static const Duration _timeout = Duration(seconds: 8);
 

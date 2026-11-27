@@ -25,10 +25,8 @@ class TranscriptionResult {
 ///
 /// لا يُلقي أي استثناء أبداً؛ كل الأعطال تصل كـ[TranscriptionStatus.failed].
 class TranscribeService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000/transcribe (iOS
-  // Simulator/سطح المكتب) أو http://10.0.2.2:3000/transcribe (Android
   // Emulator).
-  static const String _url = 'https://app.rico-go.com/transcribe';
+  static const String _url = '${Brand.apiBaseUrl}/transcribe';
 
   /// أطول من مهلة /compose (٥ ثوانٍ) لأن هنا رفع ملف فعلي فوق زمن المعالجة —
   /// مقطع ٣٠ ثانية على شبكة جوال متوسطة قد يحتاج معظم هذي المهلة.

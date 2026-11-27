@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/place_result.dart';
+import '../brand.dart';
 
 class PlacesException implements Exception {
   final String message;
@@ -14,9 +15,7 @@ class PlacesException implements Exception {
 /// Places إذا احتاج الأمر (source == 'google' حينها). لا بحث مباشر من
 /// التطبيق لأي خدمة خارجية — المفتاح يبقى على الخادم فقط.
 class PlacesService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
-  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _ricoApiBaseUrl = 'https://app.rico-go.com';
+  static const String _ricoApiBaseUrl = Brand.apiBaseUrl;
 
   /// [label] اسم عربي قصير للفئة الحرة (نتيجة تصنيف "other" بلا slug ثابت) —
   /// الخادم يستخدمه كنص بحث في Google Text Search، فتشتغل الفئات اللي ما لها

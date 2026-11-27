@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../brand.dart';
 
 /// يُبلغ rico-backend بأن نشاطاً تجارياً (بمعرّف Business حقيقي) ظهر للمستخدم
 /// ضمن نتائج المحادثة — يُستخدم في لوحة المالك لعرض عدد مرات الظهور لكل
@@ -7,9 +8,7 @@ import 'package:http/http.dart' as http;
 /// أفضل (best-effort) بحت: لا يوقف أو يبطئ عرض النتائج للمستخدم، ولا يُظهر
 /// أي خطأ إذا فشل الاتصال.
 class ImpressionService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
-  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _baseUrl = 'https://app.rico-go.com';
+  static const String _baseUrl = Brand.apiBaseUrl;
 
   /// [businessIds]: ظهور نتائج بحث عادية (بلا عرض محدد).
   Future<void> track(List<String> businessIds) async {
