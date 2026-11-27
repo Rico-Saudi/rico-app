@@ -643,6 +643,8 @@ export function keywordClassify(message: string): Intent[] {
 export interface ConversationContext {
   history: { role: string; content: string }[];
   lastResults: { label: string; items: { position: number; name: string }[] } | null;
+  /** The basket open in the app, when it sent one. */
+  basket?: { placeName: string; items: { name: string; quantity: number }[] } | null;
 }
 
 /** Words that only refine the search before ("في ارخص؟", "ابعد شوي",
@@ -743,6 +745,12 @@ function onTheList(order: Intent, ctx: ConversationContext): Intent {
 
 /** The order the conversation was building, if the customer's last request was one. */
 function previousOrder(ctx: ConversationContext): Intent | null {
+  // The basket the app actually holds beats one re-read from chat text: it
+  // includes edits made on the card, which never appear in the history.
+  if (ctx.basket?.items.length) {
+    const held = validateIntent({ kind: 'order', placeName: ctx.basket.placeName || null, orderItems: ctx.basket.items });
+    if (held) return held;
+  }
   const users = ctx.history.filter((h) => h.role === 'user').map((h) => h.content).reverse();
   for (const u of users.slice(0, 3)) {
     const found = keywordClassify(u).find((i) => i.kind === 'order');
@@ -781,7 +789,7 @@ export function keywordClassifyInContext(message: string, ctx: ConversationConte
   if (call) return [call];
 
   const direct = keywordClassify(message).map((i) => (i.kind === 'order' ? onTheList(i, ctx) : i));
-  if (!ctx.history.length && !ctx.lastResults) return direct;
+  if (!ctx.history.length && !ctx.lastResults && !ctx.basket?.items.length) return direct;
   const text = fold(message);
   const wantsNow = CLEAR_WANT_RE.test(text) || ORDER_VERB_RE.test(text);
   // "ليش تأخر الطلب", "اجاني الطلب ناقص": about an order already sent.

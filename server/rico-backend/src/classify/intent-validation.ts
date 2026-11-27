@@ -28,6 +28,21 @@ export interface Intent {
   /** Dishes they asked for (kind='order'), or the products to compare
    * prices of (kind='compare'). */
   orderItems?: OrderItem[];
+  /** What they want inside the category — a dish, a cuisine, a feature
+   * ("مندي", "جلسات خارجية") — for kind='place' only. */
+  keyword?: string | null;
+  /** A neighbourhood they named instead of "near me" ("النرجس"), for
+   * kind='place' only. */
+  area?: string | null;
+}
+
+/// A short free-text field from the model, or null. These end up in a
+/// search query and a Google text search, so only a few plain words pass —
+/// a sentence here means the model put the whole request in it.
+function shortText(raw: unknown, max = 40): string | null {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/[\r\n\t"`<>{}]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return text && text.length <= max && text.split(' ').length <= 4 ? text : null;
 }
 
 const MAX_ORDER_ITEMS = 20;
@@ -49,11 +64,13 @@ function parseOrderItems(raw: any): OrderItem[] {
   return items;
 }
 
-// Clamps to a valid 1-10 position, or null if absent/out of range — same
-// "drop, don't reject" philosophy as the rest of this function.
+// A valid 1-30 position (the most a merged answer lists), or null if
+// absent/out of range — same "drop, don't reject" philosophy as the rest of
+// this function. Whether the position exists on the list the customer is
+// actually looking at is checked by the caller, which has that list.
 function parseReferencedPosition(raw: any): number | null {
   const n = raw?.referencedPosition;
-  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 30 ? n : null;
 }
 
 // Validates one intent element, or returns null if it's unsalvageable — an
@@ -220,5 +237,7 @@ export function validateIntent(raw: any, dialect?: string): Intent | null {
     label,
     referencedPosition,
     profession: null,
+    keyword: shortText(raw.keyword),
+    area: shortText(raw.area),
   };
 }

@@ -1,5 +1,20 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsMongoId, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsMongoId,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { REQUEST_ITEM_TYPES, RequestItemType } from '../schemas/request.schema';
 
 // Only what identifies the line and how many: the label, price and image are
@@ -63,4 +78,10 @@ export class CreateRequestDto {
   @IsString()
   @Length(1, 40)
   brand?: string;
+
+  // Same value on a retry of the same tap — see CustomerRequest.clientRef.
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9-]{8,64}$/)
+  clientRef?: string;
 }
